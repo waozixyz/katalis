@@ -165,6 +165,7 @@ fn is_tile_visible(tile_x: usize, tile_y: usize, min_bound: Vector2, max_bound: 
       tile_world_y_end < min_bound.y || 
       tile_world_y > max_bound.y)
 }
+// Remove the laser bullet drawing code and update the draw_world function:
 pub fn draw_world(d: &mut RaylibMode2D<RaylibDrawHandle>, world: &World, camera: &Camera2D) {
     // Calculate visible bounds
     let (min_bound, max_bound) = get_visible_bounds(camera, 1200, 800);
@@ -206,13 +207,7 @@ pub fn draw_world(d: &mut RaylibMode2D<RaylibDrawHandle>, world: &World, camera:
         tree.draw(d);
     }
     
-    // NEW: Draw lasers
-    let visible_lasers = world.get_lasers_in_bounds(min_bound, max_bound);
-    for laser in visible_lasers {
-        laser.draw(d);
-    }
-    
-    // NEW: Apply day/night overlay
+    // Apply day/night overlay
     let light_level = world.game_time.get_light_level();
     if light_level < 1.0 {
         let darkness = (255.0 * (1.0 - light_level)) as u8;
@@ -232,31 +227,45 @@ pub fn draw_world(d: &mut RaylibMode2D<RaylibDrawHandle>, world: &World, camera:
         }
     }
 }
+
 pub fn draw_ui(d: &mut RaylibDrawHandle, player: &Player) {
     // Background panel with Factorio-style colors
-    d.draw_rectangle(10, 10, 320, 100, Color::new(47, 47, 47, 220));
-    d.draw_rectangle_lines(10, 10, 320, 100, Color::new(150, 150, 150, 255));
+    d.draw_rectangle(10, 10, 320, 120, Color::new(47, 47, 47, 220));
+    d.draw_rectangle_lines(10, 10, 320, 120, Color::new(150, 150, 150, 255));
     
     // Title
     d.draw_text("Katalis - Factory Builder", 20, 20, 20, Color::new(255, 255, 255, 255));
     
-    // Controls (simplified)
+    // Controls
     d.draw_text("WASD: Move Player", 20, 45, 16, Color::new(200, 200, 200, 255));
-    d.draw_text("LMB: Shoot Laser", 20, 65, 16, Color::new(200, 200, 200, 255)); // NEW
-    d.draw_text("Shift+IJKL: Free Camera", 20, 85, 16, Color::new(200, 200, 200, 255));
+    d.draw_text("LMB: Auto-mine (Pickaxe/Axe)", 20, 65, 16, Color::new(200, 200, 200, 255));
+    d.draw_text("RMB: Cancel mining", 20, 85, 16, Color::new(200, 200, 200, 255));
+    d.draw_text("Shift+IJKL: Free Camera", 20, 105, 16, Color::new(200, 200, 200, 255));
     
     // Player position
     d.draw_text(
         &format!("Position: ({:.0}, {:.0})", player.position.x, player.position.y),
         20,
-        115,
+        135,
         14,
         Color::LIGHTGRAY
     );
     
+    // Mining status
+    if player.is_mining() {
+        let progress = (player.get_mining_progress() * 100.0) as i32;
+        d.draw_text(
+            &format!("Mining: {}%", progress),
+            20,
+            155,
+            14,
+            Color::GREEN
+        );
+    }
+    
     // Draw inventory at top right
     draw_inventory(d, &player.inventory);
-    }
+}
 
 // Keep inventory function unchanged
 fn draw_inventory(d: &mut RaylibDrawHandle, inventory: &Inventory) {

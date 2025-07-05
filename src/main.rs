@@ -51,13 +51,24 @@ fn main() {
         // Update
         player.update(&rl, &camera);
         update_camera(&mut camera, &mut camera_target, &player, &rl);
-        handle_input(&mut world, &camera, &rl, &player);
+        handle_input(&mut world, &camera, &rl, &mut player);
         
-        // NEW: Update world systems and collect wood
-        let wood_gained = world.update(delta_time);
+        // Update world systems and collect resources
+
+        let (wood_gained, stone_gained) = world.update(delta_time, &mut player);
         if wood_gained > 0 {
             player.inventory.add_resource(ResourceType::Wood, wood_gained);
+            println!("Added {} wood to inventory. Total wood: {}", wood_gained, player.inventory.get_amount(&ResourceType::Wood));
         }
+        if stone_gained > 0 {
+            player.inventory.add_resource(ResourceType::Stone, stone_gained);
+            println!("Added {} stone to inventory. Total stone: {}", stone_gained, player.inventory.get_amount(&ResourceType::Stone));
+        }
+        
+        // Get mouse position BEFORE starting drawing
+        let mouse_screen_pos = rl.get_mouse_position();
+        let mouse_world_pos = rl.get_screen_to_world2D(mouse_screen_pos, camera);
+        let distance = player.position.distance_to(mouse_world_pos);
         
         // Draw
         let mut d = rl.begin_drawing(&thread);
@@ -67,9 +78,21 @@ fn main() {
             let mut d2d = d.begin_mode2D(camera);
             draw_world(&mut d2d, &world, &camera);
             player.draw(&mut d2d);
+            
+            // Draw mining range indicator when player is close to mouse
+            if distance <= MINING_RANGE {
+                // Draw mining range circle
+                d2d.draw_circle_lines_v(player.position, MINING_RANGE, Color::new(255, 255, 0, 100));
+                
+                // Draw target indicator at mouse position
+                d2d.draw_circle_lines_v(mouse_world_pos, 8.0, Color::YELLOW);
+            } else {
+                // Draw out-of-range indicator
+                d2d.draw_circle_lines_v(mouse_world_pos, 8.0, Color::RED);
+            }
         }
         
         draw_ui(&mut d, &player);
-        draw_time_display(&mut d, &world.game_time); // NEW: Draw time at center
+        draw_time_display(&mut d, &world.game_time);
     }
 }

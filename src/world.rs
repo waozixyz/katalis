@@ -1,11 +1,11 @@
 use crate::types::*;
 use raylib::math::Vector2;
+use crate::Player;
 
 pub struct World {
     pub tiles: Vec<Vec<Tile>>,
     pub trees: Vec<Tree>,
-    pub lasers: Vec<Laser>, // NEW: Store active lasers
-    pub game_time: GameTime, // NEW: Game time system
+    pub game_time: GameTime,
     pub width: usize,
     pub height: usize,
 }
@@ -15,13 +15,12 @@ impl World {
         Self { 
             tiles: vec![vec![Tile { tile_type: TileType::Grass }; height]; width],
             trees: Vec::new(),
-            lasers: Vec::new(), // NEW
-            game_time: GameTime::new(), // NEW
+            game_time: GameTime::new(),
             width, 
             height 
         }
     }
-    
+
     pub fn generate_simple(&mut self) {
         use noise::{NoiseFn, Perlin};
         let perlin = Perlin::new(42);
@@ -90,51 +89,130 @@ impl World {
         println!("Generated {} trees", self.trees.len());
     }
     
-    // NEW: Update world systems
-    pub fn update(&mut self, delta_time: f32) -> u32 {
+    pub fn update(&mut self, delta_time: f32, player: &mut Player) -> (u32, u32) {
         let mut wood_gained = 0;
+        let mut stone_gained = 0;
         
         // Update game time
         self.game_time.update(delta_time);
         
-        // Update lasers
-        self.lasers.retain_mut(|laser| {
-            laser.update(delta_time);
-            laser.active
-        });
+        // Check if player completed mining - FIXED LOGIC
+        let mut mining_completed = false;
+        let mut completed_mining = None;
         
-        // Check laser-tree collisions
-        for laser in &mut self.lasers {
-            if !laser.active {
-                continue;
+        if let Some(mining) = &mut player.current_mining {
+            if mining.update(delta_time) {
+                // Mining is complete
+                completed_mining = Some(mining.clone());
+                mining_completed = true;
             }
-            
-            for tree in &mut self.trees {
-                if tree.collides_with_point(laser.current_pos) {
-                    tree.ignite();
-                    laser.active = false; // Laser stops when it hits something
-                    break;
+        }
+        
+        // Process completed mining
+        if let Some(mining) = completed_mining {
+            match &mining.target_type {
+                MiningTarget::Tree(target_pos) => {
+                    wood_gained += self.cut_tree_at_position(*target_pos);
+                    println!("Tree mining completed! Gained {} wood", wood_gained);
+                }
+                MiningTarget::Tile(tile_type) => {
+                    match tile_type {
+                        TileType::Stone => {
+                            stone_gained += 5;
+                            println!("Stone mining completed! Gained {} stone", stone_gained);
+                        }
+                        TileType::Iron => {
+                            stone_gained += 3;
+                            println!("Iron mining completed! Gained {} iron", stone_gained);
+                        }
+                        TileType::Coal => {
+                            stone_gained += 2;
+                            println!("Coal mining completed! Gained {} coal", stone_gained);
+                        }
+                        _ => {}
+                    }
                 }
             }
         }
         
-        // Update trees and collect wood from burned trees
+        // Clear mining if completed
+        if mining_completed {
+            player.current_mining = None;
+        }
+        
+        // Update trees
         for tree in &mut self.trees {
-            if let Some(wood) = tree.update(delta_time) {
-                wood_gained += wood;
-            }
+            tree.update(delta_time);
         }
         
         // Remove fully faded stumps
+        let trees_before = self.trees.len();
         self.trees.retain(|tree| !tree.should_remove());
+        let trees_after = self.trees.len();
         
-        wood_gained
+        if trees_before != trees_after {
+            println!("Removed {} stumps", trees_before - trees_after);
+        }
+        
+        (wood_gained, stone_gained)
     }
     
-    // NEW: Shoot laser
-    pub fn shoot_laser(&mut self, start_pos: Vector2, direction: Vector2) {
-        let laser = Laser::new(start_pos, direction);
-        self.lasers.push(laser);
+    fn cut_tree_at_position(&mut self, target_pos: Vector2) -> u32 {
+        println!("Attempting to cut tree at position: {:?}", target_pos);
+        for (i, tree) in self.trees.iter_mut().enumerate() {
+            let distance = tree.position.distance_to(target_pos);
+            println!("Tree {} at {:?}, distance: {}, healthy: {}", i, tree.position, distance, tree.is_healthy());
+            
+            if tree.is_healthy() && distance < 32.0 { // Increased tolerance
+                let wood = tree.cut_down();
+                println!("Successfully cut tree {}! Gained {} wood", i, wood);
+                return wood;
+            }
+        }
+        println!("No tree found to cut at position {:?}", target_pos);
+        0
+    }
+    
+    pub fn try_start_mining(&mut self, player: &mut Player, target_pos: Vector2) {
+        // Don't start new mining if already mining
+        if player.is_mining() {
+            return;
+        }
+        
+        // First, try to find a tree to cut
+        for (i, tree) in self.trees.iter().enumerate() {
+            if tree.is_healthy() && tree.collides_with_point(target_pos) {
+                println!("Starting tree mining for tree {} at {:?}", i, tree.position);
+                let mining_action = MiningAction::new(
+                    ToolType::Axe,
+                    tree.position,
+                    MiningTarget::Tree(tree.position)
+                );
+                player.start_mining(mining_action);
+                return;
+            }
+        }
+        
+        // If no tree found, try to mine terrain
+        let tile_x = (target_pos.x / TILE_SIZE as f32).floor() as usize;
+        let tile_y = (target_pos.y / TILE_SIZE as f32).floor() as usize;
+        
+        if let Some(tile) = self.get_tile(tile_x, tile_y) {
+            if ToolType::Pickaxe.can_mine_tile(tile.tile_type) {
+                let tile_center = Vector2::new(
+                    tile_x as f32 * TILE_SIZE as f32 + TILE_SIZE as f32 * 0.5,
+                    tile_y as f32 * TILE_SIZE as f32 + TILE_SIZE as f32 * 0.5
+                );
+                
+                println!("Starting tile mining: {:?} at {:?}", tile.tile_type, tile_center);
+                let mining_action = MiningAction::new(
+                    ToolType::Pickaxe,
+                    tile_center,
+                    MiningTarget::Tile(tile.tile_type)
+                );
+                player.start_mining(mining_action);
+            }
+        }
     }
     
     pub fn get_tile(&self, x: usize, y: usize) -> Option<&Tile> {
@@ -158,17 +236,6 @@ impl World {
             .filter(|tree| {
                 tree.position.x >= min_bound.x && tree.position.x <= max_bound.x &&
                 tree.position.y >= min_bound.y && tree.position.y <= max_bound.y
-            })
-            .collect()
-    }
-    
-    // NEW: Get lasers in bounds
-    pub fn get_lasers_in_bounds(&self, min_bound: Vector2, max_bound: Vector2) -> Vec<&Laser> {
-        self.lasers.iter()
-            .filter(|laser| {
-                laser.active &&
-                laser.current_pos.x >= min_bound.x && laser.current_pos.x <= max_bound.x &&
-                laser.current_pos.y >= min_bound.y && laser.current_pos.y <= max_bound.y
             })
             .collect()
     }
