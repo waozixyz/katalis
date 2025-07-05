@@ -1,6 +1,5 @@
 use raylib::prelude::*;
-use super::{TileType, TreeType};
-use crate::Player;
+use super::{TileType, TreeType, VeinType};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ToolType {
@@ -18,15 +17,15 @@ impl ToolType {
     
     pub fn get_color(&self) -> Color {
         match self {
-            ToolType::Pickaxe => Color::new(139, 69, 19, 255), // Brown handle
-            ToolType::Axe => Color::new(160, 82, 45, 255), // Saddle brown
+            ToolType::Pickaxe => Color::new(139, 69, 19, 255),
+            ToolType::Axe => Color::new(160, 82, 45, 255),
         }
     }
     
-    pub fn can_mine_tile(&self, tile_type: TileType) -> bool {
+    pub fn can_mine_vein(&self, vein_type: VeinType) -> bool {
         match self {
-            ToolType::Pickaxe => matches!(tile_type, TileType::Stone | TileType::Iron | TileType::Coal),
-            ToolType::Axe => false, // Axes don't mine tiles
+            ToolType::Pickaxe => true, // Pickaxe can mine all veins
+            ToolType::Axe => false,    // Axes only cut trees
         }
     }
     
@@ -46,8 +45,8 @@ pub struct MiningAction {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MiningTarget {
-    Tile(TileType),
-    Tree(Vector2), // Changed: Use position instead of index
+    ResourceVein(VeinType, usize, usize), // vein_type, tile_x, tile_y
+    Tree(Vector2),
 }
 
 impl MiningAction {
@@ -63,7 +62,11 @@ impl MiningAction {
     
     pub fn update(&mut self, delta_time: f32) -> bool {
         self.progress += delta_time;
-        self.progress >= self.total_time
+        let completed = self.progress >= self.total_time;
+        if completed {
+            println!("Mining action completed! Progress: {}/{}", self.progress, self.total_time);
+        }
+        completed
     }
     
     pub fn get_progress_percentage(&self) -> f32 {

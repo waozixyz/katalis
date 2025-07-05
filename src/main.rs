@@ -54,8 +54,9 @@ fn main() {
         handle_input(&mut world, &camera, &rl, &mut player);
         
         // Update world systems and collect resources
-
-        let (wood_gained, stone_gained) = world.update(delta_time, &mut player);
+        let (wood_gained, stone_gained, iron_gained, coal_gained) = world.update(delta_time, &mut player);
+        
+        // Add gained resources to inventory
         if wood_gained > 0 {
             player.inventory.add_resource(ResourceType::Wood, wood_gained);
             println!("Added {} wood to inventory. Total wood: {}", wood_gained, player.inventory.get_amount(&ResourceType::Wood));
@@ -63,6 +64,14 @@ fn main() {
         if stone_gained > 0 {
             player.inventory.add_resource(ResourceType::Stone, stone_gained);
             println!("Added {} stone to inventory. Total stone: {}", stone_gained, player.inventory.get_amount(&ResourceType::Stone));
+        }
+        if iron_gained > 0 {
+            player.inventory.add_resource(ResourceType::IronOre, iron_gained);
+            println!("Added {} iron ore to inventory. Total iron ore: {}", iron_gained, player.inventory.get_amount(&ResourceType::IronOre));
+        }
+        if coal_gained > 0 {
+            player.inventory.add_resource(ResourceType::Coal, coal_gained);
+            println!("Added {} coal to inventory. Total coal: {}", coal_gained, player.inventory.get_amount(&ResourceType::Coal));
         }
         
         // Get mouse position BEFORE starting drawing
@@ -86,6 +95,35 @@ fn main() {
                 
                 // Draw target indicator at mouse position
                 d2d.draw_circle_lines_v(mouse_world_pos, 8.0, Color::YELLOW);
+                
+                // Show what resource/tree is being targeted
+                let tile_x = (mouse_world_pos.x / TILE_SIZE as f32).floor() as usize;
+                let tile_y = (mouse_world_pos.y / TILE_SIZE as f32).floor() as usize;
+                
+                if let Some(tile) = world.get_tile(tile_x, tile_y) {
+                    if let Some(vein) = &tile.resource_vein {
+                        // Draw resource info near cursor
+                        let info_text = format!("{}: {}", vein.vein_type.get_name(), vein.richness);
+                        let text_pos = Vector2::new(mouse_world_pos.x + 15.0, mouse_world_pos.y - 10.0);
+                        
+                        // Background for text
+                        d2d.draw_rectangle(
+                            text_pos.x as i32 - 2,
+                            text_pos.y as i32 - 2,
+                            (info_text.len() * 8) as i32,
+                            16,
+                            Color::new(0, 0, 0, 180)
+                        );
+                        
+                        d2d.draw_text(
+                            &info_text,
+                            text_pos.x as i32,
+                            text_pos.y as i32,
+                            12,
+                            Color::WHITE
+                        );
+                    }
+                }
             } else {
                 // Draw out-of-range indicator
                 d2d.draw_circle_lines_v(mouse_world_pos, 8.0, Color::RED);

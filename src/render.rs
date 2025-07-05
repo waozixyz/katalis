@@ -165,7 +165,6 @@ fn is_tile_visible(tile_x: usize, tile_y: usize, min_bound: Vector2, max_bound: 
       tile_world_y_end < min_bound.y || 
       tile_world_y > max_bound.y)
 }
-// Remove the laser bullet drawing code and update the draw_world function:
 pub fn draw_world(d: &mut RaylibMode2D<RaylibDrawHandle>, world: &World, camera: &Camera2D) {
     // Calculate visible bounds
     let (min_bound, max_bound) = get_visible_bounds(camera, 1200, 800);
@@ -187,13 +186,27 @@ pub fn draw_world(d: &mut RaylibMode2D<RaylibDrawHandle>, world: &World, camera:
             let pos_x = x as i32 * TILE_SIZE;
             let pos_y = y as i32 * TILE_SIZE;
             
-            // Draw terrain with Factorio-style colors
+            // Draw base terrain
             let color = tile.tile_type.get_color();
             d.draw_rectangle(pos_x, pos_y, TILE_SIZE, TILE_SIZE, color);
             
-            // Draw resource patches with slight transparency
-            if let Some(overlay_color) = tile.tile_type.get_overlay_color() {
+            // Draw resource veins with richness indication
+            if let Some(vein) = &tile.resource_vein {
+                let richness_percentage = vein.get_richness_percentage();
+                let mut overlay_color = vein.vein_type.get_overlay_color();
+                
+                // Adjust alpha based on richness (more visible = more resources)
+                overlay_color.a = (overlay_color.a as f32 * (0.3 + richness_percentage * 0.7)) as u8;
+                
                 d.draw_rectangle(pos_x + 2, pos_y + 2, TILE_SIZE - 4, TILE_SIZE - 4, overlay_color);
+                
+                // Draw richness indicator dots
+                let dots = (richness_percentage * 4.0) as i32;
+                for i in 0..dots {
+                    let dot_x = pos_x + 4 + (i % 2) * 12;
+                    let dot_y = pos_y + 4 + (i / 2) * 12;
+                    d.draw_circle(dot_x, dot_y, 2.0, Color::WHITE);
+                }
             }
             
             // Grid lines (subtle)
@@ -227,6 +240,7 @@ pub fn draw_world(d: &mut RaylibMode2D<RaylibDrawHandle>, world: &World, camera:
         }
     }
 }
+
 
 pub fn draw_ui(d: &mut RaylibDrawHandle, player: &Player) {
     // Background panel with Factorio-style colors
@@ -267,12 +281,13 @@ pub fn draw_ui(d: &mut RaylibDrawHandle, player: &Player) {
     draw_inventory(d, &player.inventory);
 }
 
-// Keep inventory function unchanged
+
+// Update the inventory drawing function
 fn draw_inventory(d: &mut RaylibDrawHandle, inventory: &Inventory) {
-    let inv_x = 1200 - 200; // Top right corner
+    let inv_x = 1200 - 200;
     let inv_y = 10;
     let inv_width = 180;
-    let inv_height = 120;
+    let inv_height = 140; // Increased height for more resources
     
     // Inventory background
     d.draw_rectangle(inv_x, inv_y, inv_width, inv_height, Color::new(47, 47, 47, 220));
@@ -282,9 +297,9 @@ fn draw_inventory(d: &mut RaylibDrawHandle, inventory: &Inventory) {
     d.draw_text("Inventory", inv_x + 10, inv_y + 10, 18, Color::WHITE);
     
     // Draw resources
-    let resources = [ResourceType::Wood, ResourceType::Stone, ResourceType::Food];
+    let resources = [ResourceType::Wood, ResourceType::Stone, ResourceType::IronOre, ResourceType::Coal];
     for (i, resource) in resources.iter().enumerate() {
-        let y_offset = inv_y + 35 + (i as i32 * 25);
+        let y_offset = inv_y + 35 + (i as i32 * 22);
         let amount = inventory.get_amount(resource);
         let color = resource.get_color();
         
@@ -297,7 +312,7 @@ fn draw_inventory(d: &mut RaylibDrawHandle, inventory: &Inventory) {
             &format!("{}: {}", resource.get_name(), amount),
             inv_x + 30,
             y_offset,
-            16,
+            14, // Slightly smaller font
             Color::WHITE
         );
     }
