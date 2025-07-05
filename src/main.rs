@@ -11,7 +11,7 @@ use player::Player;
 use world::World;
 use camera::update_camera;
 use input::handle_input;
-use render::{draw_world, draw_ui};
+use render::{draw_world, draw_ui, draw_time_display};
 
 const SCREEN_WIDTH: i32 = 1200;
 const SCREEN_HEIGHT: i32 = 800;
@@ -39,17 +39,25 @@ fn main() {
     let mut camera = Camera2D {
         target: player.position,
         offset: Vector2::new(SCREEN_WIDTH as f32 / 2.0, SCREEN_HEIGHT as f32 / 2.0),
-        rotation: -20.0,  // Factorio-style slight rotation
-        zoom: 1.0,        // Adjusted zoom for better view
+        rotation: -20.0,
+        zoom: 1.0,
     };
 
     let mut camera_target = player.position;
 
     while !rl.window_should_close() {
+        let delta_time = rl.get_frame_time();
+        
         // Update
         player.update(&rl, &camera);
         update_camera(&mut camera, &mut camera_target, &player, &rl);
         handle_input(&mut world, &camera, &rl, &player);
+        
+        // NEW: Update world systems and collect wood
+        let wood_gained = world.update(delta_time);
+        if wood_gained > 0 {
+            player.inventory.add_resource(ResourceType::Wood, wood_gained);
+        }
         
         // Draw
         let mut d = rl.begin_drawing(&thread);
@@ -57,10 +65,11 @@ fn main() {
         
         {
             let mut d2d = d.begin_mode2D(camera);
-            draw_world(&mut d2d, &world, &camera);  // CHANGED: Pass camera for frustum culling
+            draw_world(&mut d2d, &world, &camera);
             player.draw(&mut d2d);
         }
         
         draw_ui(&mut d, &player);
+        draw_time_display(&mut d, &world.game_time); // NEW: Draw time at center
     }
 }

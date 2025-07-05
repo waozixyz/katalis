@@ -4,25 +4,29 @@ use crate::world::World;
 use crate::player::Player;
 
 pub fn handle_input(
-    _world: &mut World,  // Prefixed with _ since we're not using it now
-    _camera: &Camera2D,  // Prefixed with _ since we're not using it now
-    rl: &RaylibHandle, 
-    player: &Player      // Keep player for future use
+    world: &mut World,
+    camera: &Camera2D,
+    rl: &RaylibHandle,
+    player: &Player
 ) {
-    // REMOVED: All building selection logic (1-3 keys)
-    // REMOVED: All building placement logic (mouse clicks)
+    // NEW: Laser shooting with left mouse button
+    if rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) {
+        let mouse_screen_pos = rl.get_mouse_position();
+        let mouse_world_pos = rl.get_screen_to_world2D(mouse_screen_pos, *camera);
+        
+        // Calculate direction from player to mouse
+        let direction = Vector2::new(
+            mouse_world_pos.x - player.position.x,
+            mouse_world_pos.y - player.position.y
+        ).normalized();
+        
+        world.shoot_laser(player.position, direction);
+    }
     
-    // For now, this function only handles input but doesn't do anything
-    // We keep it for future functionality
-    
-    // Example: Could add debug keys here
+    // For future functionality
     if rl.is_key_pressed(KeyboardKey::KEY_R) {
         // Future: Could add resource gathering or other actions
     }
     
-    // Suppress unused parameter warnings by using them
-    let _ = (player, _world, _camera);
+    let _ = (camera);
 }
-
-// REMOVED: can_place_building function
-// REMOVED: is_valid_placement function

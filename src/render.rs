@@ -178,7 +178,6 @@ pub fn draw_world(d: &mut RaylibMode2D<RaylibDrawHandle>, world: &World, camera:
     // Draw terrain tiles
     for x in start_x..end_x {
         for y in start_y..end_y {
-            // Double-check visibility
             if !is_tile_visible(x, y, min_bound, max_bound) {
                 continue;
             }
@@ -201,13 +200,38 @@ pub fn draw_world(d: &mut RaylibMode2D<RaylibDrawHandle>, world: &World, camera:
         }
     }
     
-    // NEW: Draw trees (with culling)
+    // Draw trees (with culling)
     let visible_trees = world.get_trees_in_bounds(min_bound, max_bound);
     for tree in visible_trees {
         tree.draw(d);
     }
+    
+    // NEW: Draw lasers
+    let visible_lasers = world.get_lasers_in_bounds(min_bound, max_bound);
+    for laser in visible_lasers {
+        laser.draw(d);
+    }
+    
+    // NEW: Apply day/night overlay
+    let light_level = world.game_time.get_light_level();
+    if light_level < 1.0 {
+        let darkness = (255.0 * (1.0 - light_level)) as u8;
+        let night_color = Color::new(0, 0, 50, darkness);
+        
+        // Draw night overlay over the visible area
+        for x in start_x..end_x {
+            for y in start_y..end_y {
+                if !is_tile_visible(x, y, min_bound, max_bound) {
+                    continue;
+                }
+                
+                let pos_x = x as i32 * TILE_SIZE;
+                let pos_y = y as i32 * TILE_SIZE;
+                d.draw_rectangle(pos_x, pos_y, TILE_SIZE, TILE_SIZE, night_color);
+            }
+        }
+    }
 }
-
 pub fn draw_ui(d: &mut RaylibDrawHandle, player: &Player) {
     // Background panel with Factorio-style colors
     d.draw_rectangle(10, 10, 320, 100, Color::new(47, 47, 47, 220));
@@ -218,7 +242,7 @@ pub fn draw_ui(d: &mut RaylibDrawHandle, player: &Player) {
     
     // Controls (simplified)
     d.draw_text("WASD: Move Player", 20, 45, 16, Color::new(200, 200, 200, 255));
-    d.draw_text("Mouse Wheel: Zoom", 20, 65, 16, Color::new(200, 200, 200, 255));
+    d.draw_text("LMB: Shoot Laser", 20, 65, 16, Color::new(200, 200, 200, 255)); // NEW
     d.draw_text("Shift+IJKL: Free Camera", 20, 85, 16, Color::new(200, 200, 200, 255));
     
     // Player position
@@ -232,10 +256,7 @@ pub fn draw_ui(d: &mut RaylibDrawHandle, player: &Player) {
     
     // Draw inventory at top right
     draw_inventory(d, &player.inventory);
-    
-    // FPS
-    d.draw_fps(1200 - 100, 10);
-}
+    }
 
 // Keep inventory function unchanged
 fn draw_inventory(d: &mut RaylibDrawHandle, inventory: &Inventory) {
@@ -271,4 +292,25 @@ fn draw_inventory(d: &mut RaylibDrawHandle, inventory: &Inventory) {
             Color::WHITE
         );
     }
+}
+
+pub fn draw_time_display(d: &mut RaylibDrawHandle, game_time: &GameTime) {
+    let time_str = game_time.get_time_string();
+    let is_day = game_time.is_day();
+    
+    // Center of screen
+    let x = 1200 / 2 - 40;
+    let y = 30;
+    
+    // Background
+    d.draw_rectangle(x - 10, y - 5, 80, 30, Color::new(47, 47, 47, 220));
+    d.draw_rectangle_lines(x - 10, y - 5, 80, 30, Color::new(150, 150, 150, 255));
+    
+    // Time text
+    let color = if is_day { Color::YELLOW } else { Color::new(100, 100, 255, 255) };
+    d.draw_text(&time_str, x, y, 20, color);
+    
+    // Day/Night indicator
+    let indicator = if is_day { "☀" } else { "🌙" };
+    d.draw_text(indicator, x + 65, y, 16, color);
 }
