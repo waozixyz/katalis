@@ -6,20 +6,21 @@ pub struct Tile {
     pub resource_vein: Option<ResourceVein>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TileType {
     Grass,
     Stone,
     Water,
-    Sand,    // NEW: Sandy areas near water
-    Mountain, // NEW: Higher elevation stone areas
+    Sand,
+    Mountain,
+    Swamp,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ResourceVein {
     pub vein_type: VeinType,
-    pub richness: u32,  // How much resource is left in this tile
-    pub max_richness: u32, // Starting amount
+    pub richness: u32,
+    pub max_richness: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash, Eq)]
@@ -27,6 +28,8 @@ pub enum VeinType {
     IronOre,
     CoalDeposit,
     StoneQuarry,
+    ClayDeposit,
+    CopperOre,  // NEW
 }
 
 impl TileType {
@@ -37,11 +40,12 @@ impl TileType {
             TileType::Water => Color::new(25, 25, 112, 255),
             TileType::Sand => Color::new(194, 178, 128, 255),
             TileType::Mountain => Color::new(80, 80, 80, 255),
+            TileType::Swamp => Color::new(61, 89, 41, 255),
         }
     }
     
     pub fn supports_trees(&self) -> bool {
-        matches!(self, TileType::Grass)
+        matches!(self, TileType::Grass | TileType::Swamp)
     }
     
     pub fn can_have_resource_vein(&self, vein_type: VeinType) -> bool {
@@ -49,6 +53,8 @@ impl TileType {
             VeinType::IronOre => matches!(self, TileType::Stone | TileType::Mountain),
             VeinType::CoalDeposit => matches!(self, TileType::Grass | TileType::Stone),
             VeinType::StoneQuarry => matches!(self, TileType::Stone | TileType::Mountain),
+            VeinType::ClayDeposit => matches!(self, TileType::Swamp | TileType::Sand),
+            VeinType::CopperOre => matches!(self, TileType::Stone | TileType::Mountain | TileType::Grass), // Copper is more common
         }
     }
 }
@@ -59,6 +65,8 @@ impl VeinType {
             VeinType::IronOre => Color::new(255, 165, 0, 120),      // Orange
             VeinType::CoalDeposit => Color::new(64, 64, 64, 150),   // Dark gray
             VeinType::StoneQuarry => Color::new(169, 169, 169, 100), // Light gray
+            VeinType::ClayDeposit => Color::new(139, 69, 19, 130),   // Brown/terracotta
+            VeinType::CopperOre => Color::new(184, 115, 51, 120),    // Copper color
         }
     }
     
@@ -67,6 +75,8 @@ impl VeinType {
             VeinType::IronOre => "Iron Ore",
             VeinType::CoalDeposit => "Coal",
             VeinType::StoneQuarry => "Stone",
+            VeinType::ClayDeposit => "Clay",
+            VeinType::CopperOre => "Copper Ore",
         }
     }
     
@@ -75,18 +85,33 @@ impl VeinType {
             VeinType::IronOre => 3,
             VeinType::CoalDeposit => 2,
             VeinType::StoneQuarry => 5,
+            VeinType::ClayDeposit => 4,
+            VeinType::CopperOre => 4,  // Good yield like clay
         }
     }
     
     pub fn get_initial_richness_range(&self) -> (u32, u32) {
         match self {
-            VeinType::IronOre => (50, 200),      // 50-200 iron ore per tile
-            VeinType::CoalDeposit => (30, 150),  // 30-150 coal per tile
-            VeinType::StoneQuarry => (100, 300), // 100-300 stone per tile
+            VeinType::IronOre => (50, 200),
+            VeinType::CoalDeposit => (30, 150),
+            VeinType::StoneQuarry => (100, 300),
+            VeinType::ClayDeposit => (40, 180),
+            VeinType::CopperOre => (60, 220),  // Slightly more abundant than iron
+        }
+    }
+    
+    pub fn get_asset_filename(&self) -> &'static str {
+        match self {
+            VeinType::IronOre => "iron.png",
+            VeinType::CoalDeposit => "coal.png",
+            VeinType::StoneQuarry => "stone_quarry.png",
+            VeinType::ClayDeposit => "clay.png",
+            VeinType::CopperOre => "copper.png",
         }
     }
 }
 
+// Rest of the implementation remains the same...
 impl ResourceVein {
     pub fn new(vein_type: VeinType, richness: u32) -> Self {
         Self {

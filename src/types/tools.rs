@@ -5,6 +5,7 @@ use super::{TileType, TreeType, VeinType};
 pub enum ToolType {
     Pickaxe,
     Axe,
+    Shovel,
 }
 
 impl ToolType {
@@ -12,6 +13,7 @@ impl ToolType {
         match self {
             ToolType::Pickaxe => "Pickaxe",
             ToolType::Axe => "Axe",
+            ToolType::Shovel => "Shovel",
         }
     }
     
@@ -19,21 +21,31 @@ impl ToolType {
         match self {
             ToolType::Pickaxe => Color::new(139, 69, 19, 255),
             ToolType::Axe => Color::new(160, 82, 45, 255),
+            ToolType::Shovel => Color::new(101, 67, 33, 255),
         }
     }
     
     pub fn can_mine_vein(&self, vein_type: VeinType) -> bool {
         match self {
-            ToolType::Pickaxe => true, // Pickaxe can mine all veins
-            ToolType::Axe => false,    // Axes only cut trees
+            ToolType::Pickaxe => matches!(vein_type, VeinType::IronOre | VeinType::CoalDeposit | VeinType::StoneQuarry | VeinType::CopperOre),
+            ToolType::Shovel => matches!(vein_type, VeinType::ClayDeposit),
+            ToolType::Axe => false,
         }
     }
     
     pub fn can_mine_tree(&self) -> bool {
         matches!(self, ToolType::Axe)
     }
+    
+    pub fn get_best_tool_for_vein(vein_type: VeinType) -> ToolType {
+        match vein_type {
+            VeinType::IronOre | VeinType::CoalDeposit | VeinType::StoneQuarry | VeinType::CopperOre => ToolType::Pickaxe,
+            VeinType::ClayDeposit => ToolType::Shovel,
+        }
+    }
 }
 
+// Rest remains the same...
 #[derive(Clone, Debug)]
 pub struct MiningAction {
     pub tool_type: ToolType,
@@ -45,7 +57,7 @@ pub struct MiningAction {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MiningTarget {
-    ResourceVein(VeinType, usize, usize), // vein_type, tile_x, tile_y
+    ResourceVein(VeinType, usize, usize),
     Tree(Vector2),
 }
 

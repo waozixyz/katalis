@@ -5,8 +5,10 @@ use std::collections::HashMap;
 pub enum ResourceType {
     Wood,
     Stone,
-    IronOre,  // NEW
-    Coal,     // NEW
+    IronOre,
+    Coal,
+    Clay,
+    CopperOre,  // NEW
 }
 
 impl ResourceType {
@@ -16,6 +18,8 @@ impl ResourceType {
             ResourceType::Stone => "Stone", 
             ResourceType::IronOre => "Iron Ore",
             ResourceType::Coal => "Coal",
+            ResourceType::Clay => "Clay",
+            ResourceType::CopperOre => "Copper Ore",
         }
     }
     
@@ -23,8 +27,10 @@ impl ResourceType {
         match self {
             ResourceType::Wood => Color::BROWN,
             ResourceType::Stone => Color::GRAY,
-            ResourceType::IronOre => Color::new(255, 165, 0, 255), // Orange
-            ResourceType::Coal => Color::new(64, 64, 64, 255),     // Dark gray
+            ResourceType::IronOre => Color::new(255, 165, 0, 255),
+            ResourceType::Coal => Color::new(64, 64, 64, 255),
+            ResourceType::Clay => Color::new(139, 69, 19, 255),
+            ResourceType::CopperOre => Color::new(184, 115, 51, 255), // Copper color
         }
     }
 }
@@ -39,8 +45,10 @@ impl Inventory {
         let mut resources = HashMap::new();
         resources.insert(ResourceType::Wood, 50);
         resources.insert(ResourceType::Stone, 30);
-        resources.insert(ResourceType::IronOre, 0);  // Start with 0
-        resources.insert(ResourceType::Coal, 0);     // Start with 0
+        resources.insert(ResourceType::IronOre, 0);
+        resources.insert(ResourceType::Coal, 0);
+        resources.insert(ResourceType::Clay, 0);
+        resources.insert(ResourceType::CopperOre, 0);  // NEW
         
         Self { resources }
     }

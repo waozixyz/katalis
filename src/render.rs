@@ -2,6 +2,7 @@ use raylib::prelude::*;
 use crate::types::*;
 use crate::world::World;
 use crate::player::Player;
+use crate::assets::AssetManager;
 
 // FIXED: Function to calculate visible world bounds
 fn get_visible_bounds(camera: &Camera2D, screen_width: i32, screen_height: i32) -> (Vector2, Vector2) {
@@ -165,7 +166,7 @@ fn is_tile_visible(tile_x: usize, tile_y: usize, min_bound: Vector2, max_bound: 
       tile_world_y_end < min_bound.y || 
       tile_world_y > max_bound.y)
 }
-pub fn draw_world(d: &mut RaylibMode2D<RaylibDrawHandle>, world: &World, camera: &Camera2D) {
+pub fn draw_world(d: &mut RaylibMode2D<RaylibDrawHandle>, world: &World, camera: &Camera2D, assets: &AssetManager) {
     // Calculate visible bounds
     let (min_bound, max_bound) = get_visible_bounds(camera, 1200, 800);
     
@@ -186,35 +187,75 @@ pub fn draw_world(d: &mut RaylibMode2D<RaylibDrawHandle>, world: &World, camera:
             let pos_x = x as i32 * TILE_SIZE;
             let pos_y = y as i32 * TILE_SIZE;
             
-            // Draw base terrain
-            let color = tile.tile_type.get_color();
-            d.draw_rectangle(pos_x, pos_y, TILE_SIZE, TILE_SIZE, color);
+            // Draw base terrain - with texture if available, otherwise solid color
+            if let Some(terrain_texture) = assets.get_terrain_texture(tile.tile_type) {
+                // Draw terrain texture
+                d.draw_texture_pro(
+                    terrain_texture,
+                    Rectangle::new(0.0, 0.0, terrain_texture.width as f32, terrain_texture.height as f32),
+                    Rectangle::new(pos_x as f32, pos_y as f32, TILE_SIZE as f32, TILE_SIZE as f32),
+                    Vector2::zero(),
+                    0.0,
+                    Color::WHITE
+                );
+            } else {
+                // Fallback to solid color
+                let color = tile.tile_type.get_color();
+                d.draw_rectangle(pos_x, pos_y, TILE_SIZE, TILE_SIZE, color);
+            }
             
-            // Draw resource veins with richness indication
+            // Draw resource veins with PNG assets or fallback to colored overlays
             if let Some(vein) = &tile.resource_vein {
-                let richness_percentage = vein.get_richness_percentage();
-                let mut overlay_color = vein.vein_type.get_overlay_color();
-                
-                // Adjust alpha based on richness (more visible = more resources)
-                overlay_color.a = (overlay_color.a as f32 * (0.3 + richness_percentage * 0.7)) as u8;
-                
-                d.draw_rectangle(pos_x + 2, pos_y + 2, TILE_SIZE - 4, TILE_SIZE - 4, overlay_color);
-                
-                // Draw richness indicator dots
-                let dots = (richness_percentage * 4.0) as i32;
-                for i in 0..dots {
-                    let dot_x = pos_x + 4 + (i % 2) * 12;
-                    let dot_y = pos_y + 4 + (i / 2) * 12;
-                    d.draw_circle(dot_x, dot_y, 2.0, Color::WHITE);
+                if let Some(resource_texture) = assets.get_resource_texture(vein.vein_type) {
+                    // Draw PNG texture centered and scaled
+                    let richness_percentage = vein.get_richness_percentage();
+                    let alpha = (255.0 * (0.5 + richness_percentage * 0.5)) as u8;
+                    let tint = Color::new(255, 255, 255, alpha);
+                    
+                    // Center the resource texture at 24x24 pixels
+                    let texture_size = 24.0;
+                    let offset = (TILE_SIZE as f32 - texture_size) * 0.5;
+                    
+                    d.draw_texture_pro(
+                        resource_texture,
+                        Rectangle::new(0.0, 0.0, resource_texture.width as f32, resource_texture.height as f32),
+                        Rectangle::new(
+                            pos_x as f32 + offset,
+                            pos_y as f32 + offset,
+                            texture_size,
+                            texture_size
+                        ),
+                        Vector2::zero(),
+                        0.0,
+                        tint
+                    );
+                } else {
+                    // Fallback to colored overlay
+                    let richness_percentage = vein.get_richness_percentage();
+                    let mut overlay_color = vein.vein_type.get_overlay_color();
+                    overlay_color.a = (overlay_color.a as f32 * (0.3 + richness_percentage * 0.7)) as u8;
+                    
+                    d.draw_rectangle(pos_x + 2, pos_y + 2, TILE_SIZE - 4, TILE_SIZE - 4, overlay_color);
+                    
+                    // Draw richness indicator dots
+                    let dots = (richness_percentage * 4.0) as i32;
+                    for i in 0..dots {
+                        let dot_x = pos_x + 4 + (i % 2) * 12;
+                        let dot_y = pos_y + 4 + (i / 2) * 12;
+                        d.draw_circle(dot_x, dot_y, 2.0, Color::WHITE);
+                    }
                 }
             }
             
-            // Grid lines (subtle)
-            d.draw_rectangle_lines(pos_x, pos_y, TILE_SIZE, TILE_SIZE, Color::new(255, 255, 255, 20));
+            // Grid lines (subtle) - only if no terrain texture
+            if !assets.has_terrain_texture(tile.tile_type) {
+                d.draw_rectangle_lines(pos_x, pos_y, TILE_SIZE, TILE_SIZE, Color::new(255, 255, 255, 20));
+            }
         }
     }
     
-    // Draw trees (with culling)
+    // Rest of the function remains the same...
+    // Draw trees, day/night overlay, etc.
     let visible_trees = world.get_trees_in_bounds(min_bound, max_bound);
     for tree in visible_trees {
         tree.draw(d);
@@ -226,7 +267,6 @@ pub fn draw_world(d: &mut RaylibMode2D<RaylibDrawHandle>, world: &World, camera:
         let darkness = (255.0 * (1.0 - light_level)) as u8;
         let night_color = Color::new(0, 0, 50, darkness);
         
-        // Draw night overlay over the visible area
         for x in start_x..end_x {
             for y in start_y..end_y {
                 if !is_tile_visible(x, y, min_bound, max_bound) {
@@ -241,7 +281,6 @@ pub fn draw_world(d: &mut RaylibMode2D<RaylibDrawHandle>, world: &World, camera:
     }
 }
 
-
 pub fn draw_ui(d: &mut RaylibDrawHandle, player: &Player) {
     // Background panel with Factorio-style colors
     d.draw_rectangle(10, 10, 320, 120, Color::new(47, 47, 47, 220));
@@ -252,7 +291,7 @@ pub fn draw_ui(d: &mut RaylibDrawHandle, player: &Player) {
     
     // Controls
     d.draw_text("WASD: Move Player", 20, 45, 16, Color::new(200, 200, 200, 255));
-    d.draw_text("LMB: Auto-mine (Pickaxe/Axe)", 20, 65, 16, Color::new(200, 200, 200, 255));
+    d.draw_text("LMB: Auto-mine (Pickaxe/Axe/Shovel)", 20, 65, 16, Color::new(200, 200, 200, 255));
     d.draw_text("RMB: Cancel mining", 20, 85, 16, Color::new(200, 200, 200, 255));
     d.draw_text("Shift+IJKL: Free Camera", 20, 105, 16, Color::new(200, 200, 200, 255));
     
@@ -281,13 +320,12 @@ pub fn draw_ui(d: &mut RaylibDrawHandle, player: &Player) {
     draw_inventory(d, &player.inventory);
 }
 
-
 // Update the inventory drawing function
 fn draw_inventory(d: &mut RaylibDrawHandle, inventory: &Inventory) {
     let inv_x = 1200 - 200;
     let inv_y = 10;
     let inv_width = 180;
-    let inv_height = 140; // Increased height for more resources
+    let inv_height = 180; // Increased height for clay
     
     // Inventory background
     d.draw_rectangle(inv_x, inv_y, inv_width, inv_height, Color::new(47, 47, 47, 220));
@@ -297,9 +335,9 @@ fn draw_inventory(d: &mut RaylibDrawHandle, inventory: &Inventory) {
     d.draw_text("Inventory", inv_x + 10, inv_y + 10, 18, Color::WHITE);
     
     // Draw resources
-    let resources = [ResourceType::Wood, ResourceType::Stone, ResourceType::IronOre, ResourceType::Coal];
+    let resources = [ResourceType::Wood, ResourceType::Stone, ResourceType::IronOre, ResourceType::Coal, ResourceType::Clay, ResourceType::CopperOre];
     for (i, resource) in resources.iter().enumerate() {
-        let y_offset = inv_y + 35 + (i as i32 * 22);
+        let y_offset = inv_y + 35 + (i as i32 * 20); // Reduced spacing to fit more resources
         let amount = inventory.get_amount(resource);
         let color = resource.get_color();
         
@@ -312,11 +350,12 @@ fn draw_inventory(d: &mut RaylibDrawHandle, inventory: &Inventory) {
             &format!("{}: {}", resource.get_name(), amount),
             inv_x + 30,
             y_offset,
-            14, // Slightly smaller font
+            13, // Smaller font to fit more resources
             Color::WHITE
         );
     }
 }
+
 
 pub fn draw_time_display(d: &mut RaylibDrawHandle, game_time: &GameTime) {
     let time_str = game_time.get_time_string();

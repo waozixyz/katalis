@@ -4,6 +4,7 @@ mod world;
 mod camera;
 mod input;
 mod render;
+mod assets; // NEW
 
 use raylib::prelude::*;
 use types::*;
@@ -12,6 +13,7 @@ use world::World;
 use camera::update_camera;
 use input::handle_input;
 use render::{draw_world, draw_ui, draw_time_display};
+use assets::AssetManager; // NEW
 
 const SCREEN_WIDTH: i32 = 1200;
 const SCREEN_HEIGHT: i32 = 800;
@@ -24,6 +26,12 @@ fn main() {
         .build();
 
     rl.set_target_fps(60);
+
+    // Initialize asset manager and load assets
+    let mut assets = AssetManager::new();
+    if let Err(e) = assets.load_assets(&mut rl, &thread) {
+        println!("Warning: Failed to load some assets: {}", e);
+    }
 
     // Initialize world
     let mut world = World::new(100, 100);
@@ -39,7 +47,7 @@ fn main() {
     let mut camera = Camera2D {
         target: player.position,
         offset: Vector2::new(SCREEN_WIDTH as f32 / 2.0, SCREEN_HEIGHT as f32 / 2.0),
-        rotation: -20.0,
+        rotation: 0.0,
         zoom: 1.0,
     };
 
@@ -54,7 +62,7 @@ fn main() {
         handle_input(&mut world, &camera, &rl, &mut player);
         
         // Update world systems and collect resources
-        let (wood_gained, stone_gained, iron_gained, coal_gained) = world.update(delta_time, &mut player);
+        let (wood_gained, stone_gained, iron_gained, coal_gained, clay_gained, copper_gained) = world.update(delta_time, &mut player);
         
         // Add gained resources to inventory
         if wood_gained > 0 {
@@ -73,6 +81,14 @@ fn main() {
             player.inventory.add_resource(ResourceType::Coal, coal_gained);
             println!("Added {} coal to inventory. Total coal: {}", coal_gained, player.inventory.get_amount(&ResourceType::Coal));
         }
+        if clay_gained > 0 {
+            player.inventory.add_resource(ResourceType::Clay, clay_gained);
+            println!("Added {} clay to inventory. Total clay: {}", clay_gained, player.inventory.get_amount(&ResourceType::Clay));
+        }
+        if copper_gained > 0 { // NEW
+            player.inventory.add_resource(ResourceType::CopperOre, copper_gained);
+            println!("Added {} copper ore to inventory. Total copper ore: {}", copper_gained, player.inventory.get_amount(&ResourceType::CopperOre));
+        }
         
         // Get mouse position BEFORE starting drawing
         let mouse_screen_pos = rl.get_mouse_position();
@@ -85,7 +101,7 @@ fn main() {
         
         {
             let mut d2d = d.begin_mode2D(camera);
-            draw_world(&mut d2d, &world, &camera);
+            draw_world(&mut d2d, &world, &camera, &assets); // Pass assets to draw_world
             player.draw(&mut d2d);
             
             // Draw mining range indicator when player is close to mouse
