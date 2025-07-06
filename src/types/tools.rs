@@ -1,5 +1,5 @@
 use raylib::prelude::*;
-use super::{TileType, TreeType, VeinType};
+use super::VeinType;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ToolType {
@@ -29,7 +29,7 @@ impl ToolType {
         match self {
             ToolType::Pickaxe => matches!(vein_type, VeinType::IronOre | VeinType::CoalDeposit | VeinType::StoneQuarry | VeinType::CopperOre),
             ToolType::Shovel => matches!(vein_type, VeinType::ClayDeposit),
-            ToolType::Axe => false,
+            ToolType::Axe => matches!(vein_type, VeinType::CottonPatch),
         }
     }
     
@@ -41,6 +41,7 @@ impl ToolType {
         match vein_type {
             VeinType::IronOre | VeinType::CoalDeposit | VeinType::StoneQuarry | VeinType::CopperOre => ToolType::Pickaxe,
             VeinType::ClayDeposit => ToolType::Shovel,
+            VeinType::CottonPatch => ToolType::Axe,
         }
     }
 }

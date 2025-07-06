@@ -52,6 +52,8 @@ impl World {
         // Second pass: Generate resource veins
         self.generate_resource_veins();
         
+        self.generate_cotton_plants();
+
         // Third pass: Generate trees
         self.generate_trees();
         
@@ -248,13 +250,15 @@ impl World {
         println!("  Terrain distribution: {:?}", terrain_counts);
         println!("  Resource distribution: {:?}", resource_counts);
     }
-    pub fn update(&mut self, delta_time: f32, player: &mut Player) -> (u32, u32, u32, u32, u32, u32) { // Returns (wood, stone, iron, coal, clay, copper)
+    
+    pub fn update(&mut self, delta_time: f32, player: &mut Player) -> (u32, u32, u32, u32, u32, u32, u32) { // Returns (wood, stone, iron, coal, clay, copper, cotton)
         let mut wood_gained = 0;
         let mut stone_gained = 0;
         let mut iron_gained = 0;
         let mut coal_gained = 0;
         let mut clay_gained = 0;
         let mut copper_gained = 0; 
+        let mut cotton_gained = 0; 
         
         // Update game time
         self.game_time.update(delta_time);
@@ -288,12 +292,12 @@ impl World {
                                 VeinType::CoalDeposit => coal_gained += mined,
                                 VeinType::StoneQuarry => stone_gained += mined,
                                 VeinType::ClayDeposit => clay_gained += mined,
-                                VeinType::CopperOre => copper_gained += mined, 
+                                VeinType::CopperOre => copper_gained += mined,
+                                VeinType::CottonPatch => cotton_gained += mined, // NEW
                             }
                             
                             println!("Mined {} {} from vein! Remaining: {}", mined, vein.vein_type.get_name(), vein.richness);
                             
-                            // Remove depleted veins
                             if vein.is_depleted() {
                                 tile.resource_vein = None;
                                 println!("Resource vein depleted!");
@@ -317,7 +321,7 @@ impl World {
         // Remove fully faded stumps
         self.trees.retain(|tree| !tree.should_remove());
         
-        (wood_gained, stone_gained, iron_gained, coal_gained, clay_gained, copper_gained)
+        (wood_gained, stone_gained, iron_gained, coal_gained, clay_gained, copper_gained, cotton_gained)
     }
     
     fn cut_tree_at_position(&mut self, target_pos: Vector2) -> u32 {
@@ -330,6 +334,52 @@ impl World {
         0
     }
     
+    fn generate_cotton_plants(&mut self) {
+        use noise::{NoiseFn, Perlin};
+        
+        let cotton_noise = Perlin::new(999);
+        let mut cotton_count = 0;
+        
+        for x in 0..self.width {
+            for y in 0..self.height {
+                // Cotton grows on grass, away from water, without resource veins
+                if matches!(self.tiles[x][y].tile_type, TileType::Grass) && self.tiles[x][y].resource_vein.is_none() {
+                    let cotton_value = cotton_noise.get([x as f64 * 0.2, y as f64 * 0.2]);
+                    
+                    // Check if away from water (cotton likes dry areas)
+                    let mut near_water = false;
+                    for dx in -3..=3 {
+                        for dy in -3..=3 {
+                            let check_x = x as i32 + dx;
+                            let check_y = y as i32 + dy;
+                            if check_x >= 0 && check_y >= 0 && 
+                            (check_x as usize) < self.width && (check_y as usize) < self.height {
+                                if matches!(self.tiles[check_x as usize][check_y as usize].tile_type, TileType::Water | TileType::Swamp) {
+                                    near_water = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if near_water { break; }
+                    }
+                    
+                    let dry_bonus = if !near_water { 0.2 } else { -0.3 };
+                    
+                    if cotton_value + dry_bonus > 0.6 {
+                        // Add a cotton plant here (we'll implement this as a simple resource patch for now)
+                        // Later you might want to make this a separate plant system
+                        cotton_count += 1;
+                        
+                        // For now, just add it as a special resource vein
+                        self.tiles[x][y].resource_vein = Some(ResourceVein::new(VeinType::CottonPatch, 20 + (cotton_value * 10.0) as u32));
+                    }
+                }
+            }
+        }
+        
+        println!("Generated {} cotton patches", cotton_count);
+    }
+
     pub fn try_start_mining(&mut self, player: &mut Player, target_pos: Vector2) {
         if player.is_mining() {
             return;

@@ -29,7 +29,65 @@ pub enum VeinType {
     CoalDeposit,
     StoneQuarry,
     ClayDeposit,
-    CopperOre,  // NEW
+    CopperOre,
+    CottonPatch, // NEW
+}
+
+impl VeinType {
+    pub fn get_overlay_color(&self) -> Color {
+        match self {
+            VeinType::IronOre => Color::new(255, 165, 0, 120),
+            VeinType::CoalDeposit => Color::new(64, 64, 64, 150),
+            VeinType::StoneQuarry => Color::new(169, 169, 169, 100),
+            VeinType::ClayDeposit => Color::new(139, 69, 19, 130),
+            VeinType::CopperOre => Color::new(184, 115, 51, 120),
+            VeinType::CottonPatch => Color::new(255, 255, 240, 100), // Off-white
+        }
+    }
+    
+    pub fn get_name(&self) -> &'static str {
+        match self {
+            VeinType::IronOre => "Iron Ore",
+            VeinType::CoalDeposit => "Coal",
+            VeinType::StoneQuarry => "Stone",
+            VeinType::ClayDeposit => "Clay",
+            VeinType::CopperOre => "Copper Ore",
+            VeinType::CottonPatch => "Cotton",
+        }
+    }
+    
+    pub fn get_mining_yield(&self) -> u32 {
+        match self {
+            VeinType::IronOre => 3,
+            VeinType::CoalDeposit => 2,
+            VeinType::StoneQuarry => 5,
+            VeinType::ClayDeposit => 4,
+            VeinType::CopperOre => 4,
+            VeinType::CottonPatch => 3, // Cotton yield
+        }
+    }
+    
+    pub fn get_initial_richness_range(&self) -> (u32, u32) {
+        match self {
+            VeinType::IronOre => (50, 200),
+            VeinType::CoalDeposit => (30, 150),
+            VeinType::StoneQuarry => (100, 300),
+            VeinType::ClayDeposit => (40, 180),
+            VeinType::CopperOre => (60, 220),
+            VeinType::CottonPatch => (15, 60), // Smaller cotton patches
+        }
+    }
+    
+    pub fn get_asset_filename(&self) -> &'static str {
+        match self {
+            VeinType::IronOre => "tiles/resources/iron.png",
+            VeinType::CoalDeposit => "tiles/resources/coal.png",
+            VeinType::StoneQuarry => "tiles/resources/stone_quarry.png",
+            VeinType::ClayDeposit => "tiles/resources/clay.png",
+            VeinType::CopperOre => "tiles/resources/copper.png",
+            VeinType::CottonPatch => "tiles/resources/cotton.png",
+        }
+    }
 }
 
 impl TileType {
@@ -54,62 +112,12 @@ impl TileType {
             VeinType::CoalDeposit => matches!(self, TileType::Grass | TileType::Stone),
             VeinType::StoneQuarry => matches!(self, TileType::Stone | TileType::Mountain),
             VeinType::ClayDeposit => matches!(self, TileType::Swamp | TileType::Sand),
-            VeinType::CopperOre => matches!(self, TileType::Stone | TileType::Mountain | TileType::Grass), // Copper is more common
+            VeinType::CopperOre => matches!(self, TileType::Stone | TileType::Mountain | TileType::Grass),
+            VeinType::CottonPatch => matches!(self, TileType::Grass), // Cotton only on grass
         }
     }
 }
 
-impl VeinType {
-    pub fn get_overlay_color(&self) -> Color {
-        match self {
-            VeinType::IronOre => Color::new(255, 165, 0, 120),      // Orange
-            VeinType::CoalDeposit => Color::new(64, 64, 64, 150),   // Dark gray
-            VeinType::StoneQuarry => Color::new(169, 169, 169, 100), // Light gray
-            VeinType::ClayDeposit => Color::new(139, 69, 19, 130),   // Brown/terracotta
-            VeinType::CopperOre => Color::new(184, 115, 51, 120),    // Copper color
-        }
-    }
-    
-    pub fn get_name(&self) -> &'static str {
-        match self {
-            VeinType::IronOre => "Iron Ore",
-            VeinType::CoalDeposit => "Coal",
-            VeinType::StoneQuarry => "Stone",
-            VeinType::ClayDeposit => "Clay",
-            VeinType::CopperOre => "Copper Ore",
-        }
-    }
-    
-    pub fn get_mining_yield(&self) -> u32 {
-        match self {
-            VeinType::IronOre => 3,
-            VeinType::CoalDeposit => 2,
-            VeinType::StoneQuarry => 5,
-            VeinType::ClayDeposit => 4,
-            VeinType::CopperOre => 4,  // Good yield like clay
-        }
-    }
-    
-    pub fn get_initial_richness_range(&self) -> (u32, u32) {
-        match self {
-            VeinType::IronOre => (50, 200),
-            VeinType::CoalDeposit => (30, 150),
-            VeinType::StoneQuarry => (100, 300),
-            VeinType::ClayDeposit => (40, 180),
-            VeinType::CopperOre => (60, 220),  // Slightly more abundant than iron
-        }
-    }
-    
-    pub fn get_asset_filename(&self) -> &'static str {
-        match self {
-            VeinType::IronOre => "iron.png",
-            VeinType::CoalDeposit => "coal.png",
-            VeinType::StoneQuarry => "stone_quarry.png",
-            VeinType::ClayDeposit => "clay.png",
-            VeinType::CopperOre => "copper.png",
-        }
-    }
-}
 
 // Rest of the implementation remains the same...
 impl ResourceVein {
