@@ -6,6 +6,7 @@ pub struct AssetManager {
     resource_textures: HashMap<VeinType, Texture2D>,
     terrain_textures: HashMap<TileType, Texture2D>,
     icon_textures: HashMap<ResourceType, Texture2D>,
+    ui_textures: HashMap<String, Texture2D>, 
 }
 
 impl AssetManager {
@@ -14,6 +15,7 @@ impl AssetManager {
             resource_textures: HashMap::new(),
             terrain_textures: HashMap::new(),
             icon_textures: HashMap::new(),
+            ui_textures: HashMap::new(),
         }
     }
     
@@ -82,8 +84,33 @@ impl AssetManager {
                 }
             }
         }
+
+        let ui_assets = [
+            ("inventory_slot", "assets/ui/inventory_slot.png"),
+            ("crafting_slot", "assets/ui/crafting_slot.png"),
+        ];
+        
+        for (name, filepath) in ui_assets.iter() {
+            match rl.load_texture(thread, filepath) {
+                Ok(texture) => {
+                    println!("Loaded UI texture: {}", filepath);
+                    self.ui_textures.insert(name.to_string(), texture);
+                }
+                Err(e) => {
+                    println!("Warning: Could not load UI texture {}: {}", filepath, e);
+                }
+            }
+        }
         
         Ok(())
+    }
+
+    pub fn get_ui_texture(&self, name: &str) -> Option<&Texture2D> {
+        self.ui_textures.get(name)
+    }
+    
+    pub fn has_ui_texture(&self, name: &str) -> bool {
+        self.ui_textures.contains_key(name)
     }
     
     pub fn get_resource_texture(&self, vein_type: VeinType) -> Option<&Texture2D> {

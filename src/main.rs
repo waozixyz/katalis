@@ -73,8 +73,8 @@ fn main() {
         // Update systems
         game_player.update(&rl, &camera);
         update_camera(&mut camera, &mut camera_target, &game_player, &rl);
-        inventory_ui.update(&rl); // NEW: Update inventory UI
-        inventory_ui.handle_mouse_input(&rl); // Handle mouse clicks for tab switching
+        inventory_ui.update(&rl);
+        inventory_ui.handle_mouse_input(&rl, &mut game_player.inventory);
         handle_input(&mut world, &camera, &rl, &mut game_player);
         
         // Update world and collect resources

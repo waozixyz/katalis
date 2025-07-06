@@ -90,52 +90,161 @@ impl ResourceType {
 }
 
 #[derive(Clone, Debug)]
+pub struct InventorySlot {
+    pub resource_type: Option<ResourceType>,
+    pub amount: u32,
+}
+
+impl InventorySlot {
+    pub fn new() -> Self {
+        Self {
+            resource_type: None,
+            amount: 0,
+        }
+    }
+    
+    pub fn with_resource(resource_type: ResourceType, amount: u32) -> Self {
+        Self {
+            resource_type: Some(resource_type),
+            amount,
+        }
+    }
+    
+    pub fn is_empty(&self) -> bool {
+        self.resource_type.is_none() || self.amount == 0
+    }
+    
+    pub fn can_add(&self, resource_type: ResourceType, amount: u32) -> bool {
+        if self.is_empty() {
+            true
+        } else if let Some(existing_type) = self.resource_type {
+            existing_type == resource_type
+        } else {
+            false
+        }
+    }
+    
+    pub fn add(&mut self, resource_type: ResourceType, amount: u32) -> u32 {
+        if self.is_empty() {
+            self.resource_type = Some(resource_type);
+            self.amount = amount;
+            amount
+        } else if let Some(existing_type) = self.resource_type {
+            if existing_type == resource_type {
+                self.amount += amount;
+                amount
+            } else {
+                0
+            }
+        } else {
+            0
+        }
+    }
+    
+    pub fn remove(&mut self, amount: u32) -> u32 {
+        let removed = amount.min(self.amount);
+        self.amount -= removed;
+        if self.amount == 0 {
+            self.resource_type = None;
+        }
+        removed
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Inventory {
-    pub resources: HashMap<ResourceType, u32>,
+    pub slots: Vec<InventorySlot>,
+    pub slot_count: usize,
 }
 
 impl Inventory {
     pub fn new() -> Self {
-        let mut resources = HashMap::new();
+        let slot_count = 48; // 8x6 grid
+        let mut slots = vec![InventorySlot::new(); slot_count];
         
-        // Basic starting resources
-        resources.insert(ResourceType::Wood, 50);
-        resources.insert(ResourceType::Stone, 30);
-        resources.insert(ResourceType::IronOre, 0);
-        resources.insert(ResourceType::Coal, 0);
-        resources.insert(ResourceType::Clay, 0);
-        resources.insert(ResourceType::CopperOre, 0);
-        resources.insert(ResourceType::Cotton, 0);
+        // Add starting resources to first few slots
+        slots[0] = InventorySlot::with_resource(ResourceType::Wood, 50);
+        slots[1] = InventorySlot::with_resource(ResourceType::Stone, 30);
         
-        // Processed materials start at 0
-        resources.insert(ResourceType::Charcoal, 0);
-        resources.insert(ResourceType::IronBloom, 0);
-        resources.insert(ResourceType::WroughtIron, 0);
-        resources.insert(ResourceType::IronPlates, 0);
-        resources.insert(ResourceType::IronGears, 0);
-        resources.insert(ResourceType::MetalRods, 0);
-        resources.insert(ResourceType::Threads, 0);
-        resources.insert(ResourceType::Fabric, 0);
-        resources.insert(ResourceType::ClothStrips, 0);
-        
-        Self { resources }
+        Self { 
+            slots,
+            slot_count,
+        }
     }
     
     pub fn get_amount(&self, resource: &ResourceType) -> u32 {
-        *self.resources.get(resource).unwrap_or(&0)
+        self.slots.iter()
+            .filter_map(|slot| {
+                if let Some(slot_resource) = slot.resource_type {
+                    if slot_resource == *resource {
+                        Some(slot.amount)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .sum()
     }
     
-    pub fn add_resource(&mut self, resource: ResourceType, amount: u32) {
-        *self.resources.entry(resource).or_insert(0) += amount;
+    pub fn add_resource(&mut self, resource: ResourceType, amount: u32) -> u32 {
+        let mut remaining = amount;
+        
+        // First, try to add to existing stacks
+        for slot in &mut self.slots {
+            if let Some(slot_resource) = slot.resource_type {
+                if slot_resource == resource {
+                    let added = slot.add(resource, remaining);
+                    remaining -= added;
+                    if remaining == 0 {
+                        return amount;
+                    }
+                }
+            }
+        }
+        
+        // Then, try to add to empty slots
+        for slot in &mut self.slots {
+            if slot.is_empty() {
+                let added = slot.add(resource, remaining);
+                remaining -= added;
+                if remaining == 0 {
+                    return amount;
+                }
+            }
+        }
+        
+        amount - remaining // Return how much was actually added
     }
     
     pub fn remove_resource(&mut self, resource: ResourceType, amount: u32) -> bool {
-        let current = self.get_amount(&resource);
-        if current >= amount {
-            *self.resources.entry(resource).or_insert(0) -= amount;
-            true
-        } else {
-            false
+        let available = self.get_amount(&resource);
+        if available < amount {
+            return false;
         }
+        
+        let mut remaining = amount;
+        for slot in &mut self.slots {
+            if let Some(slot_resource) = slot.resource_type {
+                if slot_resource == resource {
+                    let removed = slot.remove(remaining);
+                    remaining -= removed;
+                    if remaining == 0 {
+                        break;
+                    }
+                }
+            }
+        }
+        
+        true
+    }
+    
+    pub fn get_slot(&self, index: usize) -> Option<&InventorySlot> {
+        self.slots.get(index)
+    }
+    
+    pub fn get_slot_mut(&mut self, index: usize) -> Option<&mut InventorySlot> {
+        self.slots.get_mut(index)
     }
 }

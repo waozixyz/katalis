@@ -3,10 +3,23 @@ use crate::types::*;
 use crate::crafting::*;
 use crate::assets::AssetManager;
 
+#[derive(Clone, Debug)]
+pub struct DraggedItem {
+    pub resource_type: ResourceType,
+    pub amount: u32,
+    pub source_slot: usize,
+}
+
 pub struct InventoryUI {
     pub is_open: bool,
     pub selected_recipe: Option<CraftableItem>,
     pub selected_category: CraftingCategory,
+    pub dragged_item: Option<DraggedItem>,
+    pub drag_offset: Vector2,
+    // Centralized slot configuration
+    pub slot_size: i32,
+    pub slot_spacing_x: i32,
+    pub slot_spacing_y: i32,
 }
 
 impl InventoryUI {
@@ -15,22 +28,46 @@ impl InventoryUI {
             is_open: false,
             selected_recipe: None,
             selected_category: CraftingCategory::BasicMaterials,
+            dragged_item: None,
+            drag_offset: Vector2::zero(),
+            slot_size: 32,
+            slot_spacing_x: 6,
+            slot_spacing_y: 8,
         }
     }
     
     pub fn toggle(&mut self) {
         self.is_open = !self.is_open;
+        // Clear drag state when closing inventory
+        if !self.is_open {
+            self.dragged_item = None;
+        }
     }
     
-    pub fn handle_mouse_input(&mut self, rl: &RaylibHandle) {
+    pub fn handle_mouse_input(&mut self, rl: &RaylibHandle, inventory: &mut Inventory) {
         if !self.is_open {
             return;
         }
         
+        let mouse_pos = rl.get_mouse_position();
+        
         if rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) {
-            let mouse_pos = rl.get_mouse_position();
+            // Handle inventory slot clicks
+            if let Some(slot_index) = self.get_slot_at_mouse(mouse_pos, 50, 100) {
+                if let Some(slot) = inventory.get_slot(slot_index) {
+                    if !slot.is_empty() {
+                        // Start dragging
+                        self.dragged_item = Some(DraggedItem {
+                            resource_type: slot.resource_type.unwrap(),
+                            amount: slot.amount,
+                            source_slot: slot_index,
+                        });
+                        self.drag_offset = Vector2::zero();
+                    }
+                }
+            }
             
-            // Check if clicking on crafting panel tabs
+            // Handle crafting panel tabs (existing code)
             let panel_x = 650;
             let panel_y = 100;
             let tab_y = panel_y + 50;
@@ -53,7 +90,6 @@ impl InventoryUI {
                 let tab_x = panel_x + (col as i32 * tab_width);
                 let current_tab_y = tab_y + (row as i32 * tab_height);
                 
-                // Check if mouse is within tab bounds
                 if mouse_pos.x >= tab_x as f32 && 
                    mouse_pos.x <= (tab_x + tab_width) as f32 &&
                    mouse_pos.y >= current_tab_y as f32 && 
@@ -63,10 +99,57 @@ impl InventoryUI {
                 }
             }
         }
+        
+        if rl.is_mouse_button_released(MouseButton::MOUSE_BUTTON_LEFT) {
+            if let Some(dragged) = &self.dragged_item {
+                // Try to drop in a new slot
+                if let Some(target_slot) = self.get_slot_at_mouse(mouse_pos, 50, 100) {
+                    if target_slot != dragged.source_slot {
+                        // Attempt to move item
+                        if let Some(target) = inventory.get_slot(target_slot) {
+                            if target.is_empty() || target.resource_type == Some(dragged.resource_type) {
+                                // Remove from source
+                                if let Some(source) = inventory.get_slot_mut(dragged.source_slot) {
+                                    source.remove(dragged.amount);
+                                }
+                                // Add to target
+                                if let Some(target) = inventory.get_slot_mut(target_slot) {
+                                    target.add(dragged.resource_type, dragged.amount);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            self.dragged_item = None;
+        }
+    }
+    
+    fn get_slot_at_mouse(&self, mouse_pos: Vector2, panel_x: i32, panel_y: i32) -> Option<usize> {
+        let slots_per_row = 8i32;
+        let start_x = panel_x + 20;
+        let start_y = panel_y + 60;
+        
+        for row in 0..6i32 {
+            for col in 0..slots_per_row {
+                let slot_index = (row * slots_per_row + col) as usize;
+                if slot_index >= 48 { break; }
+                
+                let slot_x = start_x + (col * (self.slot_size + self.slot_spacing_x));
+                let slot_y = start_y + (row * (self.slot_size + self.slot_spacing_y));
+                
+                if mouse_pos.x >= slot_x as f32 && 
+                   mouse_pos.x <= (slot_x + self.slot_size) as f32 &&
+                   mouse_pos.y >= slot_y as f32 && 
+                   mouse_pos.y <= (slot_y + self.slot_size) as f32 {
+                    return Some(slot_index);
+                }
+            }
+        }
+        None
     }
     
     pub fn update(&mut self, rl: &RaylibHandle) {
-        // Toggle inventory with E key
         if rl.is_key_pressed(KeyboardKey::KEY_E) {
             self.toggle();
         }
@@ -80,80 +163,122 @@ impl InventoryUI {
         let screen_width = 1200;
         let screen_height = 800;
         
-        // Draw semi-transparent overlay
         d.draw_rectangle(0, 0, screen_width, screen_height, Color::new(0, 0, 0, 128));
         
-        // Left panel - Inventory
         self.draw_inventory_panel(d, inventory, assets, 50, 100);
-        
-        // Right panel - Crafting
         self.draw_crafting_panel(d, crafting_system, inventory, assets, 650, 100, mouse_pos);
+        
+        // Draw dragged item
+        if let Some(dragged) = &self.dragged_item {
+            let drag_pos = Vector2::new(mouse_pos.x - (self.slot_size as f32 / 2.0), mouse_pos.y - (self.slot_size as f32 / 2.0));
+            
+            // Draw slot background
+            if let Some(slot_texture) = assets.get_ui_texture("inventory_slot") {
+                d.draw_texture_ex(slot_texture, drag_pos, 0.0, self.slot_size as f32 / slot_texture.width as f32, Color::new(255, 255, 255, 200));
+            } else {
+                d.draw_rectangle(drag_pos.x as i32, drag_pos.y as i32, self.slot_size, self.slot_size, Color::new(60, 60, 60, 200));
+            }
+            
+            // Draw item icon
+            if let Some(texture) = assets.get_icon_texture(dragged.resource_type) {
+                let icon_size = self.slot_size - 4;
+                d.draw_texture_ex(texture, Vector2::new(drag_pos.x + 2.0, drag_pos.y + 2.0), 0.0, icon_size as f32 / texture.width as f32, Color::new(255, 255, 255, 200));
+            } else {
+                let color = dragged.resource_type.get_color();
+                let icon_size = self.slot_size - 4;
+                d.draw_rectangle(drag_pos.x as i32 + 2, drag_pos.y as i32 + 2, icon_size, icon_size, Color::new(color.r, color.g, color.b, 200));
+            }
+            
+            // Draw amount
+            let amount_text = format!("{}", dragged.amount);
+            let font_size = 10; // Smaller font for smaller slots
+            d.draw_text(&amount_text, drag_pos.x as i32 + self.slot_size - 12, drag_pos.y as i32 + self.slot_size - 12, font_size, Color::WHITE);
+        }
     }
     
     fn draw_inventory_panel(&self, d: &mut RaylibDrawHandle, inventory: &Inventory, assets: &AssetManager, x: i32, y: i32) {
         let panel_width = 500;
         let panel_height = 600;
         
-        // Panel background
         d.draw_rectangle(x, y, panel_width, panel_height, Color::new(40, 40, 40, 240));
         d.draw_rectangle_lines(x, y, panel_width, panel_height, Color::new(200, 200, 200, 255));
         
-        // Title
         d.draw_text("Inventory", x + 20, y + 20, 24, Color::WHITE);
         
-        // Draw inventory grid
-        let slot_size: i32 = 60; // Increased from 50
-        let slots_per_row = 6; // Reduced from 8 for better spacing
+        let slots_per_row = 8i32;
         let start_x = x + 20;
         let start_y = y + 60;
         
-        let resources = [
-            ResourceType::Wood, ResourceType::Stone, ResourceType::IronOre, ResourceType::Coal,
-            ResourceType::Clay, ResourceType::CopperOre, ResourceType::Cotton, ResourceType::Charcoal,
-            ResourceType::IronBloom, ResourceType::WroughtIron, ResourceType::IronPlates, ResourceType::IronGears,
-            ResourceType::MetalRods, ResourceType::Threads, ResourceType::Fabric, ResourceType::ClothStrips,
-        ];
-        
-        for (i, resource) in resources.iter().enumerate() {
-            let slot_x = start_x + ((i % slots_per_row) * (slot_size + 15) as usize) as i32; // Increased spacing from 10 to 15
-            let slot_y = start_y + ((i / slots_per_row) * (slot_size + 25) as usize) as i32; // Increased spacing from 10 to 25 for text
-            let amount = inventory.get_amount(resource);
-            
-            // Draw slot background
-            d.draw_rectangle(slot_x, slot_y, slot_size, slot_size, Color::new(60, 60, 60, 255));
-            d.draw_rectangle_lines(slot_x, slot_y, slot_size, slot_size, Color::new(100, 100, 100, 255));
-            
-            // Draw resource icon (use texture if available, fallback to colored square)
-            if let Some(texture) = assets.get_icon_texture(*resource) {
-                // Draw icon texture scaled to fit slot with padding
-                let icon_size = slot_size - 10;
-                d.draw_texture_ex(
-                    texture,
-                    Vector2::new((slot_x + 5) as f32, (slot_y + 5) as f32),
-                    0.0,
-                    icon_size as f32 / texture.width as f32,
-                    Color::WHITE
-                );
-            } else {
-                // Fallback to colored square
-                let icon_color = resource.get_color();
-                d.draw_rectangle(slot_x + 5, slot_y + 5, slot_size - 10, slot_size - 10, icon_color);
+        // Draw all 48 slots (6 rows x 8 columns)
+        for row in 0..6i32 {
+            for col in 0..slots_per_row {
+                let slot_index = (row * slots_per_row + col) as usize;
+                if slot_index >= inventory.slot_count { break; }
+                
+                let slot_x = start_x + (col * (self.slot_size + self.slot_spacing_x));
+                let slot_y = start_y + (row * (self.slot_size + self.slot_spacing_y));
+                
+                // Skip drawing if this slot is being dragged
+                let is_being_dragged = self.dragged_item.as_ref()
+                    .map(|d| d.source_slot == slot_index)
+                    .unwrap_or(false);
+                
+                // Draw slot background
+                if let Some(slot_texture) = assets.get_ui_texture("inventory_slot") {
+                    let alpha = if is_being_dragged { 100 } else { 255 };
+                    d.draw_texture_ex(
+                        slot_texture,
+                        Vector2::new(slot_x as f32, slot_y as f32),
+                        0.0,
+                        self.slot_size as f32 / slot_texture.width as f32,
+                        Color::new(255, 255, 255, alpha)
+                    );
+                } else {
+                    let alpha = if is_being_dragged { 100 } else { 255 };
+                    d.draw_rectangle(slot_x, slot_y, self.slot_size, self.slot_size, Color::new(60, 60, 60, alpha));
+                    d.draw_rectangle_lines(slot_x, slot_y, self.slot_size, self.slot_size, Color::new(100, 100, 100, alpha));
+                }
+                
+                // Draw item if slot has one and it's not being dragged
+                if let Some(slot) = inventory.get_slot(slot_index) {
+                    if !slot.is_empty() && !is_being_dragged {
+                        // Draw item icon
+                        if let Some(texture) = assets.get_icon_texture(slot.resource_type.unwrap()) {
+                            let icon_size = self.slot_size - 4;
+                            d.draw_texture_ex(
+                                texture,
+                                Vector2::new((slot_x + 2) as f32, (slot_y + 2) as f32),
+                                0.0,
+                                icon_size as f32 / texture.width as f32,
+                                Color::WHITE
+                            );
+                        } else {
+                            let icon_color = slot.resource_type.unwrap().get_color();
+                            let icon_size = self.slot_size - 4;
+                            d.draw_rectangle(slot_x + 2, slot_y + 2, icon_size, icon_size, icon_color);
+                        }
+                        
+                        // Draw amount with smaller font
+                        let amount_text = format!("{}", slot.amount);
+                        let font_size = 10; // Smaller font for smaller slots
+                        let text_width = d.measure_text(&amount_text, font_size);
+                        d.draw_rectangle(
+                            slot_x + self.slot_size - text_width - 4, 
+                            slot_y + self.slot_size - 12, 
+                            text_width + 2, 
+                            10, 
+                            Color::new(0, 0, 0, 180)
+                        );
+                        d.draw_text(
+                            &amount_text, 
+                            slot_x + self.slot_size - text_width - 3, 
+                            slot_y + self.slot_size - 11, 
+                            font_size, 
+                            Color::WHITE
+                        );
+                    }
+                }
             }
-            
-            // Draw amount text with better positioning and background
-            if amount > 0 {
-                let amount_text = format!("{}", amount);
-                // Draw a small background for better readability
-                let text_width = d.measure_text(&amount_text, 14);
-                d.draw_rectangle(slot_x + slot_size - text_width - 8, slot_y + slot_size - 20, text_width + 6, 16, Color::new(0, 0, 0, 180));
-                d.draw_text(&amount_text, slot_x + slot_size - text_width - 5, slot_y + slot_size - 16, 14, Color::WHITE);
-            }
-            
-            // Resource name below slot with better spacing and centering
-            let name = resource.get_name();
-            let name_width = d.measure_text(name, 11);
-            let name_x = slot_x + (slot_size - name_width) / 2; // Center the text
-            d.draw_text(name, name_x, slot_y + slot_size + 8, 11, Color::LIGHTGRAY);
         }
     }
     
@@ -164,7 +289,7 @@ impl InventoryUI {
         // Panel background
         d.draw_rectangle(x, y, panel_width, panel_height, Color::new(40, 40, 40, 240));
         d.draw_rectangle_lines(x, y, panel_width, panel_height, Color::new(200, 200, 200, 255));
-        
+
         // Title
         d.draw_text("Crafting", x + 20, y + 15, 24, Color::WHITE);
         
@@ -208,9 +333,9 @@ impl InventoryUI {
         // Items grid for selected category
         let items = self.selected_category.get_items();
         let grid_start_y = tab_y + (tab_height * 2) + 20; // Account for 2 rows of tabs
-        let item_size = 50; // Reduced from 60
+        let item_size = 50i32; // Reduced from 60
         let items_per_row = 7; // Reduced from 8 to fit smaller panel
-        let item_spacing = 8; // Reduced spacing
+        let item_spacing = 8i32; // Reduced spacing
         
         for (i, item) in items.iter().enumerate() {
             let grid_x = x + 15 + ((i % items_per_row) * (item_size + item_spacing) as usize) as i32;
@@ -232,8 +357,27 @@ impl InventoryUI {
                 CraftStatus::NoRecipe => if is_hovering { Color::new(80, 80, 80, 255) } else { Color::new(60, 60, 60, 255) },
             };
             
-            d.draw_rectangle(grid_x, grid_y, item_size, item_size, slot_color);
-            d.draw_rectangle_lines(grid_x, grid_y, item_size, item_size, Color::new(150, 150, 150, 255));
+            // Draw crafting slot background using texture or fallback
+            if let Some(slot_texture) = assets.get_ui_texture("crafting_slot") {
+                let tint_color = match craft_status {
+                    CraftStatus::CanCraft => if is_hovering { Color::new(255, 255, 255, 255) } else { Color::new(200, 255, 200, 255) },
+                    CraftStatus::MissingResources(_) => Color::new(255, 200, 200, 255),
+                    CraftStatus::NeedsStructure(_) => Color::new(255, 255, 200, 255),
+                    CraftStatus::NoRecipe => Color::new(150, 150, 150, 255),
+                };
+                
+                d.draw_texture_ex(
+                    slot_texture,
+                    Vector2::new(grid_x as f32, grid_y as f32),
+                    0.0,
+                    item_size as f32 / slot_texture.width as f32,
+                    tint_color
+                );
+            } else {
+                // Fallback to rectangle
+                d.draw_rectangle(grid_x, grid_y, item_size, item_size, slot_color);
+                d.draw_rectangle_lines(grid_x, grid_y, item_size, item_size, Color::new(150, 150, 150, 255));
+            }
             
             // Item icon (placeholder - colored square for now)
             let icon_color = match item.get_category() {
