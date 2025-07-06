@@ -27,7 +27,7 @@ impl AssetManager {
             (TileType::Water, "water.png"),
             (TileType::Sand, "sand.png"),
             (TileType::Mountain, "mountain.png"),
-            (TileType::Swamp, "swamp.png"), // Note: your file is named "swap.png" - you might need to rename it
+            (TileType::Swamp, "swamp.png"),
         ];
         
         for (tile_type, filename) in terrain_types.iter() {
@@ -48,7 +48,8 @@ impl AssetManager {
             (VeinType::CoalDeposit, "coal.png"),
             (VeinType::ClayDeposit, "clay.png"),
             (VeinType::CopperOre, "copper.png"),
-            (VeinType::StoneQuarry, "stone_quarry.png"), // This is a resource overlay, not terrain
+            (VeinType::StoneQuarry, "stone_quarry.png"),
+            (VeinType::CottonPatch, "cotton.png"),
         ];
         
         for (vein_type, filename) in resource_types.iter() {

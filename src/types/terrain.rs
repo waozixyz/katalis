@@ -30,7 +30,7 @@ pub enum VeinType {
     StoneQuarry,
     ClayDeposit,
     CopperOre,
-    CottonPatch, // NEW
+    CottonPatch,
 }
 
 impl VeinType {
@@ -63,7 +63,7 @@ impl VeinType {
             VeinType::StoneQuarry => 5,
             VeinType::ClayDeposit => 4,
             VeinType::CopperOre => 4,
-            VeinType::CottonPatch => 3, // Cotton yield
+            VeinType::CottonPatch => 3,
         }
     }
     
@@ -74,7 +74,7 @@ impl VeinType {
             VeinType::StoneQuarry => (100, 300),
             VeinType::ClayDeposit => (40, 180),
             VeinType::CopperOre => (60, 220),
-            VeinType::CottonPatch => (15, 60), // Smaller cotton patches
+            VeinType::CottonPatch => (15, 60),
         }
     }
     
