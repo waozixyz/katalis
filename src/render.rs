@@ -335,7 +335,7 @@ fn draw_inventory(d: &mut RaylibDrawHandle, inventory: &Inventory) {
     d.draw_text("Inventory", inv_x + 10, inv_y + 10, 18, Color::WHITE);
     
     // Draw resources
-    let resources = [ResourceType::Wood, ResourceType::Stone, ResourceType::IronOre, ResourceType::Coal, ResourceType::Clay, ResourceType::CopperOre];
+    let resources = [ResourceType::Wood, ResourceType::Stone, ResourceType::IronOre, ResourceType::Coal, ResourceType::Clay, ResourceType::CopperOre, ResourceType::Cotton];
     for (i, resource) in resources.iter().enumerate() {
         let y_offset = inv_y + 35 + (i as i32 * 20); // Reduced spacing to fit more resources
         let amount = inventory.get_amount(resource);

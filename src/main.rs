@@ -18,7 +18,7 @@ use input::handle_input;
 use render::{draw_world, draw_time_display};
 use assets::AssetManager;
 use crafting::CraftingSystem; // NEW
-use ui::InventoryUI; // NEW
+use ui::{InventoryUI, PauseMenu}; // NEW
 
 const SCREEN_WIDTH: i32 = 1200;
 const SCREEN_HEIGHT: i32 = 800;
@@ -29,6 +29,9 @@ fn main() {
         .title("Katalis - Factory Builder")
         .vsync()
         .build();
+    
+    // Disable ESC key to exit window (we want to handle ESC ourselves)
+    rl.set_exit_key(None);
 
     rl.set_target_fps(60);
 
@@ -57,6 +60,7 @@ fn main() {
     // NEW: Initialize crafting and UI systems
     let crafting_system = CraftingSystem::new();
     let mut inventory_ui = InventoryUI::new();
+    let mut pause_menu = PauseMenu::new();
 
     let mut camera = Camera2D {
         target: game_player.position,
@@ -67,27 +71,43 @@ fn main() {
 
     let mut camera_target = game_player.position;
 
-    while !rl.window_should_close() {
+    loop {
+        // Check if window should close
+        if rl.window_should_close() {
+            break;
+        }
         let delta_time = rl.get_frame_time();
         
-        // Update systems
-        game_player.update(&rl, &camera);
-        update_camera(&mut camera, &mut camera_target, &game_player, &rl);
-        inventory_ui.update(&rl);
-        inventory_ui.handle_mouse_input(&rl, &mut game_player.inventory);
-        handle_input(&mut world, &camera, &rl, &mut game_player);
+        // Update UI systems first
+        let esc_consumed_by_inventory = inventory_ui.update(&rl);
+        let should_quit = pause_menu.update(&rl, esc_consumed_by_inventory);
         
-        // Update world and collect resources
-        let (wood_gained, stone_gained, iron_gained, coal_gained, clay_gained, copper_gained, cotton_gained) = world.update(delta_time, &mut game_player);
+        // Check if we should quit the game
+        if should_quit {
+            break;
+        }
         
-        // Add gained resources to inventory
-        if wood_gained > 0 { game_player.inventory.add_resource(ResourceType::Wood, wood_gained); }
-        if stone_gained > 0 { game_player.inventory.add_resource(ResourceType::Stone, stone_gained); }
-        if iron_gained > 0 { game_player.inventory.add_resource(ResourceType::IronOre, iron_gained); }
-        if coal_gained > 0 { game_player.inventory.add_resource(ResourceType::Coal, coal_gained); }
-        if clay_gained > 0 { game_player.inventory.add_resource(ResourceType::Clay, clay_gained); }
-        if copper_gained > 0 { game_player.inventory.add_resource(ResourceType::CopperOre, copper_gained); }
-        if cotton_gained > 0 { game_player.inventory.add_resource(ResourceType::Cotton, cotton_gained); }
+        // Only update game systems if not paused
+        if !pause_menu.is_open {
+            game_player.update(&rl, &camera);
+            update_camera(&mut camera, &mut camera_target, &game_player, &rl);
+            handle_input(&mut world, &camera, &rl, &mut game_player);
+            inventory_ui.handle_mouse_input(&rl, &mut game_player.inventory);
+        }
+        
+        // Update world and collect resources only if not paused
+        if !pause_menu.is_open {
+            let (wood_gained, stone_gained, iron_gained, coal_gained, clay_gained, copper_gained, cotton_gained) = world.update(delta_time, &mut game_player);
+            
+            // Add gained resources to inventory
+            if wood_gained > 0 { game_player.inventory.add_resource(ResourceType::Wood, wood_gained); }
+            if stone_gained > 0 { game_player.inventory.add_resource(ResourceType::Stone, stone_gained); }
+            if iron_gained > 0 { game_player.inventory.add_resource(ResourceType::IronOre, iron_gained); }
+            if coal_gained > 0 { game_player.inventory.add_resource(ResourceType::Coal, coal_gained); }
+            if clay_gained > 0 { game_player.inventory.add_resource(ResourceType::Clay, clay_gained); }
+            if copper_gained > 0 { game_player.inventory.add_resource(ResourceType::CopperOre, copper_gained); }
+            if cotton_gained > 0 { game_player.inventory.add_resource(ResourceType::Cotton, cotton_gained); }
+        }
     
         // Get mouse position BEFORE starting drawing
         let mouse_screen_pos = rl.get_mouse_position();
@@ -148,6 +168,9 @@ fn main() {
         }
         
         draw_time_display(&mut d, &world.game_time);
+        
+        // Draw pause menu last (on top of everything)
+        pause_menu.draw(&mut d);
     }
 }
 

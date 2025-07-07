@@ -10,18 +10,18 @@ pub enum ResourceType {
     Coal,
     Clay,
     CopperOre,
-    Cotton, // NEW
-    
+    Cotton,
+        
     // Processed materials
-    Charcoal, // NEW
-    IronBloom, // NEW
-    WroughtIron, // NEW
-    IronPlates, // NEW
-    IronGears, // NEW
-    MetalRods, // NEW
-    Threads, // NEW
-    Fabric, // NEW
-    ClothStrips, // NEW
+    Charcoal,
+    IronBloom,
+    WroughtIron,
+    IronPlates,
+    IronGears,
+    MetalRods,
+    Threads,
+    Fabric,
+    ClothStrips,
 }
 
 impl ResourceType {
