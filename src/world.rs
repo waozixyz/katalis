@@ -1,6 +1,83 @@
 use crate::types::*;
 use raylib::math::Vector2;
 use crate::Player;
+use std::collections::HashMap;
+
+#[derive(Clone, Debug)]
+pub struct BuildingInventory {
+    pub input_slots: Vec<InventorySlot>,
+    pub output_slots: Vec<InventorySlot>,
+    pub progress: f32,
+    pub max_progress: f32,
+}
+
+impl BuildingInventory {
+    pub fn new(input_size: usize, output_size: usize) -> Self {
+        Self {
+            input_slots: vec![InventorySlot::new(); input_size],
+            output_slots: vec![InventorySlot::new(); output_size],
+            progress: 0.0,
+            max_progress: 100.0,
+        }
+    }
+    
+    pub fn can_process(&self, building_type: &BuildingType) -> bool {
+        match building_type {
+            BuildingType::CharcoalPit => {
+                // Check if there's wood in input and space for charcoal in output
+                if let Some(input_slot) = self.input_slots.get(0) {
+                    if let Some(output_slot) = self.output_slots.get(0) {
+                        input_slot.resource_type == Some(ResourceType::Wood) && 
+                        input_slot.amount > 0 &&
+                        (output_slot.is_empty() || 
+                         (output_slot.resource_type == Some(ResourceType::Charcoal) && 
+                          output_slot.amount < ResourceType::Charcoal.get_max_stack_size()))
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
+            _ => false, // Other buildings not implemented yet
+        }
+    }
+    
+    pub fn process(&mut self, building_type: &BuildingType, delta_time: f32) -> bool {
+        if !self.can_process(building_type) {
+            return false;
+        }
+        
+        let process_time = match building_type {
+            BuildingType::CharcoalPit => 50.0, // 5 seconds to convert wood to charcoal
+            _ => return false,
+        };
+        
+        self.progress += delta_time * 10.0; // Progress at 10 units per second
+        
+        if self.progress >= process_time {
+            // Complete the process
+            match building_type {
+                BuildingType::CharcoalPit => {
+                    // Consume 1 wood, produce 1 charcoal
+                    if let Some(input_slot) = self.input_slots.get_mut(0) {
+                        if input_slot.remove(1) > 0 {
+                            if let Some(output_slot) = self.output_slots.get_mut(0) {
+                                output_slot.add(ResourceType::Charcoal, 1);
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+            
+            self.progress = 0.0;
+            return true;
+        }
+        
+        false
+    }
+}
 
 pub struct World {
     pub tiles: Vec<Vec<Tile>>,
@@ -8,6 +85,7 @@ pub struct World {
     pub game_time: GameTime,
     pub width: usize,
     pub height: usize,
+    pub building_inventories: HashMap<(usize, usize), BuildingInventory>,
 }
 
 impl World {
@@ -17,7 +95,8 @@ impl World {
             trees: Vec::new(),
             game_time: GameTime::new(),
             width, 
-            height 
+            height,
+            building_inventories: HashMap::new(),
         }
     }
 
@@ -409,6 +488,31 @@ impl World {
         }
         
 
+        // Update building processes
+        let mut buildings_to_process = Vec::new();
+        for ((x, y), inventory) in &self.building_inventories {
+            if let Some(tile) = self.get_tile(*x, *y) {
+                if let Some(building_type) = tile.building {
+                    if inventory.can_process(&building_type) {
+                        buildings_to_process.push((*x, *y, building_type));
+                    }
+                }
+            }
+        }
+        
+        for (x, y, building_type) in buildings_to_process {
+            let mut is_active = false;
+            if let Some(inventory) = self.building_inventories.get_mut(&(x, y)) {
+                inventory.process(&building_type, delta_time);
+                is_active = inventory.can_process(&building_type);
+            }
+            
+            // Update building active state
+            if let Some(tile) = self.get_tile_mut(x, y) {
+                tile.building_active = is_active;
+            }
+        }
+
         // Update trees
         for tree in &mut self.trees {
             tree.update(delta_time);
@@ -586,6 +690,24 @@ impl World {
     pub fn place_building(&mut self, tile_x: usize, tile_y: usize, building_type: BuildingType) {
         let (width, height) = building_type.get_size();
         
+        // Create inventory for the building based on its type
+        let mut inventory = match building_type {
+            BuildingType::CharcoalPit => BuildingInventory::new(1, 1), // 1 input (wood), 1 output (charcoal)
+            BuildingType::BloomeryFurnace => BuildingInventory::new(2, 1), // 2 inputs (iron ore, coal), 1 output (iron ingot)
+            BuildingType::StoneAnvil => BuildingInventory::new(2, 1), // 2 inputs, 1 output
+            BuildingType::SpinningWheel => BuildingInventory::new(1, 1), // 1 input (cotton), 1 output (thread)
+            BuildingType::WeavingMachine => BuildingInventory::new(1, 1), // 1 input (thread), 1 output (cloth)
+            BuildingType::ConveyorBelt => BuildingInventory::new(1, 1), // 1 input, 1 output
+        };
+        
+        // Set the correct max_progress for each building
+        inventory.max_progress = match building_type {
+            BuildingType::CharcoalPit => 50.0,
+            _ => 100.0,
+        };
+        
+        self.building_inventories.insert((tile_x, tile_y), inventory);
+        
         // Place building on all tiles it covers
         for dx in 0..width {
             for dy in 0..height {
@@ -595,10 +717,38 @@ impl World {
                 if let Some(tile) = self.get_tile_mut(x, y) {
                     tile.building = Some(building_type);
                     tile.building_active = false; // Buildings start inactive
-                    tile.is_building_origin = (dx == 0 && dy == 0); // Only the top-left tile is the origin
+                    tile.is_building_origin = dx == 0 && dy == 0; // Only the top-left tile is the origin
                 }
             }
         }
+    }
+    
+    pub fn get_building_origin_at(&self, tile_x: usize, tile_y: usize) -> Option<(usize, usize, BuildingType)> {
+        if let Some(tile) = self.get_tile(tile_x, tile_y) {
+            if let Some(building_type) = tile.building {
+                // If this is the origin, return it
+                if tile.is_building_origin {
+                    return Some((tile_x, tile_y, building_type));
+                }
+                
+                // Otherwise, search for the origin
+                let (width, height) = building_type.get_size();
+                for dx in 0..width {
+                    for dy in 0..height {
+                        if let Some(x) = tile_x.checked_sub(dx as usize) {
+                            if let Some(y) = tile_y.checked_sub(dy as usize) {
+                                if let Some(check_tile) = self.get_tile(x, y) {
+                                    if check_tile.is_building_origin && check_tile.building == Some(building_type) {
+                                        return Some((x, y, building_type));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
     }
     
     pub fn get_tree_at(&self, x: f32, y: f32) -> Option<&Tree> {

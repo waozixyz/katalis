@@ -307,4 +307,26 @@ impl Inventory {
     pub fn get_slot_mut(&mut self, index: usize) -> Option<&mut InventorySlot> {
         self.slots.get_mut(index)
     }
+    
+    pub fn clear_slot(&mut self, index: usize) {
+        if let Some(slot) = self.slots.get_mut(index) {
+            *slot = InventorySlot::new();
+        }
+    }
+    
+    pub fn add_to_slot(&mut self, index: usize, resource_type: ResourceType, amount: u32) -> bool {
+        if let Some(slot) = self.slots.get_mut(index) {
+            if slot.is_empty() {
+                *slot = InventorySlot::with_resource(resource_type, amount);
+                true
+            } else if slot.resource_type == Some(resource_type) {
+                slot.add(resource_type, amount);
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
 }

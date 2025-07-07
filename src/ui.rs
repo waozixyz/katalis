@@ -3,6 +3,499 @@ use crate::types::*;
 use crate::crafting::*;
 use crate::assets::AssetManager;
 use crate::Player;
+use crate::world::{World, BuildingInventory};
+
+pub struct BuildingUI {
+    pub is_open: bool,
+    pub building_pos: Option<(usize, usize)>,
+    pub building_type: Option<BuildingType>,
+    pub dragged_item: Option<DraggedItem>,
+    pub drag_offset: Vector2,
+}
+
+impl BuildingUI {
+    pub fn new() -> Self {
+        Self {
+            is_open: false,
+            building_pos: None,
+            building_type: None,
+            dragged_item: None,
+            drag_offset: Vector2::zero(),
+        }
+    }
+    
+    pub fn open(&mut self, building_pos: (usize, usize), building_type: BuildingType) {
+        self.is_open = true;
+        self.building_pos = Some(building_pos);
+        self.building_type = Some(building_type);
+        self.dragged_item = None;
+    }
+    
+    pub fn close(&mut self) {
+        self.is_open = false;
+        self.building_pos = None;
+        self.building_type = None;
+        self.dragged_item = None;
+    }
+    
+    pub fn update(&mut self, rl: &RaylibHandle) -> bool {
+        if !self.is_open {
+            return false;
+        }
+        
+        // Close on ESC
+        if rl.is_key_pressed(KeyboardKey::KEY_ESCAPE) {
+            self.close();
+            return true; // Consumed ESC
+        }
+        
+        false
+    }
+    
+    pub fn handle_mouse_input(&mut self, rl: &RaylibHandle, player: &mut Player, world: &mut World) -> bool {
+        if !self.is_open {
+            return false;
+        }
+        
+        let mouse_pos = rl.get_mouse_position();
+        
+        if rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) {
+            // Handle start dragging
+            if self.dragged_item.is_none() {
+                // Check player inventory slots
+                if let Some((slot_index, slot)) = self.get_player_slot_at_mouse(mouse_pos, player) {
+                    if !slot.is_empty() {
+                        self.dragged_item = Some(DraggedItem {
+                            resource_type: slot.resource_type.unwrap(),
+                            amount: slot.amount,
+                            source_slot: slot_index,
+                        });
+                        self.drag_offset = Vector2::zero();
+                        
+                        // Clear the source slot
+                        player.inventory.clear_slot(slot_index);
+                        return true;
+                    }
+                }
+                
+                // Check building inventory slots
+                if let Some(building_pos) = self.building_pos {
+                    if let Some(inventory) = world.building_inventories.get_mut(&building_pos) {
+                        // Check input slots
+                        if let Some((slot_index, slot)) = self.get_building_input_slot_at_mouse(mouse_pos, inventory) {
+                            if !slot.is_empty() {
+                                self.dragged_item = Some(DraggedItem {
+                                    resource_type: slot.resource_type.unwrap(),
+                                    amount: slot.amount,
+                                    source_slot: 1000 + slot_index, // Use 1000+ to indicate building slot
+                                });
+                                self.drag_offset = Vector2::zero();
+                                
+                                // Clear the source slot
+                                inventory.input_slots[slot_index] = InventorySlot::new();
+                                return true;
+                            }
+                        }
+                        
+                        // Check output slots
+                        if let Some((slot_index, slot)) = self.get_building_output_slot_at_mouse(mouse_pos, inventory) {
+                            if !slot.is_empty() {
+                                self.dragged_item = Some(DraggedItem {
+                                    resource_type: slot.resource_type.unwrap(),
+                                    amount: slot.amount,
+                                    source_slot: 2000 + slot_index, // Use 2000+ to indicate output slot
+                                });
+                                self.drag_offset = Vector2::zero();
+                                
+                                // Clear the source slot
+                                inventory.output_slots[slot_index] = InventorySlot::new();
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if rl.is_mouse_button_released(MouseButton::MOUSE_BUTTON_LEFT) {
+            // Handle drop
+            if let Some(dragged) = self.dragged_item.take() {
+                let mut dropped = false;
+                
+                // Try to drop in player inventory
+                if let Some((slot_index, _)) = self.get_player_slot_at_mouse(mouse_pos, player) {
+                    player.inventory.add_to_slot(slot_index, dragged.resource_type, dragged.amount);
+                    dropped = true;
+                }
+                
+                // Try to drop in building slots
+                if !dropped {
+                    if let Some(building_pos) = self.building_pos {
+                        if let Some(inventory) = world.building_inventories.get_mut(&building_pos) {
+                            // Check input slots
+                            if let Some((slot_index, _)) = self.get_building_input_slot_at_mouse(mouse_pos, inventory) {
+                                if inventory.input_slots[slot_index].is_empty() {
+                                    inventory.input_slots[slot_index] = InventorySlot {
+                                        resource_type: Some(dragged.resource_type),
+                                        amount: dragged.amount,
+                                    };
+                                    dropped = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // If not dropped anywhere, return to source
+                if !dropped {
+                    if dragged.source_slot < 1000 {
+                        // Player inventory
+                        player.inventory.add_to_slot(dragged.source_slot, dragged.resource_type, dragged.amount);
+                    } else if dragged.source_slot < 2000 {
+                        // Building input slot
+                        if let Some(building_pos) = self.building_pos {
+                            if let Some(inventory) = world.building_inventories.get_mut(&building_pos) {
+                                let slot_index = dragged.source_slot - 1000;
+                                inventory.input_slots[slot_index] = InventorySlot {
+                                    resource_type: Some(dragged.resource_type),
+                                    amount: dragged.amount,
+                                };
+                            }
+                        }
+                    } else {
+                        // Building output slot
+                        if let Some(building_pos) = self.building_pos {
+                            if let Some(inventory) = world.building_inventories.get_mut(&building_pos) {
+                                let slot_index = dragged.source_slot - 2000;
+                                inventory.output_slots[slot_index] = InventorySlot {
+                                    resource_type: Some(dragged.resource_type),
+                                    amount: dragged.amount,
+                                };
+                            }
+                        }
+                    }
+                }
+                
+                self.dragged_item = None;
+                return true;
+            }
+        }
+        
+        false
+    }
+    
+    fn get_player_slot_at_mouse<'a>(&self, mouse_pos: Vector2, player: &'a Player) -> Option<(usize, &'a InventorySlot)> {
+        let panel_x = (1200 - 500) / 2;
+        let panel_y = (800 - 400) / 2;
+        let inv_panel_y = panel_y + 400 + 20;
+        let inv_start_x = panel_x + 20;
+        let inv_start_y = inv_panel_y + 40;
+        let slot_size = 32;
+        let slot_spacing = 4;
+        let slots_per_row = 8;
+        
+        let mouse_x = mouse_pos.x as i32;
+        let mouse_y = mouse_pos.y as i32;
+        
+        // Check each slot (only first 16 slots shown)
+        for i in 0..16.min(player.inventory.slots.len()) {
+            let row = i / slots_per_row;
+            let col = i % slots_per_row;
+            let slot_x = inv_start_x + col as i32 * (slot_size + slot_spacing);
+            let slot_y = inv_start_y + row as i32 * (slot_size + slot_spacing);
+            
+            if mouse_x >= slot_x && mouse_x < slot_x + slot_size &&
+               mouse_y >= slot_y && mouse_y < slot_y + slot_size {
+                return Some((i, &player.inventory.slots[i]));
+            }
+        }
+        
+        None
+    }
+    
+    fn get_building_input_slot_at_mouse<'a>(&self, mouse_pos: Vector2, inventory: &'a BuildingInventory) -> Option<(usize, &'a InventorySlot)> {
+        let panel_x = (1200 - 500) / 2;
+        let panel_y = (800 - 400) / 2;
+        let input_x = panel_x + 50;
+        let input_y = panel_y + 100;
+        let slot_size = 48;
+        let slot_spacing = 8;
+        
+        let mouse_x = mouse_pos.x as i32;
+        let mouse_y = mouse_pos.y as i32;
+        
+        for (i, slot) in inventory.input_slots.iter().enumerate() {
+            let slot_x = input_x + i as i32 * (slot_size + slot_spacing);
+            let slot_y = input_y;
+            
+            if mouse_x >= slot_x && mouse_x < slot_x + slot_size &&
+               mouse_y >= slot_y && mouse_y < slot_y + slot_size {
+                return Some((i, slot));
+            }
+        }
+        
+        None
+    }
+    
+    fn get_building_output_slot_at_mouse<'a>(&self, mouse_pos: Vector2, inventory: &'a BuildingInventory) -> Option<(usize, &'a InventorySlot)> {
+        let panel_x = (1200 - 500) / 2;
+        let panel_y = (800 - 400) / 2;
+        let output_x = panel_x + 500 - 100 - inventory.output_slots.len() as i32 * (48 + 8);
+        let output_y = panel_y + 100;
+        let slot_size = 48;
+        let slot_spacing = 8;
+        
+        let mouse_x = mouse_pos.x as i32;
+        let mouse_y = mouse_pos.y as i32;
+        
+        for (i, slot) in inventory.output_slots.iter().enumerate() {
+            let slot_x = output_x + i as i32 * (slot_size + slot_spacing);
+            let slot_y = output_y;
+            
+            if mouse_x >= slot_x && mouse_x < slot_x + slot_size &&
+               mouse_y >= slot_y && mouse_y < slot_y + slot_size {
+                return Some((i, slot));
+            }
+        }
+        
+        None
+    }
+    
+    pub fn draw(&self, d: &mut RaylibDrawHandle, world: &World, player: &Player, assets: &AssetManager, mouse_pos: Vector2) {
+        if !self.is_open {
+            return;
+        }
+        
+        let Some(building_type) = self.building_type else { return; };
+        let Some(building_pos) = self.building_pos else { return; };
+        let Some(inventory) = world.building_inventories.get(&building_pos) else { return; };
+        
+        let screen_width = 1200;
+        let screen_height = 800;
+        
+        // Semi-transparent overlay
+        d.draw_rectangle(0, 0, screen_width, screen_height, Color::new(0, 0, 0, 128));
+        
+        // Main panel
+        let panel_width = 500;
+        let panel_height = 400;
+        let panel_x = (screen_width - panel_width) / 2;
+        let panel_y = (screen_height - panel_height) / 2;
+        
+        // Draw panel background
+        d.draw_rectangle(panel_x, panel_y, panel_width, panel_height, Color::new(40, 40, 40, 240));
+        d.draw_rectangle_lines(panel_x, panel_y, panel_width, panel_height, Color::new(200, 200, 200, 255));
+        
+        // Title
+        let title = match building_type {
+            BuildingType::CharcoalPit => "Charcoal Pit",
+            BuildingType::BloomeryFurnace => "Bloomery Furnace",
+            BuildingType::StoneAnvil => "Stone Anvil",
+            BuildingType::SpinningWheel => "Spinning Wheel",
+            BuildingType::WeavingMachine => "Weaving Machine",
+            BuildingType::ConveyorBelt => "Conveyor Belt",
+        };
+        
+        let title_size = 24;
+        let title_width = d.measure_text(title, title_size);
+        d.draw_text(title, panel_x + (panel_width - title_width) / 2, panel_y + 20, title_size, Color::WHITE);
+        
+        // Draw input/output sections
+        let slot_size = 48;
+        let slot_spacing = 8;
+        
+        // Input section
+        let input_label = "Input";
+        let input_label_width = d.measure_text(input_label, 16);
+        let input_x = panel_x + 50;
+        let input_y = panel_y + 100;
+        
+        d.draw_text(input_label, input_x + (inventory.input_slots.len() as i32 * (slot_size + slot_spacing) - input_label_width) / 2, input_y - 25, 16, Color::LIGHTGRAY);
+        
+        // Draw input slots
+        for (i, slot) in inventory.input_slots.iter().enumerate() {
+            let slot_x = input_x + i as i32 * (slot_size + slot_spacing);
+            let slot_y = input_y;
+            
+            // Draw slot background
+            d.draw_rectangle(slot_x, slot_y, slot_size, slot_size, Color::new(60, 60, 60, 255));
+            d.draw_rectangle_lines(slot_x, slot_y, slot_size, slot_size, Color::new(100, 100, 100, 255));
+            
+            // Draw item if present
+            if !slot.is_empty() {
+                if let Some(resource_type) = slot.resource_type {
+                    if let Some(texture) = assets.get_icon_texture(resource_type) {
+                        d.draw_texture_ex(
+                            texture,
+                            Vector2::new(slot_x as f32 + 4.0, slot_y as f32 + 4.0),
+                            0.0,
+                            (slot_size - 8) as f32 / texture.width as f32,
+                            Color::WHITE
+                        );
+                    } else {
+                        let color = resource_type.get_color();
+                        d.draw_rectangle(slot_x + 4, slot_y + 4, slot_size - 8, slot_size - 8, color);
+                    }
+                    
+                    // Draw amount
+                    let amount_text = format!("{}", slot.amount);
+                    let text_size = 12;
+                    let text_width = d.measure_text(&amount_text, text_size);
+                    d.draw_text(&amount_text, slot_x + slot_size - text_width - 4, slot_y + slot_size - 14, text_size, Color::WHITE);
+                }
+            }
+        }
+        
+        // Arrow from input to output
+        let arrow_x = panel_x + panel_width / 2;
+        let arrow_y = input_y + slot_size / 2;
+        d.draw_text("→", arrow_x - 10, arrow_y - 8, 32, Color::LIGHTGRAY);
+        
+        // Progress bar
+        let progress_bar_width = 100;
+        let progress_bar_height = 20;
+        let progress_bar_x = arrow_x - progress_bar_width / 2;
+        let progress_bar_y = arrow_y + 25;
+        
+        d.draw_rectangle(progress_bar_x, progress_bar_y, progress_bar_width, progress_bar_height, Color::new(40, 40, 40, 255));
+        d.draw_rectangle_lines(progress_bar_x, progress_bar_y, progress_bar_width, progress_bar_height, Color::new(100, 100, 100, 255));
+        
+        if inventory.max_progress > 0.0 {
+            let progress_width = ((inventory.progress / inventory.max_progress) * progress_bar_width as f32) as i32;
+            d.draw_rectangle(progress_bar_x, progress_bar_y, progress_width, progress_bar_height, Color::new(100, 200, 100, 255));
+        }
+        
+        // Output section
+        let output_label = "Output";
+        let output_label_width = d.measure_text(output_label, 16);
+        let output_x = panel_x + panel_width - 100 - inventory.output_slots.len() as i32 * (slot_size + slot_spacing);
+        let output_y = input_y;
+        
+        d.draw_text(output_label, output_x + (inventory.output_slots.len() as i32 * (slot_size + slot_spacing) - output_label_width) / 2, output_y - 25, 16, Color::LIGHTGRAY);
+        
+        // Draw output slots
+        for (i, slot) in inventory.output_slots.iter().enumerate() {
+            let slot_x = output_x + i as i32 * (slot_size + slot_spacing);
+            let slot_y = output_y;
+            
+            // Draw slot background
+            d.draw_rectangle(slot_x, slot_y, slot_size, slot_size, Color::new(60, 60, 60, 255));
+            d.draw_rectangle_lines(slot_x, slot_y, slot_size, slot_size, Color::new(100, 100, 100, 255));
+            
+            // Draw item if present
+            if !slot.is_empty() {
+                if let Some(resource_type) = slot.resource_type {
+                    if let Some(texture) = assets.get_icon_texture(resource_type) {
+                        d.draw_texture_ex(
+                            texture,
+                            Vector2::new(slot_x as f32 + 4.0, slot_y as f32 + 4.0),
+                            0.0,
+                            (slot_size - 8) as f32 / texture.width as f32,
+                            Color::WHITE
+                        );
+                    } else {
+                        let color = resource_type.get_color();
+                        d.draw_rectangle(slot_x + 4, slot_y + 4, slot_size - 8, slot_size - 8, color);
+                    }
+                    
+                    // Draw amount
+                    let amount_text = format!("{}", slot.amount);
+                    let text_size = 12;
+                    let text_width = d.measure_text(&amount_text, text_size);
+                    d.draw_text(&amount_text, slot_x + slot_size - text_width - 4, slot_y + slot_size - 14, text_size, Color::WHITE);
+                }
+            }
+        }
+        
+        // Instructions
+        let instructions = "Click and drag items to move them. Press ESC to close.";
+        let inst_size = 14;
+        let inst_width = d.measure_text(instructions, inst_size);
+        d.draw_text(instructions, panel_x + (panel_width - inst_width) / 2, panel_y + panel_height - 40, inst_size, Color::LIGHTGRAY);
+        
+        // Draw player inventory panel
+        let inv_panel_x = panel_x;
+        let inv_panel_y = panel_y + panel_height + 20;
+        let inv_panel_width = panel_width;
+        let inv_panel_height = 150;
+        
+        d.draw_rectangle(inv_panel_x, inv_panel_y, inv_panel_width, inv_panel_height, Color::new(40, 40, 40, 240));
+        d.draw_rectangle_lines(inv_panel_x, inv_panel_y, inv_panel_width, inv_panel_height, Color::new(200, 200, 200, 255));
+        
+        // Player inventory label
+        let inv_label = "Player Inventory";
+        let inv_label_width = d.measure_text(inv_label, 16);
+        d.draw_text(inv_label, inv_panel_x + (inv_panel_width - inv_label_width) / 2, inv_panel_y + 10, 16, Color::WHITE);
+        
+        // Draw player inventory slots
+        let inv_slot_size = 32;
+        let inv_slot_spacing = 4;
+        let inv_slots_per_row = 8;
+        let inv_start_x = inv_panel_x + 20;
+        let inv_start_y = inv_panel_y + 40;
+        
+        for i in 0..16 { // Show first 16 slots
+            let row = i / inv_slots_per_row;
+            let col = i % inv_slots_per_row;
+            let slot_x = inv_start_x + col as i32 * (inv_slot_size + inv_slot_spacing);
+            let slot_y = inv_start_y + row as i32 * (inv_slot_size + inv_slot_spacing);
+            
+            // Draw slot background
+            d.draw_rectangle(slot_x, slot_y, inv_slot_size, inv_slot_size, Color::new(60, 60, 60, 255));
+            d.draw_rectangle_lines(slot_x, slot_y, inv_slot_size, inv_slot_size, Color::new(100, 100, 100, 255));
+            
+            // Draw item if present
+            if let Some(slot) = player.inventory.get_slot(i) {
+                if !slot.is_empty() {
+                    if let Some(resource_type) = slot.resource_type {
+                        if let Some(texture) = assets.get_icon_texture(resource_type) {
+                            d.draw_texture_ex(
+                                texture,
+                                Vector2::new(slot_x as f32 + 2.0, slot_y as f32 + 2.0),
+                                0.0,
+                                (inv_slot_size - 4) as f32 / texture.width as f32,
+                                Color::WHITE
+                            );
+                        } else {
+                            let color = resource_type.get_color();
+                            d.draw_rectangle(slot_x + 2, slot_y + 2, inv_slot_size - 4, inv_slot_size - 4, color);
+                        }
+                        
+                        // Draw amount
+                        let amount_text = format!("{}", slot.amount);
+                        let text_size = 10;
+                        let text_width = d.measure_text(&amount_text, text_size);
+                        d.draw_text(&amount_text, slot_x + inv_slot_size - text_width - 3, slot_y + inv_slot_size - 11, text_size, Color::WHITE);
+                    }
+                }
+            }
+        }
+        
+        // Draw dragged item
+        if let Some(ref dragged) = self.dragged_item {
+            let icon_size = 32;
+            let drag_x = mouse_pos.x - icon_size as f32 / 2.0;
+            let drag_y = mouse_pos.y - icon_size as f32 / 2.0;
+            
+            if let Some(texture) = assets.get_icon_texture(dragged.resource_type) {
+                d.draw_texture_ex(
+                    texture,
+                    Vector2::new(drag_x, drag_y),
+                    0.0,
+                    icon_size as f32 / texture.width as f32,
+                    Color::new(255, 255, 255, 200)
+                );
+            } else {
+                let color = dragged.resource_type.get_color();
+                d.draw_rectangle(drag_x as i32, drag_y as i32, icon_size, icon_size, Color::new(color.r, color.g, color.b, 200));
+            }
+            
+            // Draw amount
+            let amount_text = format!("{}", dragged.amount);
+            d.draw_text(&amount_text, drag_x as i32 + icon_size - 12, drag_y as i32 + icon_size - 12, 10, Color::WHITE);
+        }
+    }
+}
 
 pub struct PauseMenu {
     pub is_open: bool,

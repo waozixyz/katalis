@@ -18,7 +18,7 @@ use input::handle_input;
 use render::{draw_world, draw_time_display};
 use assets::AssetManager;
 use crafting::CraftingSystem; // NEW
-use ui::{InventoryUI, PauseMenu}; // NEW
+use ui::{InventoryUI, PauseMenu, BuildingUI}; // NEW
 
 const SCREEN_WIDTH: i32 = 1200;
 const SCREEN_HEIGHT: i32 = 800;
@@ -68,6 +68,7 @@ fn main() {
     let crafting_system = CraftingSystem::new();
     let mut inventory_ui = InventoryUI::new();
     let mut pause_menu = PauseMenu::new();
+    let mut building_ui = BuildingUI::new();
 
     let mut camera = Camera2D {
         target: game_player.position,
@@ -88,7 +89,8 @@ fn main() {
         
         // Update UI systems first
         let esc_consumed_by_inventory = inventory_ui.update(&rl);
-        let should_quit = pause_menu.update(&rl, esc_consumed_by_inventory);
+        let esc_consumed_by_building = building_ui.update(&rl);
+        let should_quit = pause_menu.update(&rl, esc_consumed_by_inventory || esc_consumed_by_building);
         
         // Check if we should quit the game
         if should_quit {
@@ -96,7 +98,7 @@ fn main() {
         }
         
         // Only update game systems if not paused
-        if !pause_menu.is_open {
+        if !pause_menu.is_open && !building_ui.is_open {
             game_player.update(&rl, &camera);
             update_camera(&mut camera, &mut camera_target, &game_player, &rl);
             
@@ -130,12 +132,19 @@ fn main() {
                     }
                 }
             } else {
-                handle_input(&mut world, &camera, &rl, &mut game_player);
-                if let Some(new_placement) = inventory_ui.handle_mouse_input(&rl, &mut game_player, &crafting_system) {
-                    placement_state = Some(new_placement);
+                let building_clicked = handle_input(&mut world, &camera, &rl, &mut game_player, &mut building_ui);
+                if !building_clicked {
+                    if let Some(new_placement) = inventory_ui.handle_mouse_input(&rl, &mut game_player, &crafting_system) {
+                        placement_state = Some(new_placement);
+                    }
                 }
             }
 
+        }
+        
+        // Handle building UI mouse input
+        if building_ui.is_open {
+            building_ui.handle_mouse_input(&rl, &mut game_player, &mut world);
         }
         
         // Update world and collect resources only if not paused
@@ -278,8 +287,11 @@ fn main() {
         
         inventory_ui.draw(&mut d, &game_player.inventory, &crafting_system, &assets, mouse_screen_pos, &game_player);
         
+        // Draw building UI
+        building_ui.draw(&mut d, &world, &game_player, &assets, mouse_screen_pos);
+        
         // Draw minimal UI when inventory is closed
-        if !inventory_ui.is_open {
+        if !inventory_ui.is_open && !building_ui.is_open {
             draw_minimal_ui(&mut d, &game_player);
         }
         
