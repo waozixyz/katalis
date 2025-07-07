@@ -308,9 +308,18 @@ impl World {
             }
         }
 
-        // Clear mining if completed
+        // Clear mining if completed, but restart if player has a mining target
         if mining_completed {
             player.current_mining = None;
+            
+            // If player has a continuous mining target, try to restart mining
+            if let Some(target_pos) = player.get_mining_target() {
+                // Check if target is still within range
+                let distance = player.position.distance_to(target_pos);
+                if distance <= MINING_RANGE {
+                    self.try_start_mining(player, target_pos);
+                }
+            }
         }
         
         // Update trees

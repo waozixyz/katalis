@@ -8,6 +8,7 @@ pub struct Player {
     pub inventory: Inventory,
     pub facing_angle: f32,
     pub current_mining: Option<MiningAction>,
+    pub mining_target: Option<Vector2>, // For continuous mining
     pub animator: SpriteAnimator,
     pub sprite_texture: Option<Texture2D>,
     pub last_movement: Vector2,
@@ -23,6 +24,7 @@ impl Player {
             inventory: Inventory::new(),
             facing_angle: 0.0,
             current_mining: None,
+            mining_target: None,
             animator: SpriteAnimator::new(128, 192), // Assuming 32x32 sprite frames
             sprite_texture: None,
             last_movement: Vector2::zero(),
@@ -134,6 +136,22 @@ impl Player {
         self.current_mining.as_ref()
             .map(|m| m.get_progress_percentage())
             .unwrap_or(0.0)
+    }
+    
+    pub fn set_mining_target(&mut self, target: Vector2) {
+        self.mining_target = Some(target);
+    }
+    
+    pub fn clear_mining_target(&mut self) {
+        self.mining_target = None;
+    }
+    
+    pub fn has_mining_target(&self) -> bool {
+        self.mining_target.is_some()
+    }
+    
+    pub fn get_mining_target(&self) -> Option<Vector2> {
+        self.mining_target
     }
     
     pub fn draw(&self, d: &mut RaylibMode2D<RaylibDrawHandle>) {
