@@ -21,6 +21,13 @@ pub enum ResourceType {
     Threads,
     Fabric,
     ClothStrips,
+
+    CharcoalPit,
+    BloomeryFurnace,
+    StoneAnvil,
+    SpinningWheel,
+    WeavingMachine,
+    ConveyorBelt,
 }
 
 impl ResourceType {
@@ -42,6 +49,12 @@ impl ResourceType {
             ResourceType::Threads => "Threads",
             ResourceType::Fabric => "Fabric",
             ResourceType::ClothStrips => "Cloth Strips",
+            ResourceType::CharcoalPit => "Charcoal Pit",
+            ResourceType::BloomeryFurnace => "Bloomery Furnace",
+            ResourceType::StoneAnvil => "Stone Anvil",
+            ResourceType::SpinningWheel => "Spinning Wheel",
+            ResourceType::WeavingMachine => "Weaving Machine",
+            ResourceType::ConveyorBelt => "Conveyor Belt",
         }
     }
     
@@ -62,7 +75,13 @@ impl ResourceType {
             ResourceType::MetalRods => Color::new(105, 105, 105, 255), // Dim gray
             ResourceType::Threads => Color::new(245, 245, 220, 255), // Beige
             ResourceType::Fabric => Color::new(230, 230, 250, 255), // Lavender
-            ResourceType::ClothStrips => Color::new(255, 228, 196, 255), // Bisque
+            ResourceType::ClothStrips => Color::new(255, 228, 196, 255),
+            ResourceType::CharcoalPit => Color::new(101, 67, 33, 255),
+            ResourceType::BloomeryFurnace => Color::new(139, 69, 19, 255),
+            ResourceType::StoneAnvil => Color::GRAY,
+            ResourceType::SpinningWheel => Color::BROWN,
+            ResourceType::WeavingMachine => Color::new(160, 82, 45, 255),
+            ResourceType::ConveyorBelt => Color::BROWN,
         }
     }
     
@@ -84,6 +103,12 @@ impl ResourceType {
             ResourceType::Threads => "icons/threads.png",
             ResourceType::Fabric => "icons/fabric.png",
             ResourceType::ClothStrips => "icons/cloth_strips.png",
+            ResourceType::CharcoalPit => "icons/charcoal_pit.png",
+            ResourceType::BloomeryFurnace => "icons/bloomery_furnace.png", 
+            ResourceType::StoneAnvil => "icons/stone_anvil.png",
+            ResourceType::SpinningWheel => "icons/spinning_wheel.png",
+            ResourceType::WeavingMachine => "icons/weaving_machine.png",
+            ResourceType::ConveyorBelt => "icons/conveyor_belt.png",
         }
     }
 }
@@ -161,8 +186,9 @@ impl Inventory {
         let mut slots = vec![InventorySlot::new(); slot_count];
         
         // Add starting resources to first few slots
-        slots[0] = InventorySlot::with_resource(ResourceType::Wood, 50);
+        slots[0] = InventorySlot::with_resource(ResourceType::Wood, 20);
         slots[1] = InventorySlot::with_resource(ResourceType::Stone, 30);
+        slots[2] = InventorySlot::with_resource(ResourceType::Clay, 5); 
         
         Self { 
             slots,

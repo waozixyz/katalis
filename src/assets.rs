@@ -1,12 +1,15 @@
 use raylib::prelude::*;
 use std::collections::HashMap;
 use crate::types::{VeinType, TileType, ResourceType};
+use crate::crafting::CraftableItem;
 
 pub struct AssetManager {
     resource_textures: HashMap<VeinType, Texture2D>,
     terrain_textures: HashMap<TileType, Texture2D>,
     icon_textures: HashMap<ResourceType, Texture2D>,
     ui_textures: HashMap<String, Texture2D>, 
+    building_textures: HashMap<CraftableItem, Texture2D>,
+    crafting_icons: HashMap<CraftableItem, Texture2D>, 
 }
 
 impl AssetManager {
@@ -16,6 +19,8 @@ impl AssetManager {
             terrain_textures: HashMap::new(),
             icon_textures: HashMap::new(),
             ui_textures: HashMap::new(),
+            building_textures: HashMap::new(),
+            crafting_icons: HashMap::new(),
         }
     }
     
@@ -76,6 +81,7 @@ impl AssetManager {
             (ResourceType::Coal, "coal.png"),
             (ResourceType::Charcoal, "charcoal.png"),
             (ResourceType::IronBloom, "iron_bloom.png"),
+            (ResourceType::CharcoalPit, "charcoal_pit.png"),
         ];
         
         for (resource_type, filename) in icon_types.iter() {
@@ -104,6 +110,44 @@ impl AssetManager {
                 }
                 Err(e) => {
                     println!("Warning: Could not load UI texture {}: {}", filepath, e);
+                }
+            }
+        }
+
+
+        let crafting_icon_types = [
+            (CraftableItem::CharcoalPit, "charcoal_pit.png"),
+            // Add more as you create them
+        ];
+
+        for (craftable_item, filename) in crafting_icon_types.iter() {
+            let filepath = format!("assets/icons/{}", filename);
+            match rl.load_texture(thread, &filepath) {
+                Ok(texture) => {
+                    println!("Loaded crafting icon: {}", filepath);
+                    self.crafting_icons.insert(*craftable_item, texture);
+                }
+                Err(e) => {
+                    println!("Warning: Could not load crafting icon {}: {}", filepath, e);
+                }
+            }
+        }
+
+        // Load building sprites
+        let building_types = [
+            (CraftableItem::CharcoalPit, "charcoal_pit.png"),
+            // Add more buildings as you create them
+        ];
+
+        for (building_item, filename) in building_types.iter() {
+            let filepath = format!("assets/buildings/{}", filename);
+            match rl.load_texture(thread, &filepath) {
+                Ok(texture) => {
+                    println!("Loaded building texture: {}", filepath);
+                    self.building_textures.insert(*building_item, texture);
+                }
+                Err(e) => {
+                    println!("Warning: Could not load building texture {}: {}", filepath, e);
                 }
             }
         }
@@ -141,5 +185,17 @@ impl AssetManager {
     
     pub fn has_icon_texture(&self, resource_type: ResourceType) -> bool {
         self.icon_textures.contains_key(&resource_type)
+    }
+
+    pub fn get_crafting_icon(&self, item: CraftableItem) -> Option<&Texture2D> {
+        self.crafting_icons.get(&item)
+    }
+    
+    pub fn get_building_texture(&self, item: CraftableItem) -> Option<&Texture2D> {
+        self.building_textures.get(&item)
+    }
+    
+    pub fn has_crafting_icon(&self, item: CraftableItem) -> bool {
+        self.crafting_icons.contains_key(&item)
     }
 }

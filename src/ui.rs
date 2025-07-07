@@ -173,31 +173,58 @@ impl InventoryUI {
                     break;
                 }
             }
-
             if let Some(clicked_item) = self.get_crafting_item_at_mouse(mouse_pos, 650, 100) {
                 if let Some(recipe) = crafting_system.recipes.get(&clicked_item) {
                     let craft_status = crafting_system.get_craft_status(&clicked_item, &player.inventory);
                     
+                    // ONLY proceed if we can actually craft
                     if matches!(craft_status, CraftStatus::CanCraft) {
-                        // Consume ingredients immediately
+                        // Double-check ingredients before consuming (safety check)
                         let mut can_craft = true;
                         for (resource_type, required_amount) in &recipe.inputs {
-                            if !player.inventory.remove_resource(*resource_type, *required_amount) {
+                            if player.inventory.get_amount(resource_type) < *required_amount {
                                 can_craft = false;
+                                println!("Not enough {}: need {}, have {}", 
+                                         resource_type.get_name(), 
+                                         required_amount, 
+                                         player.inventory.get_amount(resource_type));
                                 break;
                             }
                         }
                         
                         if can_craft {
-                            // Start crafting or add to queue
-                            if !player.is_crafting() {
-                                player.start_crafting(clicked_item, recipe.clone());
+                            // Now consume ingredients
+                            let mut successfully_consumed = true;
+                            for (resource_type, required_amount) in &recipe.inputs {
+                                if !player.inventory.remove_resource(*resource_type, *required_amount) {
+                                    successfully_consumed = false;
+                                    println!("Failed to consume {} {}", required_amount, resource_type.get_name());
+                                    break;
+                                }
+                            }
+                            
+                            if successfully_consumed {
+                                // Start crafting or add to queue
+                                if !player.is_crafting() {
+                                    player.start_crafting(clicked_item, recipe.clone());
+                                    println!("Started crafting: {}", clicked_item.get_name());
+                                } else {
+                                    player.add_to_crafting_queue(clicked_item, recipe.output.1);
+                                    println!("Added {} to crafting queue", clicked_item.get_name());
+                                }
                             } else {
-                                player.add_to_crafting_queue(clicked_item, recipe.output.1);
-                                println!("Added {} to crafting queue", clicked_item.get_name());
+                                println!("Failed to consume all ingredients for crafting");
                             }
                         } else {
-                            println!("Failed to consume ingredients for crafting");
+                            println!("Cannot craft {}: insufficient resources", clicked_item.get_name());
+                        }
+                    } else {
+                        // Print why we can't craft
+                        match craft_status {
+                            CraftStatus::MissingResources(msg) => println!("Cannot craft: {}", msg),
+                            CraftStatus::NeedsStructure(msg) => println!("Cannot craft: {}", msg),
+                            CraftStatus::NoRecipe => println!("No recipe found for {:?}", clicked_item),
+                            CraftStatus::CanCraft => {} // This shouldn't happen
                         }
                     }
                 }
@@ -536,14 +563,26 @@ impl InventoryUI {
             }
             
             // Item icon (placeholder - colored square for now)
-            let icon_color = match item.get_category() {
-                CraftingCategory::BasicMaterials => Color::BROWN,
-                CraftingCategory::Metallurgy => Color::LIGHTGRAY,
-                CraftingCategory::Textiles => Color::BEIGE,
-                CraftingCategory::Structures => Color::DARKGRAY,
-                CraftingCategory::Automation => Color::BLUE,
-            };
-            d.draw_rectangle(grid_x + 3, grid_y + 3, item_size - 6, item_size - 6, icon_color);
+            if let Some(icon_texture) = assets.get_crafting_icon(*item) {
+                let icon_size = item_size - 6;
+                d.draw_texture_ex(
+                    icon_texture,
+                    Vector2::new((grid_x + 3) as f32, (grid_y + 3) as f32),
+                    0.0,
+                    icon_size as f32 / icon_texture.width as f32,
+                    Color::WHITE
+                );
+            } else {
+                // Fallback to colored square
+                let icon_color = match item.get_category() {
+                    CraftingCategory::BasicMaterials => Color::BROWN,
+                    CraftingCategory::Metallurgy => Color::LIGHTGRAY,
+                    CraftingCategory::Textiles => Color::BEIGE,
+                    CraftingCategory::Structures => Color::DARKGRAY,
+                    CraftingCategory::Automation => Color::BLUE,
+                };
+                d.draw_rectangle(grid_x + 3, grid_y + 3, item_size - 6, item_size - 6, icon_color);
+            }
             
             // Item name below slot
             let name = item.get_name();

@@ -340,15 +340,56 @@ impl World {
             // Add crafted item to inventory
             let (output_item, output_amount) = &craft.recipe.output;
             match output_item {
-                CraftableItem::Charcoal => {
+                ResourceType::Charcoal => {
                     player.inventory.add_resource(ResourceType::Charcoal, *output_amount);
                 }
-                CraftableItem::IronBloom => {
+                ResourceType::IronBloom => {
                     player.inventory.add_resource(ResourceType::IronBloom, *output_amount);
                 }
-                // Add other craftable items as needed
+                ResourceType::WroughtIron => {
+                    player.inventory.add_resource(ResourceType::WroughtIron, *output_amount);
+                }
+                ResourceType::IronPlates => {
+                    player.inventory.add_resource(ResourceType::IronPlates, *output_amount);
+                }
+                ResourceType::IronGears => {
+                    player.inventory.add_resource(ResourceType::IronGears, *output_amount);
+                }
+                ResourceType::MetalRods => {
+                    player.inventory.add_resource(ResourceType::MetalRods, *output_amount);
+                }
+                ResourceType::Threads => {
+                    player.inventory.add_resource(ResourceType::Threads, *output_amount);
+                }
+                ResourceType::Fabric => {
+                    player.inventory.add_resource(ResourceType::Fabric, *output_amount);
+                }
+                ResourceType::ClothStrips => {
+                    player.inventory.add_resource(ResourceType::ClothStrips, *output_amount);
+                }
+                // Structures/Buildings
+                ResourceType::CharcoalPit => {
+                    player.inventory.add_resource(ResourceType::CharcoalPit, *output_amount);
+                }
+                ResourceType::BloomeryFurnace => {
+                    player.inventory.add_resource(ResourceType::BloomeryFurnace, *output_amount);
+                }
+                ResourceType::StoneAnvil => {
+                    player.inventory.add_resource(ResourceType::StoneAnvil, *output_amount);
+                }
+                ResourceType::SpinningWheel => {
+                    player.inventory.add_resource(ResourceType::SpinningWheel, *output_amount);
+                }
+                ResourceType::WeavingMachine => {
+                    player.inventory.add_resource(ResourceType::WeavingMachine, *output_amount);
+                }
+                ResourceType::ConveyorBelt => {
+                    player.inventory.add_resource(ResourceType::ConveyorBelt, *output_amount);
+                }
+                // Raw resources (shouldn't be crafted, but just in case)
                 _ => {
-                    println!("Crafted item not yet implemented in inventory: {:?}", output_item);
+                    player.inventory.add_resource(*output_item, *output_amount);
+                    println!("Added crafted resource: {} x{}", output_item.get_name(), output_amount);
                 }
             }
             
