@@ -65,12 +65,13 @@ impl AssetManager {
             }
         }
         
-        // Load icon textures for the 4 new icons we have
+        // Load icon textures for the 5 new icons we have
         let icon_types = [
             (ResourceType::Wood, "wood.png"),
             (ResourceType::Stone, "stone.png"),
             (ResourceType::IronOre, "iron_ore.png"),
             (ResourceType::CopperOre, "copper_ore.png"),
+            (ResourceType::Cotton, "cotton.png"),
         ];
         
         for (resource_type, filename) in icon_types.iter() {

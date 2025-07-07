@@ -167,6 +167,9 @@ fn main() {
             draw_minimal_ui(&mut d, &game_player);
         }
         
+        // Always draw quick slot bar at bottom (even when inventory is open)
+        draw_quick_slot_bar(&mut d, &game_player, &assets);
+        
         draw_time_display(&mut d, &world.game_time);
         
         // Draw pause menu last (on top of everything)
@@ -176,11 +179,98 @@ fn main() {
 
 // NEW: Minimal UI function when inventory is closed
 fn draw_minimal_ui(d: &mut RaylibDrawHandle, player: &Player) {
-    // Small info panel
-    d.draw_rectangle(10, 10, 200, 60, Color::new(47, 47, 47, 220));
-    d.draw_rectangle_lines(10, 10, 200, 60, Color::new(150, 150, 150, 255));
+    // Small info panel - simplified to just show the instruction
+    d.draw_rectangle(10, 10, 200, 30, Color::new(47, 47, 47, 220));
+    d.draw_rectangle_lines(10, 10, 200, 30, Color::new(150, 150, 150, 255));
     
     d.draw_text("Press E for Inventory", 20, 20, 16, Color::WHITE);
-    d.draw_text(&format!("Wood: {}", player.inventory.get_amount(&ResourceType::Wood)), 20, 40, 12, Color::LIGHTGRAY);
-    d.draw_text(&format!("Stone: {}", player.inventory.get_amount(&ResourceType::Stone)), 120, 40, 12, Color::LIGHTGRAY);
+}
+
+// Quick slot bar showing first row of inventory
+fn draw_quick_slot_bar(d: &mut RaylibDrawHandle, player: &Player, assets: &AssetManager) {
+    let screen_width = 1200;
+    let screen_height = 800;
+    let slot_size = 40;
+    let slot_spacing = 4;
+    let slots_per_row = 8;
+    let total_width = slots_per_row * slot_size + (slots_per_row - 1) * slot_spacing;
+    let start_x = (screen_width - total_width) / 2;
+    let start_y = screen_height - slot_size - 20; // 20px from bottom
+    
+    // Draw background for the entire quick slot bar
+    let padding = 8;
+    d.draw_rectangle(
+        start_x - padding, 
+        start_y - padding, 
+        total_width + padding * 2, 
+        slot_size + padding * 2, 
+        Color::new(40, 40, 40, 200)
+    );
+    d.draw_rectangle_lines(
+        start_x - padding, 
+        start_y - padding, 
+        total_width + padding * 2, 
+        slot_size + padding * 2, 
+        Color::new(100, 100, 100, 255)
+    );
+    
+    // Draw the first 8 inventory slots
+    for i in 0..slots_per_row {
+        let slot_x = start_x + i * (slot_size + slot_spacing);
+        let slot_y = start_y;
+        
+        // Draw slot background
+        if let Some(slot_texture) = assets.get_ui_texture("inventory_slot") {
+            d.draw_texture_ex(
+                slot_texture,
+                Vector2::new(slot_x as f32, slot_y as f32),
+                0.0,
+                slot_size as f32 / slot_texture.width as f32,
+                Color::WHITE
+            );
+        } else {
+            d.draw_rectangle(slot_x, slot_y, slot_size, slot_size, Color::new(60, 60, 60, 255));
+            d.draw_rectangle_lines(slot_x, slot_y, slot_size, slot_size, Color::new(100, 100, 100, 255));
+        }
+        
+        // Draw item if slot has one
+        if let Some(slot) = player.inventory.get_slot(i as usize) {
+            if !slot.is_empty() {
+                // Draw item icon
+                if let Some(texture) = assets.get_icon_texture(slot.resource_type.unwrap()) {
+                    let icon_size = slot_size - 4;
+                    d.draw_texture_ex(
+                        texture,
+                        Vector2::new((slot_x + 2) as f32, (slot_y + 2) as f32),
+                        0.0,
+                        icon_size as f32 / texture.width as f32,
+                        Color::WHITE
+                    );
+                } else {
+                    let icon_color = slot.resource_type.unwrap().get_color();
+                    let icon_size = slot_size - 4;
+                    d.draw_rectangle(slot_x + 2, slot_y + 2, icon_size, icon_size, icon_color);
+                }
+                
+                // Draw amount
+                let amount_text = format!("{}", slot.amount);
+                let font_size = 10;
+                let text_width = d.measure_text(&amount_text, font_size);
+                d.draw_rectangle(
+                    slot_x + slot_size - text_width - 4, 
+                    slot_y + slot_size - 12, 
+                    text_width + 2, 
+                    10, 
+                    Color::new(0, 0, 0, 180)
+                );
+                d.draw_text(
+                    &amount_text, 
+                    slot_x + slot_size - text_width - 3, 
+                    slot_y + slot_size - 11, 
+                    font_size, 
+                    Color::WHITE
+                );
+            }
+        }
+    }
 }
