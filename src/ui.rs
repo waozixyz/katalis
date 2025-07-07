@@ -5,12 +5,193 @@ use crate::assets::AssetManager;
 use crate::Player;
 use crate::world::{World, BuildingInventory};
 
+// Common UI layout constants
+const SCREEN_WIDTH: i32 = 1200;
+const SCREEN_HEIGHT: i32 = 800;
+const PANEL_BACKGROUND_COLOR: Color = Color::new(40, 40, 40, 240);
+const PANEL_BORDER_COLOR: Color = Color::new(200, 200, 200, 255);
+const SLOT_BACKGROUND_COLOR: Color = Color::new(60, 60, 60, 255);
+const SLOT_BORDER_COLOR: Color = Color::new(100, 100, 100, 255);
+
+// Common UI drawing functions
+fn draw_panel(d: &mut RaylibDrawHandle, x: i32, y: i32, width: i32, height: i32) {
+    d.draw_rectangle(x, y, width, height, PANEL_BACKGROUND_COLOR);
+    d.draw_rectangle_lines(x, y, width, height, PANEL_BORDER_COLOR);
+}
+
+fn draw_panel_title(d: &mut RaylibDrawHandle, title: &str, x: i32, y: i32, width: i32, size: i32) {
+    let title_width = d.measure_text(title, size);
+    d.draw_text(title, x + (width - title_width) / 2, y + 20, size, Color::WHITE);
+}
+
+fn draw_inventory_slots(
+    d: &mut RaylibDrawHandle,
+    player: &Player,
+    assets: &AssetManager,
+    start_x: i32,
+    start_y: i32,
+    slot_size: i32,
+    slot_spacing: i32,
+    slots_per_row: usize,
+    max_slots: usize,
+) {
+    for i in 0..max_slots.min(player.inventory.slots.len()) {
+        let row = i / slots_per_row;
+        let col = i % slots_per_row;
+        let slot_x = start_x + col as i32 * (slot_size + slot_spacing);
+        let slot_y = start_y + row as i32 * (slot_size + slot_spacing);
+        
+        // Draw slot background
+        if let Some(slot_texture) = assets.get_ui_texture("inventory_slot") {
+            d.draw_texture_ex(
+                slot_texture,
+                Vector2::new(slot_x as f32, slot_y as f32),
+                0.0,
+                slot_size as f32 / slot_texture.width as f32,
+                Color::WHITE
+            );
+        } else {
+            d.draw_rectangle(slot_x, slot_y, slot_size, slot_size, SLOT_BACKGROUND_COLOR);
+            d.draw_rectangle_lines(slot_x, slot_y, slot_size, slot_size, SLOT_BORDER_COLOR);
+        }
+        
+        // Draw item if present
+        if let Some(slot) = player.inventory.get_slot(i) {
+            if !slot.is_empty() {
+                if let Some(resource_type) = slot.resource_type {
+                    draw_item_in_slot(d, assets, resource_type, slot.amount, slot_x, slot_y, slot_size);
+                }
+            }
+        }
+    }
+}
+
+fn draw_item_in_slot(
+    d: &mut RaylibDrawHandle,
+    assets: &AssetManager,
+    resource_type: ResourceType,
+    amount: u32,
+    slot_x: i32,
+    slot_y: i32,
+    slot_size: i32,
+) {
+    let icon_size = slot_size - 4;
+    
+    // Draw item icon
+    if let Some(texture) = assets.get_icon_texture(resource_type) {
+        d.draw_texture_ex(
+            texture,
+            Vector2::new((slot_x + 2) as f32, (slot_y + 2) as f32),
+            0.0,
+            icon_size as f32 / texture.width as f32,
+            Color::WHITE
+        );
+    } else {
+        let color = resource_type.get_color();
+        d.draw_rectangle(slot_x + 2, slot_y + 2, icon_size, icon_size, color);
+    }
+    
+    // Draw amount
+    let amount_text = format!("{}", amount);
+    let text_size = 10;
+    let text_width = d.measure_text(&amount_text, text_size);
+    d.draw_rectangle(
+        slot_x + slot_size - text_width - 4, 
+        slot_y + slot_size - 12, 
+        text_width + 2, 
+        10, 
+        Color::new(0, 0, 0, 180)
+    );
+    d.draw_text(
+        &amount_text, 
+        slot_x + slot_size - text_width - 3, 
+        slot_y + slot_size - 11, 
+        text_size, 
+        Color::WHITE
+    );
+}
+
+struct InventoryLayout {
+    panel_x: i32,
+    panel_y: i32,
+    panel_width: i32,
+    panel_height: i32,
+    start_x: i32,
+    start_y: i32,
+    slot_size: i32,
+    slot_spacing: i32,
+    slots_per_row: usize,
+    max_slots: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum RightPanelMode {
+    Crafting,
+    Building(BuildingType),
+}
+
+impl InventoryLayout {
+    fn new_left_panel() -> Self {
+        let panel_x = 50;
+        let panel_y = 100;
+        let panel_width = 500;
+        let panel_height = 600;
+        
+        Self {
+            panel_x,
+            panel_y,
+            panel_width,
+            panel_height,
+            start_x: panel_x + 20,
+            start_y: panel_y + 60,
+            slot_size: 32,
+            slot_spacing: 6,
+            slots_per_row: 8,
+            max_slots: 48,
+        }
+    }
+    
+    fn draw_inventory(&self, d: &mut RaylibDrawHandle, player: &Player, assets: &AssetManager) {
+        draw_panel(d, self.panel_x, self.panel_y, self.panel_width, self.panel_height);
+        draw_panel_title(d, "Player Inventory", self.panel_x, self.panel_y, self.panel_width, 20);
+        draw_inventory_slots(
+            d, player, assets, 
+            self.start_x, self.start_y, 
+            self.slot_size, self.slot_spacing, 
+            self.slots_per_row, self.max_slots
+        );
+    }
+    
+    fn get_slot_at_mouse<'a>(&self, mouse_pos: Vector2, player: &'a Player) -> Option<(usize, &'a InventorySlot)> {
+        let mouse_x = mouse_pos.x as i32;
+        let mouse_y = mouse_pos.y as i32;
+        
+        for i in 0..self.max_slots.min(player.inventory.slots.len()) {
+            let row = i / self.slots_per_row;
+            let col = i % self.slots_per_row;
+            let slot_x = self.start_x + col as i32 * (self.slot_size + self.slot_spacing);
+            let slot_y = self.start_y + row as i32 * (self.slot_size + self.slot_spacing);
+            
+            if mouse_x >= slot_x && mouse_x < slot_x + self.slot_size &&
+               mouse_y >= slot_y && mouse_y < slot_y + self.slot_size {
+                return Some((i, &player.inventory.slots[i]));
+            }
+        }
+        
+        None
+    }
+}
+
+
+// Keep the old BuildingUI for now for compatibility, but mark as deprecated
+#[deprecated(note = "Use DualPanelUI instead")]
 pub struct BuildingUI {
     pub is_open: bool,
     pub building_pos: Option<(usize, usize)>,
     pub building_type: Option<BuildingType>,
     pub dragged_item: Option<DraggedItem>,
     pub drag_offset: Vector2,
+    inventory_layout: InventoryLayout,
 }
 
 impl BuildingUI {
@@ -21,6 +202,7 @@ impl BuildingUI {
             building_type: None,
             dragged_item: None,
             drag_offset: Vector2::zero(),
+            inventory_layout: InventoryLayout::new_left_panel(),
         }
     }
     
@@ -63,7 +245,7 @@ impl BuildingUI {
             // Handle start dragging
             if self.dragged_item.is_none() {
                 // Check player inventory slots
-                if let Some((slot_index, slot)) = self.get_player_slot_at_mouse(mouse_pos, player) {
+                if let Some((slot_index, slot)) = self.inventory_layout.get_slot_at_mouse(mouse_pos, player) {
                     if !slot.is_empty() {
                         self.dragged_item = Some(DraggedItem {
                             resource_type: slot.resource_type.unwrap(),
@@ -123,7 +305,7 @@ impl BuildingUI {
                 let mut dropped = false;
                 
                 // Try to drop in player inventory
-                if let Some((slot_index, _)) = self.get_player_slot_at_mouse(mouse_pos, player) {
+                if let Some((slot_index, _)) = self.inventory_layout.get_slot_at_mouse(mouse_pos, player) {
                     player.inventory.add_to_slot(slot_index, dragged.resource_type, dragged.amount);
                     dropped = true;
                 }
@@ -184,14 +366,24 @@ impl BuildingUI {
         false
     }
     
+    fn get_building_name(&self, building_type: BuildingType) -> &'static str {
+        match building_type {
+            BuildingType::CharcoalPit => "Charcoal Pit",
+            BuildingType::BloomeryFurnace => "Bloomery Furnace",
+            BuildingType::StoneAnvil => "Stone Anvil",
+            BuildingType::SpinningWheel => "Spinning Wheel",
+            BuildingType::WeavingMachine => "Weaving Machine",
+            BuildingType::ConveyorBelt => "Conveyor Belt",
+        }
+    }
+    
     fn get_player_slot_at_mouse<'a>(&self, mouse_pos: Vector2, player: &'a Player) -> Option<(usize, &'a InventorySlot)> {
-        let panel_x = (1200 - 500) / 2;
-        let panel_y = (800 - 400) / 2;
-        let inv_panel_y = panel_y + 400 + 20;
-        let inv_start_x = panel_x + 20;
-        let inv_start_y = inv_panel_y + 40;
+        let inv_panel_x = 50;
+        let inv_panel_y = 150;
+        let inv_start_x = inv_panel_x + 20;
+        let inv_start_y = inv_panel_y + 60;
         let slot_size = 32;
-        let slot_spacing = 4;
+        let slot_spacing = 6;
         let slots_per_row = 8;
         
         let mouse_x = mouse_pos.x as i32;
@@ -214,10 +406,10 @@ impl BuildingUI {
     }
     
     fn get_building_input_slot_at_mouse<'a>(&self, mouse_pos: Vector2, inventory: &'a BuildingInventory) -> Option<(usize, &'a InventorySlot)> {
-        let panel_x = (1200 - 500) / 2;
-        let panel_y = (800 - 400) / 2;
-        let input_x = panel_x + 50;
-        let input_y = panel_y + 100;
+        let building_panel_x = 650;
+        let building_panel_y = 150;
+        let input_x = building_panel_x + 50;
+        let input_y = building_panel_y + 100;
         let slot_size = 48;
         let slot_spacing = 8;
         
@@ -238,10 +430,11 @@ impl BuildingUI {
     }
     
     fn get_building_output_slot_at_mouse<'a>(&self, mouse_pos: Vector2, inventory: &'a BuildingInventory) -> Option<(usize, &'a InventorySlot)> {
-        let panel_x = (1200 - 500) / 2;
-        let panel_y = (800 - 400) / 2;
-        let output_x = panel_x + 500 - 100 - inventory.output_slots.len() as i32 * (48 + 8);
-        let output_y = panel_y + 100;
+        let building_panel_x = 650;
+        let building_panel_y = 150;
+        let building_panel_width = 480;
+        let output_x = building_panel_x + building_panel_width - 100 - inventory.output_slots.len() as i32 * (48 + 8);
+        let output_y = building_panel_y + 100;
         let slot_size = 48;
         let slot_spacing = 8;
         
@@ -270,206 +463,26 @@ impl BuildingUI {
         let Some(building_pos) = self.building_pos else { return; };
         let Some(inventory) = world.building_inventories.get(&building_pos) else { return; };
         
-        let screen_width = 1200;
-        let screen_height = 800;
-        
         // Semi-transparent overlay
-        d.draw_rectangle(0, 0, screen_width, screen_height, Color::new(0, 0, 0, 128));
+        d.draw_rectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Color::new(0, 0, 0, 128));
         
-        // Main panel
-        let panel_width = 500;
-        let panel_height = 400;
-        let panel_x = (screen_width - panel_width) / 2;
-        let panel_y = (screen_height - panel_height) / 2;
+        // Draw player inventory using layout
+        self.inventory_layout.draw_inventory(d, player, assets);
         
-        // Draw panel background
-        d.draw_rectangle(panel_x, panel_y, panel_width, panel_height, Color::new(40, 40, 40, 240));
-        d.draw_rectangle_lines(panel_x, panel_y, panel_width, panel_height, Color::new(200, 200, 200, 255));
+        // Building panel (right side)
+        let building_panel_width = 480;
+        let building_panel_height = 500;
+        let building_panel_x = 650;
+        let building_panel_y = 150;
         
-        // Title
-        let title = match building_type {
-            BuildingType::CharcoalPit => "Charcoal Pit",
-            BuildingType::BloomeryFurnace => "Bloomery Furnace",
-            BuildingType::StoneAnvil => "Stone Anvil",
-            BuildingType::SpinningWheel => "Spinning Wheel",
-            BuildingType::WeavingMachine => "Weaving Machine",
-            BuildingType::ConveyorBelt => "Conveyor Belt",
-        };
+        draw_panel(d, building_panel_x, building_panel_y, building_panel_width, building_panel_height);
         
-        let title_size = 24;
-        let title_width = d.measure_text(title, title_size);
-        d.draw_text(title, panel_x + (panel_width - title_width) / 2, panel_y + 20, title_size, Color::WHITE);
+        // Building title
+        let title = self.get_building_name(building_type);
+        draw_panel_title(d, title, building_panel_x, building_panel_y, building_panel_width, 24);
         
-        // Draw input/output sections
-        let slot_size = 48;
-        let slot_spacing = 8;
-        
-        // Input section
-        let input_label = "Input";
-        let input_label_width = d.measure_text(input_label, 16);
-        let input_x = panel_x + 50;
-        let input_y = panel_y + 100;
-        
-        d.draw_text(input_label, input_x + (inventory.input_slots.len() as i32 * (slot_size + slot_spacing) - input_label_width) / 2, input_y - 25, 16, Color::LIGHTGRAY);
-        
-        // Draw input slots
-        for (i, slot) in inventory.input_slots.iter().enumerate() {
-            let slot_x = input_x + i as i32 * (slot_size + slot_spacing);
-            let slot_y = input_y;
-            
-            // Draw slot background
-            d.draw_rectangle(slot_x, slot_y, slot_size, slot_size, Color::new(60, 60, 60, 255));
-            d.draw_rectangle_lines(slot_x, slot_y, slot_size, slot_size, Color::new(100, 100, 100, 255));
-            
-            // Draw item if present
-            if !slot.is_empty() {
-                if let Some(resource_type) = slot.resource_type {
-                    if let Some(texture) = assets.get_icon_texture(resource_type) {
-                        d.draw_texture_ex(
-                            texture,
-                            Vector2::new(slot_x as f32 + 4.0, slot_y as f32 + 4.0),
-                            0.0,
-                            (slot_size - 8) as f32 / texture.width as f32,
-                            Color::WHITE
-                        );
-                    } else {
-                        let color = resource_type.get_color();
-                        d.draw_rectangle(slot_x + 4, slot_y + 4, slot_size - 8, slot_size - 8, color);
-                    }
-                    
-                    // Draw amount
-                    let amount_text = format!("{}", slot.amount);
-                    let text_size = 12;
-                    let text_width = d.measure_text(&amount_text, text_size);
-                    d.draw_text(&amount_text, slot_x + slot_size - text_width - 4, slot_y + slot_size - 14, text_size, Color::WHITE);
-                }
-            }
-        }
-        
-        // Arrow from input to output
-        let arrow_x = panel_x + panel_width / 2;
-        let arrow_y = input_y + slot_size / 2;
-        d.draw_text("→", arrow_x - 10, arrow_y - 8, 32, Color::LIGHTGRAY);
-        
-        // Progress bar
-        let progress_bar_width = 100;
-        let progress_bar_height = 20;
-        let progress_bar_x = arrow_x - progress_bar_width / 2;
-        let progress_bar_y = arrow_y + 25;
-        
-        d.draw_rectangle(progress_bar_x, progress_bar_y, progress_bar_width, progress_bar_height, Color::new(40, 40, 40, 255));
-        d.draw_rectangle_lines(progress_bar_x, progress_bar_y, progress_bar_width, progress_bar_height, Color::new(100, 100, 100, 255));
-        
-        if inventory.max_progress > 0.0 {
-            let progress_width = ((inventory.progress / inventory.max_progress) * progress_bar_width as f32) as i32;
-            d.draw_rectangle(progress_bar_x, progress_bar_y, progress_width, progress_bar_height, Color::new(100, 200, 100, 255));
-        }
-        
-        // Output section
-        let output_label = "Output";
-        let output_label_width = d.measure_text(output_label, 16);
-        let output_x = panel_x + panel_width - 100 - inventory.output_slots.len() as i32 * (slot_size + slot_spacing);
-        let output_y = input_y;
-        
-        d.draw_text(output_label, output_x + (inventory.output_slots.len() as i32 * (slot_size + slot_spacing) - output_label_width) / 2, output_y - 25, 16, Color::LIGHTGRAY);
-        
-        // Draw output slots
-        for (i, slot) in inventory.output_slots.iter().enumerate() {
-            let slot_x = output_x + i as i32 * (slot_size + slot_spacing);
-            let slot_y = output_y;
-            
-            // Draw slot background
-            d.draw_rectangle(slot_x, slot_y, slot_size, slot_size, Color::new(60, 60, 60, 255));
-            d.draw_rectangle_lines(slot_x, slot_y, slot_size, slot_size, Color::new(100, 100, 100, 255));
-            
-            // Draw item if present
-            if !slot.is_empty() {
-                if let Some(resource_type) = slot.resource_type {
-                    if let Some(texture) = assets.get_icon_texture(resource_type) {
-                        d.draw_texture_ex(
-                            texture,
-                            Vector2::new(slot_x as f32 + 4.0, slot_y as f32 + 4.0),
-                            0.0,
-                            (slot_size - 8) as f32 / texture.width as f32,
-                            Color::WHITE
-                        );
-                    } else {
-                        let color = resource_type.get_color();
-                        d.draw_rectangle(slot_x + 4, slot_y + 4, slot_size - 8, slot_size - 8, color);
-                    }
-                    
-                    // Draw amount
-                    let amount_text = format!("{}", slot.amount);
-                    let text_size = 12;
-                    let text_width = d.measure_text(&amount_text, text_size);
-                    d.draw_text(&amount_text, slot_x + slot_size - text_width - 4, slot_y + slot_size - 14, text_size, Color::WHITE);
-                }
-            }
-        }
-        
-        // Instructions
-        let instructions = "Click and drag items to move them. Press ESC to close.";
-        let inst_size = 14;
-        let inst_width = d.measure_text(instructions, inst_size);
-        d.draw_text(instructions, panel_x + (panel_width - inst_width) / 2, panel_y + panel_height - 40, inst_size, Color::LIGHTGRAY);
-        
-        // Draw player inventory panel
-        let inv_panel_x = panel_x;
-        let inv_panel_y = panel_y + panel_height + 20;
-        let inv_panel_width = panel_width;
-        let inv_panel_height = 150;
-        
-        d.draw_rectangle(inv_panel_x, inv_panel_y, inv_panel_width, inv_panel_height, Color::new(40, 40, 40, 240));
-        d.draw_rectangle_lines(inv_panel_x, inv_panel_y, inv_panel_width, inv_panel_height, Color::new(200, 200, 200, 255));
-        
-        // Player inventory label
-        let inv_label = "Player Inventory";
-        let inv_label_width = d.measure_text(inv_label, 16);
-        d.draw_text(inv_label, inv_panel_x + (inv_panel_width - inv_label_width) / 2, inv_panel_y + 10, 16, Color::WHITE);
-        
-        // Draw player inventory slots
-        let inv_slot_size = 32;
-        let inv_slot_spacing = 4;
-        let inv_slots_per_row = 8;
-        let inv_start_x = inv_panel_x + 20;
-        let inv_start_y = inv_panel_y + 40;
-        
-        for i in 0..16 { // Show first 16 slots
-            let row = i / inv_slots_per_row;
-            let col = i % inv_slots_per_row;
-            let slot_x = inv_start_x + col as i32 * (inv_slot_size + inv_slot_spacing);
-            let slot_y = inv_start_y + row as i32 * (inv_slot_size + inv_slot_spacing);
-            
-            // Draw slot background
-            d.draw_rectangle(slot_x, slot_y, inv_slot_size, inv_slot_size, Color::new(60, 60, 60, 255));
-            d.draw_rectangle_lines(slot_x, slot_y, inv_slot_size, inv_slot_size, Color::new(100, 100, 100, 255));
-            
-            // Draw item if present
-            if let Some(slot) = player.inventory.get_slot(i) {
-                if !slot.is_empty() {
-                    if let Some(resource_type) = slot.resource_type {
-                        if let Some(texture) = assets.get_icon_texture(resource_type) {
-                            d.draw_texture_ex(
-                                texture,
-                                Vector2::new(slot_x as f32 + 2.0, slot_y as f32 + 2.0),
-                                0.0,
-                                (inv_slot_size - 4) as f32 / texture.width as f32,
-                                Color::WHITE
-                            );
-                        } else {
-                            let color = resource_type.get_color();
-                            d.draw_rectangle(slot_x + 2, slot_y + 2, inv_slot_size - 4, inv_slot_size - 4, color);
-                        }
-                        
-                        // Draw amount
-                        let amount_text = format!("{}", slot.amount);
-                        let text_size = 10;
-                        let text_width = d.measure_text(&amount_text, text_size);
-                        d.draw_text(&amount_text, slot_x + inv_slot_size - text_width - 3, slot_y + inv_slot_size - 11, text_size, Color::WHITE);
-                    }
-                }
-            }
-        }
+        // Draw building interface
+        self.draw_building_interface(d, assets, inventory, building_panel_x, building_panel_y, building_panel_width);
         
         // Draw dragged item
         if let Some(ref dragged) = self.dragged_item {
@@ -493,6 +506,74 @@ impl BuildingUI {
             // Draw amount
             let amount_text = format!("{}", dragged.amount);
             d.draw_text(&amount_text, drag_x as i32 + icon_size - 12, drag_y as i32 + icon_size - 12, 10, Color::WHITE);
+        }
+    }
+    
+    fn draw_building_interface(&self, d: &mut RaylibDrawHandle, assets: &AssetManager, inventory: &BuildingInventory, panel_x: i32, panel_y: i32, panel_width: i32) {
+        let slot_size = 48;
+        let slot_spacing = 8;
+        
+        // Input section
+        let input_x = panel_x + 50;
+        let input_y = panel_y + 100;
+        let input_label = "Input";
+        let input_label_width = d.measure_text(input_label, 16);
+        d.draw_text(input_label, input_x + (inventory.input_slots.len() as i32 * (slot_size + slot_spacing) - input_label_width) / 2, input_y - 25, 16, Color::LIGHTGRAY);
+        
+        // Draw input slots
+        for (i, slot) in inventory.input_slots.iter().enumerate() {
+            let slot_x = input_x + i as i32 * (slot_size + slot_spacing);
+            self.draw_building_slot(d, assets, slot, slot_x, input_y, slot_size);
+        }
+        
+        // Arrow and progress bar
+        let arrow_x = panel_x + panel_width / 2;
+        let arrow_y = input_y + slot_size / 2;
+        d.draw_text("→", arrow_x - 10, arrow_y - 8, 32, Color::LIGHTGRAY);
+        
+        let progress_bar_width = 100;
+        let progress_bar_height = 20;
+        let progress_bar_x = arrow_x - progress_bar_width / 2;
+        let progress_bar_y = arrow_y + 25;
+        
+        d.draw_rectangle(progress_bar_x, progress_bar_y, progress_bar_width, progress_bar_height, Color::new(40, 40, 40, 255));
+        d.draw_rectangle_lines(progress_bar_x, progress_bar_y, progress_bar_width, progress_bar_height, Color::new(100, 100, 100, 255));
+        
+        if inventory.max_progress > 0.0 {
+            let progress_width = ((inventory.progress / inventory.max_progress) * progress_bar_width as f32) as i32;
+            d.draw_rectangle(progress_bar_x, progress_bar_y, progress_width, progress_bar_height, Color::new(100, 200, 100, 255));
+        }
+        
+        // Output section
+        let output_x = panel_x + panel_width - 100 - inventory.output_slots.len() as i32 * (slot_size + slot_spacing);
+        let output_y = input_y;
+        let output_label = "Output";
+        let output_label_width = d.measure_text(output_label, 16);
+        d.draw_text(output_label, output_x + (inventory.output_slots.len() as i32 * (slot_size + slot_spacing) - output_label_width) / 2, output_y - 25, 16, Color::LIGHTGRAY);
+        
+        // Draw output slots
+        for (i, slot) in inventory.output_slots.iter().enumerate() {
+            let slot_x = output_x + i as i32 * (slot_size + slot_spacing);
+            self.draw_building_slot(d, assets, slot, slot_x, output_y, slot_size);
+        }
+        
+        // Instructions
+        let instructions = "Click and drag items to move them. Press ESC to close.";
+        let inst_size = 14;
+        let inst_width = d.measure_text(instructions, inst_size);
+        d.draw_text(instructions, panel_x + (panel_width - inst_width) / 2, panel_y + 500 - 40, inst_size, Color::LIGHTGRAY);
+    }
+    
+    fn draw_building_slot(&self, d: &mut RaylibDrawHandle, assets: &AssetManager, slot: &InventorySlot, slot_x: i32, slot_y: i32, slot_size: i32) {
+        // Draw slot background
+        d.draw_rectangle(slot_x, slot_y, slot_size, slot_size, SLOT_BACKGROUND_COLOR);
+        d.draw_rectangle_lines(slot_x, slot_y, slot_size, slot_size, SLOT_BORDER_COLOR);
+        
+        // Draw item if present
+        if !slot.is_empty() {
+            if let Some(resource_type) = slot.resource_type {
+                draw_item_in_slot(d, assets, resource_type, slot.amount, slot_x, slot_y, slot_size);
+            }
         }
     }
 }
@@ -589,6 +670,10 @@ pub struct InventoryUI {
     pub slot_size: i32,
     pub slot_spacing_x: i32,
     pub slot_spacing_y: i32,
+    // NEW: Right panel mode and building support
+    pub right_panel_mode: RightPanelMode,
+    pub building_pos: Option<(usize, usize)>,
+    inventory_layout: InventoryLayout,
 }
 
 impl InventoryUI {
@@ -602,6 +687,9 @@ impl InventoryUI {
             slot_size: 32,
             slot_spacing_x: 6,
             slot_spacing_y: 8,
+            right_panel_mode: RightPanelMode::Crafting,
+            building_pos: None,
+            inventory_layout: InventoryLayout::new_left_panel(),
         }
     }
     
@@ -612,6 +700,39 @@ impl InventoryUI {
             self.dragged_item = None;
         }
     }
+    
+    pub fn open_crafting(&mut self) {
+        self.is_open = true;
+        self.right_panel_mode = RightPanelMode::Crafting;
+        self.building_pos = None;
+        self.dragged_item = None;
+    }
+    
+    pub fn open_building(&mut self, building_pos: (usize, usize), building_type: BuildingType) {
+        self.is_open = true;
+        self.right_panel_mode = RightPanelMode::Building(building_type);
+        self.building_pos = Some(building_pos);
+        self.dragged_item = None;
+    }
+    
+    pub fn close(&mut self) {
+        self.is_open = false;
+        self.dragged_item = None;
+    }
+    
+    pub fn update(&mut self, rl: &RaylibHandle) -> bool {
+        if !self.is_open {
+            return false;
+        }
+        
+        // ESC closes the UI
+        if rl.is_key_pressed(KeyboardKey::KEY_ESCAPE) {
+            self.close();
+            return true; // Consumed ESC
+        }
+        
+        false
+    }
     pub fn handle_mouse_input(&mut self, rl: &RaylibHandle, player: &mut Player, crafting_system: &CraftingSystem) -> Option<crate::PlacementState> {
         if !self.is_open {
             return None;
@@ -621,36 +742,36 @@ impl InventoryUI {
         
         if rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) {
             // Handle inventory slot clicks
-            if let Some(slot_index) = self.get_slot_at_mouse(mouse_pos, 50, 100) {
-                if let Some(slot) = player.inventory.get_slot(slot_index) {
-                    if !slot.is_empty() {
-                        let resource_type = slot.resource_type.unwrap();
-                        
-                        // Check if this is a building item
-                        if let Some(building_type) = BuildingType::from_resource_type(&resource_type) {
-                            // Start placement mode
-                            self.is_open = false; // Close inventory
-                            return Some(crate::PlacementState {
-                                building_type,
-                                resource_type,
-                                source_slot: slot_index,
-                            });
-                        } else {
-                            // Start dragging for non-building items
-                            self.dragged_item = Some(DraggedItem {
-                                resource_type,
-                                amount: slot.amount,
-                                source_slot: slot_index,
-                            });
-                            self.drag_offset = Vector2::zero();
-                        }
+            if let Some((slot_index, slot)) = self.inventory_layout.get_slot_at_mouse(mouse_pos, player) {
+                // slot is already available from get_slot_at_mouse
+                if !slot.is_empty() {
+                    let resource_type = slot.resource_type.unwrap();
+                    
+                    // Check if this is a building item
+                    if let Some(building_type) = BuildingType::from_resource_type(&resource_type) {
+                        // Start placement mode
+                        self.is_open = false; // Close inventory
+                        return Some(crate::PlacementState {
+                            building_type,
+                            resource_type,
+                            source_slot: slot_index,
+                        });
+                    } else {
+                        // Start dragging for non-building items
+                        self.dragged_item = Some(DraggedItem {
+                            resource_type,
+                            amount: slot.amount,
+                            source_slot: slot_index,
+                        });
+                        self.drag_offset = Vector2::zero();
                     }
                 }
             }
             
-            // Handle crafting panel tabs (existing code)
-            let panel_x = 650;
-            let panel_y = 100;
+            // Handle crafting panel tabs only when in crafting mode
+            if matches!(self.right_panel_mode, RightPanelMode::Crafting) {
+                let panel_x = 650;
+                let panel_y = 100;
             let tab_y = panel_y + 50;
             let tab_height = 35;
             let panel_width = 480;
@@ -735,13 +856,14 @@ impl InventoryUI {
                     }
                 }
             }
+            } // End crafting mode handling
 
         }
         
         if rl.is_mouse_button_released(MouseButton::MOUSE_BUTTON_LEFT) {
             if let Some(dragged) = &self.dragged_item {
                 // Try to drop in a new slot
-                if let Some(target_slot) = self.get_slot_at_mouse(mouse_pos, 50, 100) {
+                if let Some((target_slot, _)) = self.inventory_layout.get_slot_at_mouse(mouse_pos, player) {
                     if target_slot != dragged.source_slot {
                         // Attempt to move item
                         if let Some(target) = player.inventory.get_slot(target_slot) {
@@ -790,20 +912,6 @@ impl InventoryUI {
     }
     
     
-    pub fn update(&mut self, rl: &RaylibHandle) -> bool {
-        if rl.is_key_pressed(KeyboardKey::KEY_E) {
-            self.toggle();
-        }
-        
-        // Close inventory/crafting with escape key
-        if rl.is_key_pressed(KeyboardKey::KEY_ESCAPE) && self.is_open {
-            self.is_open = false;
-            self.dragged_item = None;
-            return true; // Signal that ESC was consumed by inventory
-        }
-        
-        false // ESC was not consumed
-    }
     pub fn draw(&self, d: &mut RaylibDrawHandle, inventory: &Inventory, crafting_system: &CraftingSystem, assets: &AssetManager, mouse_pos: Vector2, player: &Player) {
         if !self.is_open {
             return;
@@ -814,8 +922,96 @@ impl InventoryUI {
         
         d.draw_rectangle(0, 0, screen_width, screen_height, Color::new(0, 0, 0, 128));
         
-        self.draw_inventory_panel(d, inventory, assets, 50, 100);
-        self.draw_crafting_panel(d, crafting_system, inventory, assets, 650, 100, mouse_pos);
+        // Draw left panel (always player inventory)
+        self.inventory_layout.draw_inventory(d, player, assets);
+        
+        // Draw right panel based on mode
+        let right_panel_x = 650;
+        let right_panel_y = 100;
+        let right_panel_width = 480;
+        let right_panel_height = 600;
+        
+        match self.right_panel_mode {
+            RightPanelMode::Crafting => {
+                // Don't draw a separate panel background for crafting - the crafting panel draws its own
+                self.draw_crafting_panel(d, crafting_system, inventory, assets, right_panel_x, right_panel_y, mouse_pos);
+            }
+            RightPanelMode::Building(building_type) => {
+                draw_panel(d, right_panel_x, right_panel_y, right_panel_width, right_panel_height);
+                let title = self.get_building_name(building_type);
+                draw_panel_title(d, title, right_panel_x, right_panel_y, right_panel_width, 24);
+                // For building mode, we need access to world - this will be handled by parameter change
+            }
+        }
+        
+        // Draw dragged item
+        if let Some(dragged) = &self.dragged_item {
+            let drag_pos = Vector2::new(mouse_pos.x - (self.slot_size as f32 / 2.0), mouse_pos.y - (self.slot_size as f32 / 2.0));
+            
+            // Draw slot background
+            if let Some(slot_texture) = assets.get_ui_texture("inventory_slot") {
+                d.draw_texture_ex(slot_texture, drag_pos, 0.0, self.slot_size as f32 / slot_texture.width as f32, Color::new(255, 255, 255, 200));
+            } else {
+                d.draw_rectangle(drag_pos.x as i32, drag_pos.y as i32, self.slot_size, self.slot_size, Color::new(60, 60, 60, 200));
+            }
+            
+            // Draw item icon
+            if let Some(texture) = assets.get_icon_texture(dragged.resource_type) {
+                let icon_size = self.slot_size - 4;
+                d.draw_texture_ex(texture, Vector2::new(drag_pos.x + 2.0, drag_pos.y + 2.0), 0.0, icon_size as f32 / texture.width as f32, Color::new(255, 255, 255, 200));
+            } else {
+                let color = dragged.resource_type.get_color();
+                let icon_size = self.slot_size - 4;
+                d.draw_rectangle(drag_pos.x as i32 + 2, drag_pos.y as i32 + 2, icon_size, icon_size, Color::new(color.r, color.g, color.b, 200));
+            }
+            
+            // Draw amount
+            let amount_text = format!("{}", dragged.amount);
+            let font_size = 10; // Smaller font for smaller slots
+            d.draw_text(&amount_text, drag_pos.x as i32 + self.slot_size - 12, drag_pos.y as i32 + self.slot_size - 12, font_size, Color::WHITE);
+        }
+
+        self.draw_crafting_queue(d, player, 50, 500);
+
+    }
+    
+    // Method to draw when in building mode - will be called from main with world parameter
+    pub fn draw_with_world(&self, d: &mut RaylibDrawHandle, world: &World, inventory: &Inventory, crafting_system: &CraftingSystem, assets: &AssetManager, mouse_pos: Vector2, player: &Player) {
+        if !self.is_open {
+            return;
+        }
+        
+        let screen_width = 1200;
+        let screen_height = 800;
+        
+        d.draw_rectangle(0, 0, screen_width, screen_height, Color::new(0, 0, 0, 128));
+        
+        // Draw left panel (always player inventory)
+        self.inventory_layout.draw_inventory(d, player, assets);
+        
+        // Draw right panel based on mode
+        let right_panel_x = 650;
+        let right_panel_y = 100;
+        let right_panel_width = 480;
+        let right_panel_height = 600;
+        
+        match self.right_panel_mode {
+            RightPanelMode::Crafting => {
+                // Don't draw a separate panel background for crafting - the crafting panel draws its own
+                self.draw_crafting_panel(d, crafting_system, inventory, assets, right_panel_x, right_panel_y, mouse_pos);
+            }
+            RightPanelMode::Building(building_type) => {
+                draw_panel(d, right_panel_x, right_panel_y, right_panel_width, right_panel_height);
+                let title = self.get_building_name(building_type);
+                draw_panel_title(d, title, right_panel_x, right_panel_y, right_panel_width, 24);
+                
+                if let Some(building_pos) = self.building_pos {
+                    if let Some(building_inventory) = world.building_inventories.get(&building_pos) {
+                        self.draw_building_interface(d, assets, building_inventory, right_panel_x, right_panel_y, right_panel_width);
+                    }
+                }
+            }
+        }
         
         // Draw dragged item
         if let Some(dragged) = &self.dragged_item {
@@ -966,15 +1162,15 @@ impl InventoryUI {
     }
     
     fn draw_crafting_panel(&self, d: &mut RaylibDrawHandle, crafting_system: &CraftingSystem, inventory: &Inventory, assets: &AssetManager, x: i32, y: i32, mouse_pos: Vector2) {
-        let panel_width = 480; // Reduced from 600
-        let panel_height = 550; // Reduced from 650
+        let panel_width = 480;
+        let panel_height = 600;
         
         // Panel background
         d.draw_rectangle(x, y, panel_width, panel_height, Color::new(40, 40, 40, 240));
         d.draw_rectangle_lines(x, y, panel_width, panel_height, Color::new(200, 200, 200, 255));
 
         // Title
-        d.draw_text("Crafting", x + 20, y + 15, 24, Color::WHITE);
+        d.draw_text("Crafting", x + 20, y + 20, 24, Color::WHITE);
         
         // Category tabs - 2 rows
         let tab_height = 35;
@@ -1194,5 +1390,84 @@ impl InventoryUI {
             }
         }
         None
+    }
+    
+    fn get_building_name(&self, building_type: BuildingType) -> &'static str {
+        match building_type {
+            BuildingType::CharcoalPit => "Charcoal Pit",
+            BuildingType::BloomeryFurnace => "Bloomery Furnace",
+            BuildingType::StoneAnvil => "Stone Anvil",
+            BuildingType::SpinningWheel => "Spinning Wheel",
+            BuildingType::WeavingMachine => "Weaving Machine",
+            BuildingType::ConveyorBelt => "Conveyor Belt",
+        }
+    }
+    
+    fn draw_building_interface(&self, d: &mut RaylibDrawHandle, assets: &AssetManager, inventory: &BuildingInventory, panel_x: i32, panel_y: i32, panel_width: i32) {
+        let slot_size = 48;
+        let slot_spacing = 8;
+        
+        // Input section
+        let input_x = panel_x + 50;
+        let input_y = panel_y + 100;
+        let input_label = "Input";
+        let input_label_width = d.measure_text(input_label, 16);
+        d.draw_text(input_label, input_x + (inventory.input_slots.len() as i32 * (slot_size + slot_spacing) - input_label_width) / 2, input_y - 25, 16, Color::LIGHTGRAY);
+        
+        // Draw input slots
+        for (i, slot) in inventory.input_slots.iter().enumerate() {
+            let slot_x = input_x + i as i32 * (slot_size + slot_spacing);
+            self.draw_building_slot(d, assets, slot, slot_x, input_y, slot_size);
+        }
+        
+        // Arrow and progress bar
+        let arrow_x = panel_x + panel_width / 2;
+        let arrow_y = input_y + slot_size / 2;
+        d.draw_text("→", arrow_x - 10, arrow_y - 8, 32, Color::LIGHTGRAY);
+        
+        let progress_bar_width = 100;
+        let progress_bar_height = 20;
+        let progress_bar_x = arrow_x - progress_bar_width / 2;
+        let progress_bar_y = arrow_y + 25;
+        
+        d.draw_rectangle(progress_bar_x, progress_bar_y, progress_bar_width, progress_bar_height, Color::new(40, 40, 40, 255));
+        d.draw_rectangle_lines(progress_bar_x, progress_bar_y, progress_bar_width, progress_bar_height, Color::new(100, 100, 100, 255));
+        
+        if inventory.max_progress > 0.0 {
+            let progress_width = ((inventory.progress / inventory.max_progress) * progress_bar_width as f32) as i32;
+            d.draw_rectangle(progress_bar_x, progress_bar_y, progress_width, progress_bar_height, Color::new(100, 200, 100, 255));
+        }
+        
+        // Output section
+        let output_x = panel_x + panel_width - 100 - inventory.output_slots.len() as i32 * (slot_size + slot_spacing);
+        let output_y = input_y;
+        let output_label = "Output";
+        let output_label_width = d.measure_text(output_label, 16);
+        d.draw_text(output_label, output_x + (inventory.output_slots.len() as i32 * (slot_size + slot_spacing) - output_label_width) / 2, output_y - 25, 16, Color::LIGHTGRAY);
+        
+        // Draw output slots
+        for (i, slot) in inventory.output_slots.iter().enumerate() {
+            let slot_x = output_x + i as i32 * (slot_size + slot_spacing);
+            self.draw_building_slot(d, assets, slot, slot_x, output_y, slot_size);
+        }
+        
+        // Instructions
+        let instructions = "Click and drag items to move them. Press ESC to close.";
+        let inst_size = 14;
+        let inst_width = d.measure_text(instructions, inst_size);
+        d.draw_text(instructions, panel_x + (panel_width - inst_width) / 2, panel_y + 500 - 40, inst_size, Color::LIGHTGRAY);
+    }
+    
+    fn draw_building_slot(&self, d: &mut RaylibDrawHandle, assets: &AssetManager, slot: &InventorySlot, slot_x: i32, slot_y: i32, slot_size: i32) {
+        // Draw slot background
+        d.draw_rectangle(slot_x, slot_y, slot_size, slot_size, SLOT_BACKGROUND_COLOR);
+        d.draw_rectangle_lines(slot_x, slot_y, slot_size, slot_size, SLOT_BORDER_COLOR);
+        
+        // Draw item if present
+        if !slot.is_empty() {
+            if let Some(resource_type) = slot.resource_type {
+                draw_item_in_slot(d, assets, resource_type, slot.amount, slot_x, slot_y, slot_size);
+            }
+        }
     }
 }

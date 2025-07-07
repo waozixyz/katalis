@@ -70,7 +70,7 @@ impl AssetManager {
             }
         }
         
-        // Load icon textures for the 5 new icons we have
+        // Load icon textures for all available icons
         let icon_types = [
             (ResourceType::Wood, "wood.png"),
             (ResourceType::Stone, "stone.png"),
@@ -81,7 +81,15 @@ impl AssetManager {
             (ResourceType::Coal, "coal.png"),
             (ResourceType::Charcoal, "charcoal.png"),
             (ResourceType::IronBloom, "iron_bloom.png"),
+            (ResourceType::WroughtIron, "wrought_iron.png"),
+            (ResourceType::IronPlates, "iron_plates.png"),
+            (ResourceType::IronGears, "iron_gears.png"),
+            (ResourceType::MetalRods, "metal_rods.png"),
             (ResourceType::CharcoalPit, "charcoal_pit.png"),
+            (ResourceType::BloomeryFurnace, "bloomery_furnace.png"),
+            (ResourceType::StoneAnvil, "stone_anvil.png"),
+            (ResourceType::SpinningWheel, "spinning wheel.png"),
+            (ResourceType::WeavingMachine, "weaving_machine.png"),
         ];
         
         for (resource_type, filename) in icon_types.iter() {
@@ -117,7 +125,10 @@ impl AssetManager {
 
         let crafting_icon_types = [
             (CraftableItem::CharcoalPit, "charcoal_pit.png"),
-            // Add more as you create them
+            (CraftableItem::BloomeryFurnace, "bloomery_furnace.png"),
+            (CraftableItem::StoneAnvil, "stone_anvil.png"),
+            (CraftableItem::SpinningWheel, "spinning wheel.png"),
+            (CraftableItem::WeavingMachine, "weaving_machine.png"),
         ];
 
         for (craftable_item, filename) in crafting_icon_types.iter() {

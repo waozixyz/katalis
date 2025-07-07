@@ -2,7 +2,7 @@ use raylib::prelude::*;
 use crate::types::*;
 use crate::world::World;
 use crate::player::Player;
-use crate::ui::BuildingUI;
+use crate::ui::{BuildingUI, InventoryUI};
 
 pub fn handle_input(
     world: &mut World,
@@ -10,6 +10,7 @@ pub fn handle_input(
     rl: &RaylibHandle,
     player: &mut Player, // Changed to mutable
     building_ui: &mut BuildingUI,
+    inventory_ui: &mut InventoryUI,
 ) -> bool { // Returns true if handled a building click
     // Check for building clicks first (on press, not hold)
     if rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) {
@@ -22,8 +23,8 @@ pub fn handle_input(
         
         // Check if there's a building at this position
         if let Some((origin_x, origin_y, building_type)) = world.get_building_origin_at(tile_x, tile_y) {
-            // Open building UI
-            building_ui.open((origin_x, origin_y), building_type);
+            // Open inventory UI in building mode
+            inventory_ui.open_building((origin_x, origin_y), building_type);
             return true; // Handled the click
         }
     }
