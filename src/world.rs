@@ -1,6 +1,7 @@
 use crate::types::*;
 use raylib::math::Vector2;
 use crate::Player;
+use crate::crafting::CraftableItem;
 
 pub struct World {
     pub tiles: Vec<Vec<Tile>>,
@@ -322,6 +323,52 @@ impl World {
             }
         }
         
+
+        let mut crafting_completed = false;
+        let mut completed_craft = None;
+        
+        if let Some(crafting) = &mut player.current_crafting {
+            crafting.progress += delta_time;
+            if crafting.progress >= crafting.total_time {
+                completed_craft = Some(crafting.clone());
+                crafting_completed = true;
+            }
+        }
+        
+        // Handle completed crafting
+        if let Some(craft) = completed_craft {
+            // Add crafted item to inventory
+            let (output_item, output_amount) = &craft.recipe.output;
+            match output_item {
+                CraftableItem::Charcoal => {
+                    player.inventory.add_resource(ResourceType::Charcoal, *output_amount);
+                }
+                CraftableItem::IronBloom => {
+                    player.inventory.add_resource(ResourceType::IronBloom, *output_amount);
+                }
+                // Add other craftable items as needed
+                _ => {
+                    println!("Crafted item not yet implemented in inventory: {:?}", output_item);
+                }
+            }
+            
+            println!("Crafting completed! Created {} {}", output_amount, output_item.get_name());
+        }
+        
+        // Clear completed crafting and start next in queue
+        if crafting_completed {
+            player.current_crafting = None;
+            
+            // Start next item in queue if any
+            if !player.crafting_queue.is_empty() {
+                let next_queued = player.crafting_queue.remove(0);
+                // You'd need to get the recipe again here
+                // This is a simplified version - you might want to store recipes in the queue
+                println!("Starting next queued craft: {}", next_queued.item.get_name());
+            }
+        }
+        
+
         // Update trees
         for tree in &mut self.trees {
             tree.update(delta_time);

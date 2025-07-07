@@ -1,6 +1,7 @@
 use raylib::prelude::*;
 use crate::types::*;
 use crate::animation::{SpriteAnimator, AnimationState, ActionType};
+use crate::crafting::{CraftableItem, CraftingRecipe}; // ADD THIS LINE
 
 pub struct Player {
     pub position: Vector2,
@@ -14,7 +15,24 @@ pub struct Player {
     pub last_movement: Vector2,
     pub scale: f32,
     pub facing_left: bool, 
+    pub current_crafting: Option<CraftingProgress>,
+    pub crafting_queue: Vec<QueuedCraft>,
 }
+
+#[derive(Clone, Debug)]
+pub struct CraftingProgress {
+    pub item: CraftableItem,
+    pub recipe: CraftingRecipe,
+    pub progress: f32,
+    pub total_time: f32,
+}
+
+#[derive(Clone, Debug)]
+pub struct QueuedCraft {
+    pub item: CraftableItem,
+    pub quantity: u32,
+}
+
 
 impl Player {
     pub fn new(x: f32, y: f32) -> Self {
@@ -29,9 +47,51 @@ impl Player {
             sprite_texture: None,
             last_movement: Vector2::zero(),
             scale: 0.3,
-            facing_left: false
+            facing_left: false,
+            current_crafting: None,
+            crafting_queue: Vec::new(),
         }
     }
+
+    pub fn start_crafting(&mut self, item: CraftableItem, recipe: CraftingRecipe) {
+        if self.current_crafting.is_none() {
+            println!("Started crafting: {}", item.get_name());
+            let crafting_time = recipe.crafting_time;
+            self.current_crafting = Some(CraftingProgress {
+                item,
+                recipe,
+                progress: 0.0,
+                total_time: crafting_time, 
+            });
+        }
+    }
+    
+    pub fn add_to_crafting_queue(&mut self, item: CraftableItem, quantity: u32) {
+        // Check if this item is already in queue and add to it
+        for queued in &mut self.crafting_queue {
+            if queued.item == item {
+                queued.quantity += quantity;
+                return;
+            }
+        }
+        // If not found, add new entry
+        self.crafting_queue.push(QueuedCraft { item, quantity });
+    }
+    
+    pub fn is_crafting(&self) -> bool {
+        self.current_crafting.is_some()
+    }
+    
+    pub fn get_crafting_progress(&self) -> f32 {
+        self.current_crafting.as_ref()
+            .map(|c| c.progress / c.total_time)
+            .unwrap_or(0.0)
+    }
+    
+    pub fn get_current_crafting_item(&self) -> Option<&CraftableItem> {
+        self.current_crafting.as_ref().map(|c| &c.item)
+    }
+
     
     pub fn load_sprite(&mut self, texture: Texture2D) {
         self.sprite_texture = Some(texture);
@@ -201,38 +261,66 @@ impl Player {
             d.draw_line_v(self.position, front_pos, Color::new(255, 255, 0, 100));
         }
         
-        // Draw mining progress bar (positioned relative to scaled sprite)
+        // Draw progress bars (mining and crafting)
+        let mut bar_y_offset = -30.0;
+        
+        // Draw mining progress bar
         if let Some(mining) = &self.current_mining {
             let progress = mining.get_progress_percentage();
-            let bar_width = 40.0;
-            let bar_height = 6.0;
-            let bar_x = self.position.x - bar_width * 0.5;
-            let bar_y = self.position.y - (self.animator.frame_height as f32 * self.scale) * 0.5 - 20.0;
-            
-            d.draw_rectangle(
-                bar_x as i32,
-                bar_y as i32,
-                bar_width as i32,
-                bar_height as i32,
-                Color::new(100, 100, 100, 200)
-            );
-            
-            d.draw_rectangle(
-                bar_x as i32,
-                bar_y as i32,
-                (bar_width * progress) as i32,
-                bar_height as i32,
-                Color::new(0, 255, 0, 200)
-            );
-            
-            d.draw_rectangle_lines(
-                bar_x as i32,
-                bar_y as i32,
-                bar_width as i32,
-                bar_height as i32,
-                Color::WHITE
-            );
+            self.draw_progress_bar(d, progress, "Mining", Color::GREEN, bar_y_offset);
+            bar_y_offset -= 15.0; // Stack bars vertically
         }
+        
+        // Draw crafting progress bar
+        if let Some(crafting) = &self.current_crafting {
+            let progress = crafting.progress / crafting.total_time;
+            let label = format!("Crafting {}", crafting.item.get_name());
+            self.draw_progress_bar(d, progress, &label, Color::BLUE, bar_y_offset);
+        }
+    }
+    
+    fn draw_progress_bar(&self, d: &mut RaylibMode2D<RaylibDrawHandle>, progress: f32, label: &str, color: Color, y_offset: f32) {
+        let bar_width = 60.0;
+        let bar_height = 6.0;
+        let bar_x = self.position.x - bar_width * 0.5;
+        let bar_y = self.position.y - (self.animator.frame_height as f32 * self.scale) * 0.5 + y_offset;
+        
+        // Background
+        d.draw_rectangle(
+            bar_x as i32,
+            bar_y as i32,
+            bar_width as i32,
+            bar_height as i32,
+            Color::new(100, 100, 100, 200)
+        );
+        
+        // Progress
+        d.draw_rectangle(
+            bar_x as i32,
+            bar_y as i32,
+            (bar_width * progress) as i32,
+            bar_height as i32,
+            color
+        );
+        
+        // Border
+        d.draw_rectangle_lines(
+            bar_x as i32,
+            bar_y as i32,
+            bar_width as i32,
+            bar_height as i32,
+            Color::WHITE
+        );
+        
+        // Label above bar
+        let text_width = 8 * label.len() as i32; // Approximate text width
+        d.draw_text(
+            label,
+            (bar_x - text_width as f32 * 0.5 + bar_width * 0.5) as i32,
+            (bar_y - 12.0) as i32,
+            8,
+            Color::WHITE
+        );
     }
     
     pub fn set_scale(&mut self, new_scale: f32) {

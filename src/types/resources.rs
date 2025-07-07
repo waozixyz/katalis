@@ -1,5 +1,4 @@
 use raylib::prelude::*;
-use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ResourceType {
@@ -113,8 +112,7 @@ impl InventorySlot {
     pub fn is_empty(&self) -> bool {
         self.resource_type.is_none() || self.amount == 0
     }
-    
-    pub fn can_add(&self, resource_type: ResourceType, amount: u32) -> bool {
+    pub fn can_add(&self, resource_type: ResourceType, _amount: u32) -> bool {
         if self.is_empty() {
             true
         } else if let Some(existing_type) = self.resource_type {

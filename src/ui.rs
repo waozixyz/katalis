@@ -2,6 +2,7 @@ use raylib::prelude::*;
 use crate::types::*;
 use crate::crafting::*;
 use crate::assets::AssetManager;
+use crate::Player;
 
 pub struct PauseMenu {
     pub is_open: bool,
@@ -118,8 +119,7 @@ impl InventoryUI {
             self.dragged_item = None;
         }
     }
-    
-    pub fn handle_mouse_input(&mut self, rl: &RaylibHandle, inventory: &mut Inventory) {
+    pub fn handle_mouse_input(&mut self, rl: &RaylibHandle, player: &mut Player, crafting_system: &CraftingSystem) {
         if !self.is_open {
             return;
         }
@@ -129,7 +129,7 @@ impl InventoryUI {
         if rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) {
             // Handle inventory slot clicks
             if let Some(slot_index) = self.get_slot_at_mouse(mouse_pos, 50, 100) {
-                if let Some(slot) = inventory.get_slot(slot_index) {
+                if let Some(slot) = player.inventory.get_slot(slot_index) {
                     if !slot.is_empty() {
                         // Start dragging
                         self.dragged_item = Some(DraggedItem {
@@ -173,6 +173,36 @@ impl InventoryUI {
                     break;
                 }
             }
+
+            if let Some(clicked_item) = self.get_crafting_item_at_mouse(mouse_pos, 650, 100) {
+                if let Some(recipe) = crafting_system.recipes.get(&clicked_item) {
+                    let craft_status = crafting_system.get_craft_status(&clicked_item, &player.inventory);
+                    
+                    if matches!(craft_status, CraftStatus::CanCraft) {
+                        // Consume ingredients immediately
+                        let mut can_craft = true;
+                        for (resource_type, required_amount) in &recipe.inputs {
+                            if !player.inventory.remove_resource(*resource_type, *required_amount) {
+                                can_craft = false;
+                                break;
+                            }
+                        }
+                        
+                        if can_craft {
+                            // Start crafting or add to queue
+                            if !player.is_crafting() {
+                                player.start_crafting(clicked_item, recipe.clone());
+                            } else {
+                                player.add_to_crafting_queue(clicked_item, recipe.output.1);
+                                println!("Added {} to crafting queue", clicked_item.get_name());
+                            }
+                        } else {
+                            println!("Failed to consume ingredients for crafting");
+                        }
+                    }
+                }
+            }
+
         }
         
         if rl.is_mouse_button_released(MouseButton::MOUSE_BUTTON_LEFT) {
@@ -181,14 +211,14 @@ impl InventoryUI {
                 if let Some(target_slot) = self.get_slot_at_mouse(mouse_pos, 50, 100) {
                     if target_slot != dragged.source_slot {
                         // Attempt to move item
-                        if let Some(target) = inventory.get_slot(target_slot) {
+                        if let Some(target) = player.inventory.get_slot(target_slot) {
                             if target.is_empty() || target.resource_type == Some(dragged.resource_type) {
                                 // Remove from source
-                                if let Some(source) = inventory.get_slot_mut(dragged.source_slot) {
+                                if let Some(source) = player.inventory.get_slot_mut(dragged.source_slot) {
                                     source.remove(dragged.amount);
                                 }
                                 // Add to target
-                                if let Some(target) = inventory.get_slot_mut(target_slot) {
+                                if let Some(target) = player.inventory.get_slot_mut(target_slot) {
                                     target.add(dragged.resource_type, dragged.amount);
                                 }
                             }
@@ -224,6 +254,7 @@ impl InventoryUI {
         None
     }
     
+    
     pub fn update(&mut self, rl: &RaylibHandle) -> bool {
         if rl.is_key_pressed(KeyboardKey::KEY_E) {
             self.toggle();
@@ -238,8 +269,7 @@ impl InventoryUI {
         
         false // ESC was not consumed
     }
-    
-    pub fn draw(&self, d: &mut RaylibDrawHandle, inventory: &Inventory, crafting_system: &CraftingSystem, assets: &AssetManager, mouse_pos: Vector2) {
+    pub fn draw(&self, d: &mut RaylibDrawHandle, inventory: &Inventory, crafting_system: &CraftingSystem, assets: &AssetManager, mouse_pos: Vector2, player: &Player) {
         if !self.is_open {
             return;
         }
@@ -278,8 +308,42 @@ impl InventoryUI {
             let font_size = 10; // Smaller font for smaller slots
             d.draw_text(&amount_text, drag_pos.x as i32 + self.slot_size - 12, drag_pos.y as i32 + self.slot_size - 12, font_size, Color::WHITE);
         }
+
+        self.draw_crafting_queue(d, player, 50, 500);
+
     }
     
+
+    fn draw_crafting_queue(&self, d: &mut RaylibDrawHandle, player: &Player, x: i32, y: i32) {
+        if player.crafting_queue.is_empty() && !player.is_crafting() {
+            return;
+        }
+        
+        let panel_width = 200;
+        let panel_height = 100;
+        
+        d.draw_rectangle(x, y, panel_width, panel_height, Color::new(40, 40, 40, 240));
+        d.draw_rectangle_lines(x, y, panel_width, panel_height, Color::new(200, 200, 200, 255));
+        
+        d.draw_text("Crafting Queue", x + 10, y + 10, 16, Color::WHITE);
+        
+        let mut line_y = y + 35;
+        
+        // Show current crafting
+        if let Some(current) = player.get_current_crafting_item() {
+            let progress = (player.get_crafting_progress() * 100.0) as i32;
+            d.draw_text(&format!("Crafting: {} ({}%)", current.get_name(), progress), x + 10, line_y, 12, Color::GREEN);
+            line_y += 15;
+        }
+        
+        // Show queue
+        for queued in &player.crafting_queue {
+            d.draw_text(&format!("Queued: {} x{}", queued.item.get_name(), queued.quantity), x + 10, line_y, 12, Color::LIGHTGRAY);
+            line_y += 15;
+        }
+    }
+
+
     fn draw_inventory_panel(&self, d: &mut RaylibDrawHandle, inventory: &Inventory, assets: &AssetManager, x: i32, y: i32) {
         let panel_width = 500;
         let panel_height = 600;
@@ -536,30 +600,52 @@ impl InventoryUI {
                     let has_enough = available >= *required_amount;
                     
                     let text_color = if has_enough { Color::WHITE } else { Color::RED };
-                    let requirement_text = format!("• {} {} (have: {})", required_amount, resource_type.get_name(), available);
+                    let requirement_text = format!("- {} {} (have: {})", required_amount, resource_type.get_name(), available);
                     
                     d.draw_text(&requirement_text, tooltip_x + padding, current_y, 12, text_color);
                     current_y += line_height;
                 }
             } else {
-                d.draw_text("• No materials required", tooltip_x + padding, current_y, 12, Color::WHITE);
+                d.draw_text("- No materials required", tooltip_x + padding, current_y, 12, Color::WHITE);
                 current_y += line_height;
             }
             
             // Structure requirement
             if let Some(structure) = &recipe.requires_structure {
                 let structure_text = if *structure == StructureType::Manual {
-                    "• Can be crafted manually".to_string()
+                    "- Can be crafted manually".to_string()
                 } else {
-                    format!("• Requires: {}", structure.get_name())
+                    format!("- Requires: {}", structure.get_name())
                 };
                 d.draw_text(&structure_text, tooltip_x + padding, current_y, 12, Color::YELLOW);
                 current_y += line_height;
             }
             
             // Crafting time
-            let time_text = format!("• Crafting time: {:.1}s", recipe.crafting_time);
+            let time_text = format!("- Crafting time: {:.1}s", recipe.crafting_time);
             d.draw_text(&time_text, tooltip_x + padding, current_y, 12, Color::LIGHTGRAY);
         }
+    }
+
+    
+    fn get_crafting_item_at_mouse(&self, mouse_pos: Vector2, panel_x: i32, panel_y: i32) -> Option<CraftableItem> {
+        let items = self.selected_category.get_items();
+        let grid_start_y = panel_y + 50 + (35 * 2) + 20; // Account for tabs
+        let item_size = 50i32;
+        let items_per_row = 7;
+        let item_spacing = 8i32;
+        
+        for (i, item) in items.iter().enumerate() {
+            let grid_x = panel_x + 15 + ((i % items_per_row) * (item_size + item_spacing) as usize) as i32;
+            let grid_y = grid_start_y + ((i / items_per_row) * (item_size + item_spacing + 25) as usize) as i32;
+            
+            if mouse_pos.x >= grid_x as f32 && 
+               mouse_pos.x <= (grid_x + item_size) as f32 &&
+               mouse_pos.y >= grid_y as f32 && 
+               mouse_pos.y <= (grid_y + item_size) as f32 {
+                return Some(*item);
+            }
+        }
+        None
     }
 }

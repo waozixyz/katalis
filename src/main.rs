@@ -92,7 +92,8 @@ fn main() {
             game_player.update(&rl, &camera);
             update_camera(&mut camera, &mut camera_target, &game_player, &rl);
             handle_input(&mut world, &camera, &rl, &mut game_player);
-            inventory_ui.handle_mouse_input(&rl, &mut game_player.inventory);
+            inventory_ui.handle_mouse_input(&rl, &mut game_player, &crafting_system);
+
         }
         
         // Update world and collect resources only if not paused
@@ -159,8 +160,7 @@ fn main() {
             }
         }
         
-        // NEW: Draw inventory UI (outside of 2D mode)
-        inventory_ui.draw(&mut d, &game_player.inventory, &crafting_system, &assets, mouse_screen_pos);
+        inventory_ui.draw(&mut d, &game_player.inventory, &crafting_system, &assets, mouse_screen_pos, &game_player);
         
         // Draw minimal UI when inventory is closed
         if !inventory_ui.is_open {
@@ -178,7 +178,7 @@ fn main() {
 }
 
 // NEW: Minimal UI function when inventory is closed
-fn draw_minimal_ui(d: &mut RaylibDrawHandle, player: &Player) {
+fn draw_minimal_ui(d: &mut RaylibDrawHandle, _player: &Player) {
     // Small info panel - simplified to just show the instruction
     d.draw_rectangle(10, 10, 200, 30, Color::new(47, 47, 47, 220));
     d.draw_rectangle_lines(10, 10, 200, 30, Color::new(150, 150, 150, 255));

@@ -72,6 +72,10 @@ impl AssetManager {
             (ResourceType::IronOre, "iron_ore.png"),
             (ResourceType::CopperOre, "copper_ore.png"),
             (ResourceType::Cotton, "cotton.png"),
+            (ResourceType::Clay, "clay.png"),
+            (ResourceType::Coal, "coal.png"),
+            (ResourceType::Charcoal, "charcoal.png"),
+            (ResourceType::IronBloom, "iron_bloom.png"),
         ];
         
         for (resource_type, filename) in icon_types.iter() {
