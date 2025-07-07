@@ -4,6 +4,9 @@ use raylib::prelude::*;
 pub struct Tile {
     pub tile_type: TileType,
     pub resource_vein: Option<ResourceVein>,
+    pub building: Option<BuildingType>,
+    pub building_active: bool, // Whether the building is currently crafting/active
+    pub is_building_origin: bool, // True only for the top-left tile of a building
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -31,6 +34,77 @@ pub enum VeinType {
     ClayDeposit,
     CopperOre,
     CottonPatch,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum BuildingType {
+    CharcoalPit,
+    BloomeryFurnace,
+    StoneAnvil,
+    SpinningWheel,
+    WeavingMachine,
+    ConveyorBelt,
+}
+
+impl BuildingType {
+    pub fn from_resource_type(resource: &super::resources::ResourceType) -> Option<Self> {
+        use super::resources::ResourceType;
+        match resource {
+            ResourceType::CharcoalPit => Some(BuildingType::CharcoalPit),
+            ResourceType::BloomeryFurnace => Some(BuildingType::BloomeryFurnace),
+            ResourceType::StoneAnvil => Some(BuildingType::StoneAnvil),
+            ResourceType::SpinningWheel => Some(BuildingType::SpinningWheel),
+            ResourceType::WeavingMachine => Some(BuildingType::WeavingMachine),
+            ResourceType::ConveyorBelt => Some(BuildingType::ConveyorBelt),
+            _ => None,
+        }
+    }
+    
+    pub fn get_size(&self) -> (i32, i32) {
+        match self {
+            BuildingType::CharcoalPit => (2, 2),
+            BuildingType::BloomeryFurnace => (3, 3),
+            BuildingType::StoneAnvil => (2, 2),
+            BuildingType::SpinningWheel => (2, 2),
+            BuildingType::WeavingMachine => (3, 2),
+            BuildingType::ConveyorBelt => (1, 1),
+        }
+    }
+    
+    pub fn get_color(&self) -> Color {
+        match self {
+            BuildingType::CharcoalPit => Color::new(101, 67, 33, 255),
+            BuildingType::BloomeryFurnace => Color::new(139, 69, 19, 255),
+            BuildingType::StoneAnvil => Color::GRAY,
+            BuildingType::SpinningWheel => Color::BROWN,
+            BuildingType::WeavingMachine => Color::new(160, 82, 45, 255),
+            BuildingType::ConveyorBelt => Color::DARKGRAY,
+        }
+    }
+    
+    pub fn to_craftable_item(&self) -> super::super::crafting::CraftableItem {
+        use super::super::crafting::CraftableItem;
+        match self {
+            BuildingType::CharcoalPit => CraftableItem::CharcoalPit,
+            BuildingType::BloomeryFurnace => CraftableItem::BloomeryFurnace,
+            BuildingType::StoneAnvil => CraftableItem::StoneAnvil,
+            BuildingType::SpinningWheel => CraftableItem::SpinningWheel,
+            BuildingType::WeavingMachine => CraftableItem::WeavingMachine,
+            BuildingType::ConveyorBelt => CraftableItem::ConveyorBelt,
+        }
+    }
+    
+    pub fn get_sprite_info(&self) -> (i32, i32, bool) {
+        // Returns (frame_width_in_texture, frame_height_in_texture, is_animated)
+        match self {
+            BuildingType::CharcoalPit => (256, 256, true), // Each frame is 256x256 pixels, animated with 2 frames
+            BuildingType::BloomeryFurnace => (96, 96, false), // 3x3 tiles, static
+            BuildingType::StoneAnvil => (64, 64, false), // 2x2 tiles, static
+            BuildingType::SpinningWheel => (64, 64, false), // 2x2 tiles, static
+            BuildingType::WeavingMachine => (96, 64, false), // 3x2 tiles, static
+            BuildingType::ConveyorBelt => (32, 32, false), // 1x1 tile, static
+        }
+    }
 }
 
 impl VeinType {
@@ -153,6 +227,9 @@ impl Tile {
         Self {
             tile_type,
             resource_vein: None,
+            building: None,
+            building_active: false,
+            is_building_origin: false,
         }
     }
     
@@ -160,10 +237,17 @@ impl Tile {
         Self {
             tile_type,
             resource_vein: Some(vein),
+            building: None,
+            building_active: false,
+            is_building_origin: false,
         }
     }
     
     pub fn can_be_mined(&self) -> bool {
         self.resource_vein.is_some() && !self.resource_vein.as_ref().unwrap().is_depleted()
+    }
+    
+    pub fn can_place_building(&self) -> bool {
+        self.building.is_none() && matches!(self.tile_type, TileType::Grass | TileType::Stone | TileType::Sand)
     }
 }

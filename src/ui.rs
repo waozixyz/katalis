@@ -119,9 +119,9 @@ impl InventoryUI {
             self.dragged_item = None;
         }
     }
-    pub fn handle_mouse_input(&mut self, rl: &RaylibHandle, player: &mut Player, crafting_system: &CraftingSystem) {
+    pub fn handle_mouse_input(&mut self, rl: &RaylibHandle, player: &mut Player, crafting_system: &CraftingSystem) -> Option<crate::PlacementState> {
         if !self.is_open {
-            return;
+            return None;
         }
         
         let mouse_pos = rl.get_mouse_position();
@@ -131,13 +131,26 @@ impl InventoryUI {
             if let Some(slot_index) = self.get_slot_at_mouse(mouse_pos, 50, 100) {
                 if let Some(slot) = player.inventory.get_slot(slot_index) {
                     if !slot.is_empty() {
-                        // Start dragging
-                        self.dragged_item = Some(DraggedItem {
-                            resource_type: slot.resource_type.unwrap(),
-                            amount: slot.amount,
-                            source_slot: slot_index,
-                        });
-                        self.drag_offset = Vector2::zero();
+                        let resource_type = slot.resource_type.unwrap();
+                        
+                        // Check if this is a building item
+                        if let Some(building_type) = BuildingType::from_resource_type(&resource_type) {
+                            // Start placement mode
+                            self.is_open = false; // Close inventory
+                            return Some(crate::PlacementState {
+                                building_type,
+                                resource_type,
+                                source_slot: slot_index,
+                            });
+                        } else {
+                            // Start dragging for non-building items
+                            self.dragged_item = Some(DraggedItem {
+                                resource_type,
+                                amount: slot.amount,
+                                source_slot: slot_index,
+                            });
+                            self.drag_offset = Vector2::zero();
+                        }
                     }
                 }
             }
@@ -255,6 +268,8 @@ impl InventoryUI {
             }
             self.dragged_item = None;
         }
+        
+        None
     }
     
     fn get_slot_at_mouse(&self, mouse_pos: Vector2, panel_x: i32, panel_y: i32) -> Option<usize> {

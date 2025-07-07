@@ -247,6 +247,70 @@ pub fn draw_world(d: &mut RaylibMode2D<RaylibDrawHandle>, world: &World, camera:
                 }
             }
             
+            // Draw buildings - each tile shows its portion of the building image
+            if let Some(building) = tile.building {
+                let (width_tiles, height_tiles) = building.get_size();
+                
+                if let Some(building_texture) = assets.get_building_texture_by_type(building) {
+                    // Get sprite info for this building type
+                    let (frame_width, frame_height, is_animated) = building.get_sprite_info();
+                    
+                    // Determine which frame to use (for animated buildings)
+                    let frame_x = if is_animated && tile.building_active {
+                        frame_width as f32 // Second frame for active state
+                    } else {
+                        0.0 // First frame for idle state
+                    };
+                    
+                    // Find the building's origin position by checking which tile is the origin
+                    let mut origin_x = x;
+                    let mut origin_y = y;
+                    
+                    // Search backwards to find the origin tile
+                    'search: for check_x in (x.saturating_sub(width_tiles as usize - 1))..=x {
+                        for check_y in (y.saturating_sub(height_tiles as usize - 1))..=y {
+                            if let Some(check_tile) = world.get_tile(check_x, check_y) {
+                                if check_tile.building == Some(building) && check_tile.is_building_origin {
+                                    origin_x = check_x;
+                                    origin_y = check_y;
+                                    break 'search;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Calculate which part of the building image to draw on this tile
+                    let tile_offset_x = (x - origin_x) as f32;
+                    let tile_offset_y = (y - origin_y) as f32;
+                    
+                    // Each tile shows 1/width_tiles of the image width and 1/height_tiles of the image height
+                    let tile_src_width = frame_width as f32 / width_tiles as f32;
+                    let tile_src_height = frame_height as f32 / height_tiles as f32;
+                    
+                    let src_x = frame_x + (tile_offset_x * tile_src_width);
+                    let src_y = tile_offset_y * tile_src_height;
+                    
+                    // Draw this tile's portion of the building
+                    d.draw_texture_pro(
+                        building_texture,
+                        Rectangle::new(src_x, src_y, tile_src_width, tile_src_height),
+                        Rectangle::new(pos_x as f32, pos_y as f32, TILE_SIZE as f32, TILE_SIZE as f32),
+                        Vector2::zero(),
+                        0.0,
+                        Color::WHITE
+                    );
+                } else {
+                    // Fallback to colored rectangle - only draw on origin tile
+                    if tile.is_building_origin {
+                        let building_color = building.get_color();
+                        let building_width = width_tiles * TILE_SIZE;
+                        let building_height = height_tiles * TILE_SIZE;
+                        d.draw_rectangle(pos_x + 4, pos_y + 4, building_width - 8, building_height - 8, building_color);
+                        d.draw_rectangle_lines(pos_x + 2, pos_y + 2, building_width - 4, building_height - 4, Color::BLACK);
+                    }
+                }
+            }
+            
             // Grid lines (subtle) - only if no terrain texture
             if !assets.has_terrain_texture(tile.tile_type) {
                 d.draw_rectangle_lines(pos_x, pos_y, TILE_SIZE, TILE_SIZE, Color::new(255, 255, 255, 20));

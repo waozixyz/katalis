@@ -111,6 +111,36 @@ impl ResourceType {
             ResourceType::ConveyorBelt => "icons/conveyor_belt.png",
         }
     }
+    
+    pub fn get_max_stack_size(&self) -> u32 {
+        match self {
+            // Basic resources - high stack size
+            ResourceType::Wood | ResourceType::Stone | ResourceType::IronOre | 
+            ResourceType::Coal | ResourceType::Clay | ResourceType::CopperOre | 
+            ResourceType::Cotton => 200,
+            
+            // Processed materials - medium stack size
+            ResourceType::Charcoal | ResourceType::IronBloom | ResourceType::WroughtIron | 
+            ResourceType::IronPlates | ResourceType::IronGears | ResourceType::MetalRods |
+            ResourceType::Threads | ResourceType::Fabric | ResourceType::ClothStrips => 100,
+            
+            // Buildings - low stack size
+            ResourceType::CharcoalPit | ResourceType::StoneAnvil | 
+            ResourceType::SpinningWheel => 5,
+            
+            ResourceType::BloomeryFurnace | ResourceType::WeavingMachine => 3,
+            
+            ResourceType::ConveyorBelt => 50,
+        }
+    }
+    
+    pub fn is_building(&self) -> bool {
+        matches!(self, 
+            ResourceType::CharcoalPit | ResourceType::BloomeryFurnace | 
+            ResourceType::StoneAnvil | ResourceType::SpinningWheel | 
+            ResourceType::WeavingMachine | ResourceType::ConveyorBelt
+        )
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -137,25 +167,31 @@ impl InventorySlot {
     pub fn is_empty(&self) -> bool {
         self.resource_type.is_none() || self.amount == 0
     }
-    pub fn can_add(&self, resource_type: ResourceType, _amount: u32) -> bool {
+    pub fn can_add(&self, resource_type: ResourceType, amount: u32) -> bool {
         if self.is_empty() {
             true
         } else if let Some(existing_type) = self.resource_type {
-            existing_type == resource_type
+            existing_type == resource_type && 
+            self.amount + amount <= resource_type.get_max_stack_size()
         } else {
             false
         }
     }
     
     pub fn add(&mut self, resource_type: ResourceType, amount: u32) -> u32 {
+        let max_stack = resource_type.get_max_stack_size();
+        
         if self.is_empty() {
+            let amount_to_add = amount.min(max_stack);
             self.resource_type = Some(resource_type);
-            self.amount = amount;
-            amount
+            self.amount = amount_to_add;
+            amount_to_add
         } else if let Some(existing_type) = self.resource_type {
             if existing_type == resource_type {
-                self.amount += amount;
-                amount
+                let available_space = max_stack.saturating_sub(self.amount);
+                let amount_to_add = amount.min(available_space);
+                self.amount += amount_to_add;
+                amount_to_add
             } else {
                 0
             }

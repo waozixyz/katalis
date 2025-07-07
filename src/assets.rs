@@ -1,6 +1,6 @@
 use raylib::prelude::*;
 use std::collections::HashMap;
-use crate::types::{VeinType, TileType, ResourceType};
+use crate::types::{VeinType, TileType, ResourceType, BuildingType};
 use crate::crafting::CraftableItem;
 
 pub struct AssetManager {
@@ -136,7 +136,11 @@ impl AssetManager {
         // Load building sprites
         let building_types = [
             (CraftableItem::CharcoalPit, "charcoal_pit.png"),
-            // Add more buildings as you create them
+            (CraftableItem::BloomeryFurnace, "bloomery_furnace.png"),
+            (CraftableItem::StoneAnvil, "stone_anvil.png"),
+            (CraftableItem::SpinningWheel, "spinning_wheel.png"),
+            (CraftableItem::WeavingMachine, "weaving_machine.png"),
+            (CraftableItem::ConveyorBelt, "conveyor_belt.png"),
         ];
 
         for (building_item, filename) in building_types.iter() {
@@ -193,6 +197,11 @@ impl AssetManager {
     
     pub fn get_building_texture(&self, item: CraftableItem) -> Option<&Texture2D> {
         self.building_textures.get(&item)
+    }
+    
+    pub fn get_building_texture_by_type(&self, building_type: BuildingType) -> Option<&Texture2D> {
+        let craftable_item = building_type.to_craftable_item();
+        self.building_textures.get(&craftable_item)
     }
     
     pub fn has_crafting_icon(&self, item: CraftableItem) -> bool {

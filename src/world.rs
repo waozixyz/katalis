@@ -1,7 +1,6 @@
 use crate::types::*;
 use raylib::math::Vector2;
 use crate::Player;
-use crate::crafting::CraftableItem;
 
 pub struct World {
     pub tiles: Vec<Vec<Tile>>,
@@ -549,5 +548,62 @@ impl World {
                 tree.position.y >= min_bound.y && tree.position.y <= max_bound.y
             })
             .collect()
+    }
+    
+    pub fn can_place_building(&self, tile_x: usize, tile_y: usize, building_type: &BuildingType) -> bool {
+        let (width, height) = building_type.get_size();
+        
+        // Check if all tiles are within bounds and can have buildings
+        for dx in 0..width {
+            for dy in 0..height {
+                let x = tile_x + dx as usize;
+                let y = tile_y + dy as usize;
+                
+                if x >= self.width || y >= self.height {
+                    return false;
+                }
+                
+                if let Some(tile) = self.get_tile(x, y) {
+                    if !tile.can_place_building() {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+                
+                // Check for trees in the area
+                let world_x = x as f32 * TILE_SIZE as f32 + TILE_SIZE as f32 / 2.0;
+                let world_y = y as f32 * TILE_SIZE as f32 + TILE_SIZE as f32 / 2.0;
+                if self.get_tree_at(world_x, world_y).is_some() {
+                    return false;
+                }
+            }
+        }
+        
+        true
+    }
+    
+    pub fn place_building(&mut self, tile_x: usize, tile_y: usize, building_type: BuildingType) {
+        let (width, height) = building_type.get_size();
+        
+        // Place building on all tiles it covers
+        for dx in 0..width {
+            for dy in 0..height {
+                let x = tile_x + dx as usize;
+                let y = tile_y + dy as usize;
+                
+                if let Some(tile) = self.get_tile_mut(x, y) {
+                    tile.building = Some(building_type);
+                    tile.building_active = false; // Buildings start inactive
+                    tile.is_building_origin = (dx == 0 && dy == 0); // Only the top-left tile is the origin
+                }
+            }
+        }
+    }
+    
+    pub fn get_tree_at(&self, x: f32, y: f32) -> Option<&Tree> {
+        self.trees.iter().find(|tree| {
+            tree.collides_with_point(Vector2::new(x, y))
+        })
     }
 }

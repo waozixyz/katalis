@@ -23,6 +23,13 @@ use ui::{InventoryUI, PauseMenu}; // NEW
 const SCREEN_WIDTH: i32 = 1200;
 const SCREEN_HEIGHT: i32 = 800;
 
+#[derive(Debug, Clone)]
+pub struct PlacementState {
+    pub building_type: BuildingType,
+    pub resource_type: ResourceType,
+    pub source_slot: usize,
+}
+
 fn main() {
     let (mut rl, thread) = raylib::init()
         .size(SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -70,6 +77,7 @@ fn main() {
     };
 
     let mut camera_target = game_player.position;
+    let mut placement_state: Option<PlacementState> = None;
 
     loop {
         // Check if window should close
@@ -91,8 +99,42 @@ fn main() {
         if !pause_menu.is_open {
             game_player.update(&rl, &camera);
             update_camera(&mut camera, &mut camera_target, &game_player, &rl);
-            handle_input(&mut world, &camera, &rl, &mut game_player);
-            inventory_ui.handle_mouse_input(&rl, &mut game_player, &crafting_system);
+            
+            // Handle placement state
+            if let Some(ref placement) = placement_state {
+                // Cancel placement with ESC or right click
+                if rl.is_key_pressed(KeyboardKey::KEY_ESCAPE) || rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_RIGHT) {
+                    placement_state = None;
+                }
+                // Toggle inventory cancels placement
+                else if rl.is_key_pressed(KeyboardKey::KEY_E) {
+                    placement_state = None;
+                    inventory_ui.toggle();
+                }
+                // Place building with left click
+                else if rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) {
+                    let mouse_pos = rl.get_mouse_position();
+                    let world_pos = rl.get_screen_to_world2D(mouse_pos, camera);
+                    let tile_x = (world_pos.x / TILE_SIZE as f32).floor() as usize;
+                    let tile_y = (world_pos.y / TILE_SIZE as f32).floor() as usize;
+                    
+                    if world.can_place_building(tile_x, tile_y, &placement.building_type) {
+                        // Place the building
+                        world.place_building(tile_x, tile_y, placement.building_type);
+                        
+                        // Remove from inventory
+                        game_player.inventory.remove_resource(placement.resource_type, 1);
+                        
+                        // Clear placement state
+                        placement_state = None;
+                    }
+                }
+            } else {
+                handle_input(&mut world, &camera, &rl, &mut game_player);
+                if let Some(new_placement) = inventory_ui.handle_mouse_input(&rl, &mut game_player, &crafting_system) {
+                    placement_state = Some(new_placement);
+                }
+            }
 
         }
         
@@ -157,6 +199,80 @@ fn main() {
                 }
             } else {
                 d2d.draw_circle_lines_v(mouse_world_pos, 8.0, Color::RED);
+            }
+            
+            // Draw building placement preview
+            if let Some(ref placement) = placement_state {
+                let tile_x = (mouse_world_pos.x / TILE_SIZE as f32).floor() as usize;
+                let tile_y = (mouse_world_pos.y / TILE_SIZE as f32).floor() as usize;
+                let (width, height) = placement.building_type.get_size();
+                
+                let can_place = world.can_place_building(tile_x, tile_y, &placement.building_type);
+                let preview_color = if can_place {
+                    Color::new(0, 255, 0, 100) // Green for valid placement
+                } else {
+                    Color::new(255, 0, 0, 100) // Red for invalid placement
+                };
+                
+                let world_x = tile_x as f32 * TILE_SIZE as f32;
+                let world_y = tile_y as f32 * TILE_SIZE as f32;
+                let building_width = width as f32 * TILE_SIZE as f32;
+                let building_height = height as f32 * TILE_SIZE as f32;
+                
+                // Draw preview background tiles
+                for dx in 0..width {
+                    for dy in 0..height {
+                        let x = tile_x + dx as usize;
+                        let y = tile_y + dy as usize;
+                        let tile_world_x = x as f32 * TILE_SIZE as f32;
+                        let tile_world_y = y as f32 * TILE_SIZE as f32;
+                        
+                        d2d.draw_rectangle(
+                            tile_world_x as i32,
+                            tile_world_y as i32,
+                            TILE_SIZE,
+                            TILE_SIZE,
+                            preview_color
+                        );
+                        
+                        d2d.draw_rectangle_lines(
+                            tile_world_x as i32,
+                            tile_world_y as i32,
+                            TILE_SIZE,
+                            TILE_SIZE,
+                            Color::WHITE
+                        );
+                    }
+                }
+                
+                // Draw building preview image
+                if let Some(building_texture) = assets.get_building_texture_by_type(placement.building_type) {
+                    let alpha = if can_place { 200 } else { 120 };
+                    
+                    // Get sprite info and use first frame (idle state) for preview
+                    let (frame_width, frame_height, _is_animated) = placement.building_type.get_sprite_info();
+                    
+                    // Scale from texture frame size (e.g., 256x256) to world tile size (e.g., 64x64)
+                    d2d.draw_texture_pro(
+                        building_texture,
+                        Rectangle::new(0.0, 0.0, frame_width as f32, frame_height as f32),
+                        Rectangle::new(world_x, world_y, building_width, building_height),
+                        Vector2::zero(),
+                        0.0,
+                        Color::new(255, 255, 255, alpha)
+                    );
+                } else {
+                    // Fallback preview with building color
+                    let building_color = placement.building_type.get_color();
+                    let alpha = if can_place { 150 } else { 80 };
+                    d2d.draw_rectangle(
+                        world_x as i32 + 4,
+                        world_y as i32 + 4,
+                        building_width as i32 - 8,
+                        building_height as i32 - 8,
+                        Color::new(building_color.r, building_color.g, building_color.b, alpha)
+                    );
+                }
             }
         }
         
