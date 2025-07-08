@@ -165,7 +165,7 @@ impl InventoryLayout {
             start_y: panel_y + vertical_padding,
             slot_size,
             slot_spacing,
-            slots_per_row,
+            slots_per_row: slots_per_row as usize,
             max_slots,
         }
     }
