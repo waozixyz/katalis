@@ -152,9 +152,9 @@ impl InventoryLayout {
         let total_spacing_width = (slots_per_row - 1) * slot_spacing;
         let slot_size = (available_width - total_spacing_width) / slots_per_row;
         
-        // Calculate number of rows that fit in the available height
-        let rows_that_fit = available_height / (slot_size + slot_spacing);
-        let max_slots = (slots_per_row * rows_that_fit) as usize;
+        // Default to 4 rows for inventory display
+        let rows_to_display = 4;
+        let max_slots = (slots_per_row * rows_to_display) as usize;
         
         Self {
             panel_x,
@@ -190,18 +190,6 @@ impl InventoryLayout {
             self.panel_x + self.panel_width - 10, 
             separator_y, 
             Color::new(100, 100, 100, 128)
-        );
-        
-        // Add a small hint text showing how many slots are shown vs total
-        let slot_text = format!("Showing {} of {} slots", self.max_slots, player.inventory.slot_count);
-        let text_size = 10;
-        let text_width = d.measure_text(&slot_text, text_size);
-        d.draw_text(
-            &slot_text,
-            self.panel_x + self.panel_width - text_width - 10,
-            separator_y + 5,
-            text_size,
-            Color::new(150, 150, 150, 255)
         );
     }
     
