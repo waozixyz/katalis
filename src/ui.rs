@@ -94,7 +94,7 @@ fn draw_item_in_slot(
     // Draw amount
     let amount_text = format!("{}", amount);
     let text_size = 10;
-    let text_width = d.measure_text(&amount_text, text_size);
+    let text_width = d.measure_text(&amount_text, text_size) as i32;
     d.draw_rectangle(
         slot_x + slot_size - text_width - 4, 
         slot_y + slot_size - 12, 
@@ -181,6 +181,95 @@ impl InventoryLayout {
             self.slot_size, self.slot_spacing, 
             self.slots_per_row, self.max_slots
         );
+    }
+    
+    fn draw_inventory_with_tooltips(&self, d: &mut RaylibDrawHandle, player: &Player, assets: &AssetManager, mouse_pos: Vector2) {
+        draw_panel(d, self.panel_x, self.panel_y, self.panel_width, self.panel_height);
+        draw_panel_title(d, "Player Inventory", self.panel_x, self.panel_y, self.panel_width, 20);
+        
+        let mut hovered_item: Option<ResourceType> = None;
+        
+        // Draw inventory slots and detect hover
+        for i in 0..self.max_slots.min(player.inventory.slots.len()) {
+            let row = i / self.slots_per_row;
+            let col = i % self.slots_per_row;
+            let slot_x = self.start_x + col as i32 * (self.slot_size + self.slot_spacing);
+            let slot_y = self.start_y + row as i32 * (self.slot_size + self.slot_spacing);
+            
+            // Check if mouse is over this slot
+            let is_hovered = mouse_pos.x >= slot_x as f32 && mouse_pos.x < (slot_x + self.slot_size) as f32 &&
+                           mouse_pos.y >= slot_y as f32 && mouse_pos.y < (slot_y + self.slot_size) as f32;
+            
+            // Draw slot background
+            if let Some(slot_texture) = assets.get_ui_texture("inventory_slot") {
+                d.draw_texture_ex(
+                    slot_texture,
+                    Vector2::new(slot_x as f32, slot_y as f32),
+                    0.0,
+                    self.slot_size as f32 / slot_texture.width as f32,
+                    Color::WHITE
+                );
+            } else {
+                d.draw_rectangle(slot_x, slot_y, self.slot_size, self.slot_size, SLOT_BACKGROUND_COLOR);
+                d.draw_rectangle_lines(slot_x, slot_y, self.slot_size, self.slot_size, SLOT_BORDER_COLOR);
+            }
+            
+            // Draw item if present
+            if let Some(slot) = player.inventory.get_slot(i) {
+                if !slot.is_empty() {
+                    if let Some(resource_type) = slot.resource_type {
+                        draw_item_in_slot(d, assets, resource_type, slot.amount, slot_x, slot_y, self.slot_size);
+                        
+                        // Store hovered item for tooltip
+                        if is_hovered {
+                            hovered_item = Some(resource_type);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Draw tooltip if hovering over an item
+        if let Some(resource_type) = hovered_item {
+            self.draw_inventory_tooltip(d, resource_type, mouse_pos);
+        }
+    }
+    
+    fn draw_inventory_tooltip(&self, d: &mut RaylibDrawHandle, resource_type: ResourceType, mouse_pos: Vector2) {
+        let tooltip_width = 200;
+        let tooltip_height = 60;
+        let padding = 8;
+        
+        // Position tooltip near mouse but keep it on screen
+        let mut tooltip_x = mouse_pos.x as i32 + 15;
+        let mut tooltip_y = mouse_pos.y as i32 - tooltip_height / 2;
+        
+        // Keep tooltip on screen
+        if tooltip_x + tooltip_width > SCREEN_WIDTH { 
+            tooltip_x = mouse_pos.x as i32 - tooltip_width - 15; 
+        }
+        if tooltip_y < 0 { 
+            tooltip_y = 0; 
+        }
+        if tooltip_y + tooltip_height > SCREEN_HEIGHT { 
+            tooltip_y = SCREEN_HEIGHT - tooltip_height; 
+        }
+        
+        // Draw tooltip background
+        d.draw_rectangle(tooltip_x, tooltip_y, tooltip_width, tooltip_height, Color::new(25, 25, 25, 240));
+        d.draw_rectangle_lines(tooltip_x, tooltip_y, tooltip_width, tooltip_height, Color::new(150, 150, 150, 255));
+        
+        // Draw item name
+        d.draw_text(resource_type.get_name(), tooltip_x + padding, tooltip_y + padding, 14, Color::WHITE);
+        
+        // Draw stack size info
+        let stack_info = format!("Max stack: {}", resource_type.get_max_stack_size());
+        d.draw_text(&stack_info, tooltip_x + padding, tooltip_y + padding + 18, 12, Color::LIGHTGRAY);
+        
+        // Draw building indicator if it's a building
+        if resource_type.is_building() {
+            d.draw_text("Click to place", tooltip_x + padding, tooltip_y + padding + 32, 10, Color::YELLOW);
+        }
     }
     
     fn get_slot_at_mouse<'a>(&self, mouse_pos: Vector2, player: &'a Player) -> Option<(usize, &'a InventorySlot)> {
@@ -666,7 +755,7 @@ impl PauseMenu {
         
         let mut y_offset = 80;
         for instruction in instructions {
-            let text_width = d.measure_text(instruction, 14);
+            let text_width = d.measure_text(instruction, 14) as i32;
             let text_x = panel_x + (panel_width - text_width) / 2;
             d.draw_text(instruction, text_x, panel_y + y_offset, 14, Color::LIGHTGRAY);
             y_offset += 20;
@@ -925,7 +1014,7 @@ impl InventoryUI {
         d.draw_rectangle(0, 0, screen_width, screen_height, Color::new(0, 0, 0, 128));
         
         // Draw left panel (always player inventory)
-        self.inventory_layout.draw_inventory(d, player, assets);
+        self.inventory_layout.draw_inventory_with_tooltips(d, player, assets, mouse_pos);
         
         // Draw right panel based on mode
         let right_panel_x = 650;
@@ -973,7 +1062,7 @@ impl InventoryUI {
             d.draw_text(&amount_text, drag_pos.x as i32 + self.slot_size - 12, drag_pos.y as i32 + self.slot_size - 12, font_size, Color::WHITE);
         }
 
-        self.draw_crafting_queue(d, player, 50, 500);
+        self.draw_crafting_queue(d, player, assets, 50, 500);
 
     }
     
@@ -989,7 +1078,7 @@ impl InventoryUI {
         d.draw_rectangle(0, 0, screen_width, screen_height, Color::new(0, 0, 0, 128));
         
         // Draw left panel (always player inventory)
-        self.inventory_layout.draw_inventory(d, player, assets);
+        self.inventory_layout.draw_inventory_with_tooltips(d, player, assets, mouse_pos);
         
         // Draw right panel based on mode
         let right_panel_x = 650;
@@ -1042,37 +1131,148 @@ impl InventoryUI {
             d.draw_text(&amount_text, drag_pos.x as i32 + self.slot_size - 12, drag_pos.y as i32 + self.slot_size - 12, font_size, Color::WHITE);
         }
 
-        self.draw_crafting_queue(d, player, 50, 500);
+        self.draw_crafting_queue(d, player, assets, 50, 500);
 
     }
     
 
-    fn draw_crafting_queue(&self, d: &mut RaylibDrawHandle, player: &Player, x: i32, y: i32) {
+    fn draw_crafting_queue(&self, d: &mut RaylibDrawHandle, player: &Player, assets: &AssetManager, x: i32, y: i32) {
         if player.crafting_queue.is_empty() && !player.is_crafting() {
             return;
         }
         
-        let panel_width = 200;
-        let panel_height = 100;
+        let slot_size = 48;
+        let slot_spacing = 4;
+        let slots_per_row = 5;
+        let max_visible_items = 10; // Current crafting + up to 9 queue items
         
-        d.draw_rectangle(x, y, panel_width, panel_height, Color::new(40, 40, 40, 240));
-        d.draw_rectangle_lines(x, y, panel_width, panel_height, Color::new(200, 200, 200, 255));
+        // Calculate how many items we have to display
+        let current_item_count: usize = if player.is_crafting() { 1 } else { 0 };
+        let queue_count = player.crafting_queue.len().min(max_visible_items - current_item_count);
+        let total_items = current_item_count + queue_count;
         
-        d.draw_text("Crafting Queue", x + 10, y + 10, 16, Color::WHITE);
-        
-        let mut line_y = y + 35;
-        
-        // Show current crafting
-        if let Some(current) = player.get_current_crafting_item() {
-            let progress = (player.get_crafting_progress() * 100.0) as i32;
-            d.draw_text(&format!("Crafting: {} ({}%)", current.get_name(), progress), x + 10, line_y, 12, Color::GREEN);
-            line_y += 15;
+        if total_items == 0 {
+            return;
         }
         
-        // Show queue
-        for queued in &player.crafting_queue {
-            d.draw_text(&format!("Queued: {} x{}", queued.item.get_name(), queued.quantity), x + 10, line_y, 12, Color::LIGHTGRAY);
-            line_y += 15;
+        // Calculate panel dimensions based on items
+        let rows = ((total_items + slots_per_row - 1) / slots_per_row) as i32;
+        let panel_width = (slots_per_row * slot_size) + ((slots_per_row - 1) * slot_spacing) + 16;
+        let panel_height = (rows * slot_size) + ((rows - 1) * slot_spacing) + 16;
+        
+        // Draw panel background
+        d.draw_rectangle(x, y, panel_width, panel_height, PANEL_BACKGROUND_COLOR);
+        d.draw_rectangle_lines(x, y, panel_width, panel_height, PANEL_BORDER_COLOR);
+        
+        let mut item_index = 0;
+        
+        // Draw current crafting item first
+        if let Some(current) = player.get_current_crafting_item() {
+            let row = (item_index / slots_per_row) as i32;
+            let col = (item_index % slots_per_row) as i32;
+            let slot_x = x + 8 + (col * (slot_size + slot_spacing));
+            let slot_y = y + 8 + (row * (slot_size + slot_spacing));
+            
+            self.draw_crafting_queue_slot(d, assets, current, slot_x, slot_y, slot_size, Some(player.get_crafting_progress()));
+            item_index += 1;
+        }
+        
+        // Draw queued items
+        for queued in player.crafting_queue.iter().take(queue_count) {
+            let row = (item_index / slots_per_row) as i32;
+            let col = (item_index % slots_per_row) as i32;
+            let slot_x = x + 8 + (col * (slot_size + slot_spacing));
+            let slot_y = y + 8 + (row * (slot_size + slot_spacing));
+            
+            self.draw_crafting_queue_slot(d, assets, &queued.item, slot_x, slot_y, slot_size, None);
+            
+            // Draw quantity indicator if more than 1
+            if queued.quantity > 1 {
+                let quantity_text = format!("{}", queued.quantity);
+                let text_size = 10;
+                let text_width = d.measure_text(&quantity_text, text_size) as i32;
+                
+                // Draw background for quantity
+                d.draw_rectangle(
+                    slot_x + slot_size - text_width - 4,
+                    slot_y + slot_size - 12,
+                    text_width + 2,
+                    10,
+                    Color::new(0, 0, 0, 180)
+                );
+                
+                // Draw quantity text
+                d.draw_text(
+                    &quantity_text,
+                    slot_x + slot_size - text_width - 3,
+                    slot_y + slot_size - 11,
+                    text_size,
+                    Color::WHITE
+                );
+            }
+            
+            item_index += 1;
+        }
+    }
+    
+    fn draw_crafting_queue_slot(&self, d: &mut RaylibDrawHandle, assets: &AssetManager, item: &CraftableItem, x: i32, y: i32, size: i32, progress: Option<f32>) {
+        // Draw slot background using crafting slot texture
+        if let Some(slot_texture) = assets.get_ui_texture("crafting_slot") {
+            d.draw_texture_ex(
+                slot_texture,
+                Vector2::new(x as f32, y as f32),
+                0.0,
+                size as f32 / slot_texture.width as f32,
+                Color::WHITE
+            );
+        } else {
+            // Fallback to rectangle
+            d.draw_rectangle(x, y, size, size, SLOT_BACKGROUND_COLOR);
+            d.draw_rectangle_lines(x, y, size, size, SLOT_BORDER_COLOR);
+        }
+        
+        // Draw item icon
+        if let Some(icon_texture) = assets.get_crafting_icon(*item) {
+            let icon_size = size - 6;
+            d.draw_texture_ex(
+                icon_texture,
+                Vector2::new((x + 3) as f32, (y + 3) as f32),
+                0.0,
+                icon_size as f32 / icon_texture.width as f32,
+                Color::WHITE
+            );
+        } else {
+            // Fallback to colored square based on category
+            let icon_color = match item.get_category() {
+                CraftingCategory::BasicMaterials => Color::BROWN,
+                CraftingCategory::Woodworking => Color::new(139, 69, 19, 255),
+                CraftingCategory::Metallurgy => Color::LIGHTGRAY,
+                CraftingCategory::CopperWorking => Color::new(184, 115, 51, 255),
+                CraftingCategory::Textiles => Color::BEIGE,
+                CraftingCategory::FoodProduction => Color::new(255, 215, 0, 255),
+                CraftingCategory::SteamSystems => Color::new(128, 128, 128, 255),
+                CraftingCategory::Structures => Color::DARKGRAY,
+                CraftingCategory::Automation => Color::BLUE,
+            };
+            d.draw_rectangle(x + 3, y + 3, size - 6, size - 6, icon_color);
+        }
+        
+        // Draw progress bar overlay if provided
+        if let Some(progress_value) = progress {
+            let progress_height = 4;
+            let progress_width = size - 6;
+            let progress_x = x + 3;
+            let progress_y = y + size - progress_height - 3;
+            
+            // Draw progress bar background
+            d.draw_rectangle(progress_x, progress_y, progress_width, progress_height, Color::new(0, 0, 0, 128));
+            
+            // Draw progress bar fill
+            let fill_width = (progress_width as f32 * progress_value) as i32;
+            d.draw_rectangle(progress_x, progress_y, fill_width, progress_height, Color::new(0, 255, 0, 200));
+            
+            // Draw progress bar border
+            d.draw_rectangle_lines(progress_x, progress_y, progress_width, progress_height, Color::new(255, 255, 255, 128));
         }
     }
 
@@ -1142,7 +1342,7 @@ impl InventoryUI {
                         // Draw amount with smaller font
                         let amount_text = format!("{}", slot.amount);
                         let font_size = 10; // Smaller font for smaller slots
-                        let text_width = d.measure_text(&amount_text, font_size);
+                        let text_width = d.measure_text(&amount_text, font_size) as i32;
                         d.draw_rectangle(
                             slot_x + self.slot_size - text_width - 4, 
                             slot_y + self.slot_size - 12, 
@@ -1210,7 +1410,7 @@ impl InventoryUI {
             
             // Tab text (centered)
             let tab_text = category.get_name();
-            let text_width = d.measure_text(tab_text, 12);
+            let text_width = d.measure_text(tab_text, 12) as i32;
             let text_x = tab_x + (tab_width - text_width) / 2;
             d.draw_text(tab_text, text_x, current_tab_y + 12, 12, Color::WHITE);
         }
@@ -1299,11 +1499,7 @@ impl InventoryUI {
                 d.draw_rectangle(grid_x + 3, grid_y + 3, item_size - 6, item_size - 6, icon_color);
             }
             
-            // Item name below slot
-            let name = item.get_name();
-            let name_width = d.measure_text(name, 9);
-            let name_x = grid_x + (item_size - name_width) / 2;
-            d.draw_text(name, name_x, grid_y + item_size + 3, 9, Color::WHITE);
+            // Item name below slot removed - use tooltips instead
         }
         
         // Draw tooltip AFTER all slots to ensure it appears on top
