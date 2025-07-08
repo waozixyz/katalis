@@ -494,10 +494,17 @@ impl Inventory {
         let slot_count = 100; // Expanded from 48 to 100 for future expansion
         let mut slots = vec![InventorySlot::new(); slot_count];
         
-        // Add starting resources to first few slots
-        slots[0] = InventorySlot::with_resource(ResourceType::Wood, 20);
-        slots[1] = InventorySlot::with_resource(ResourceType::Stone, 30);
-        slots[2] = InventorySlot::with_resource(ResourceType::Clay, 5); 
+        // Add starting resources to first few slots for testing
+        slots[0] = InventorySlot::with_resource(ResourceType::Wood, 50);
+        slots[1] = InventorySlot::with_resource(ResourceType::Stone, 100);
+        slots[2] = InventorySlot::with_resource(ResourceType::Clay, 25);
+        slots[3] = InventorySlot::with_resource(ResourceType::IronOre, 30);
+        slots[4] = InventorySlot::with_resource(ResourceType::Coal, 20);
+        slots[5] = InventorySlot::with_resource(ResourceType::CopperOre, 25);
+        slots[6] = InventorySlot::with_resource(ResourceType::Cotton, 15);
+        slots[7] = InventorySlot::with_resource(ResourceType::Water, 40);
+        slots[8] = InventorySlot::with_resource(ResourceType::WheatSeeds, 10);
+        slots[9] = InventorySlot::with_resource(ResourceType::Wheat, 20); 
         
         Self { 
             slots,

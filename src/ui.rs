@@ -152,8 +152,8 @@ impl InventoryLayout {
         let total_spacing_width = (slots_per_row - 1) * slot_spacing;
         let slot_size = (available_width - total_spacing_width) / slots_per_row;
         
-        // Default to 4 rows for inventory display
-        let rows_to_display = 4;
+        // Default to 3 rows for inventory display
+        let rows_to_display = 3;
         let max_slots = (slots_per_row * rows_to_display) as usize;
         
         Self {
@@ -180,16 +180,6 @@ impl InventoryLayout {
             self.start_x, self.start_y, 
             self.slot_size, self.slot_spacing, 
             self.slots_per_row, self.max_slots
-        );
-        
-        // Draw a subtle separator line below the inventory section
-        let separator_y = self.start_y + (self.panel_height / 4) - 10;
-        d.draw_line(
-            self.panel_x + 10, 
-            separator_y, 
-            self.panel_x + self.panel_width - 10, 
-            separator_y, 
-            Color::new(100, 100, 100, 128)
         );
     }
     
