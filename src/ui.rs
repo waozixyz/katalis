@@ -681,7 +681,7 @@ impl InventoryUI {
         Self {
             is_open: false,
             selected_recipe: None,
-            selected_category: CraftingCategory::BasicMaterials,
+            selected_category: CraftingCategory::Woodworking,
             dragged_item: None,
             drag_offset: Vector2::zero(),
             slot_size: 32,
@@ -780,8 +780,12 @@ impl InventoryUI {
             
             let categories = [
                 CraftingCategory::BasicMaterials,
+                CraftingCategory::Woodworking,
                 CraftingCategory::Metallurgy,
+                CraftingCategory::CopperWorking,
                 CraftingCategory::Textiles,
+                CraftingCategory::FoodProduction,
+                CraftingCategory::SteamSystems,
                 CraftingCategory::Structures,
                 CraftingCategory::Automation,
             ];
@@ -1177,8 +1181,12 @@ impl InventoryUI {
         let tab_y = y + 50;
         let categories = [
             CraftingCategory::BasicMaterials,
+            CraftingCategory::Woodworking,
             CraftingCategory::Metallurgy,
+            CraftingCategory::CopperWorking,
             CraftingCategory::Textiles,
+            CraftingCategory::FoodProduction,
+            CraftingCategory::SteamSystems,
             CraftingCategory::Structures,
             CraftingCategory::Automation,
         ];
@@ -1280,8 +1288,12 @@ impl InventoryUI {
                 // Fallback to colored square
                 let icon_color = match item.get_category() {
                     CraftingCategory::BasicMaterials => Color::BROWN,
+                    CraftingCategory::Woodworking => Color::new(139, 69, 19, 255),
                     CraftingCategory::Metallurgy => Color::LIGHTGRAY,
+                    CraftingCategory::CopperWorking => Color::new(184, 115, 51, 255),
                     CraftingCategory::Textiles => Color::BEIGE,
+                    CraftingCategory::FoodProduction => Color::new(255, 215, 0, 255),
+                    CraftingCategory::SteamSystems => Color::new(128, 128, 128, 255),
                     CraftingCategory::Structures => Color::DARKGRAY,
                     CraftingCategory::Automation => Color::BLUE,
                 };
