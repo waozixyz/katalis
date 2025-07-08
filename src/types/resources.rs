@@ -491,7 +491,7 @@ pub struct Inventory {
 
 impl Inventory {
     pub fn new() -> Self {
-        let slot_count = 48; // 8x6 grid
+        let slot_count = 100; // Expanded from 48 to 100 for future expansion
         let mut slots = vec![InventorySlot::new(); slot_count];
         
         // Add starting resources to first few slots

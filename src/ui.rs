@@ -137,28 +137,71 @@ impl InventoryLayout {
         let panel_width = 500;
         let panel_height = 600;
         
+        // Take about 1/4 of the panel height from the top for inventory
+        let inventory_height = panel_height / 4;
+        
+        // Calculate slot size and spacing to fit nicely in the available space
+        let horizontal_padding = 20;
+        let vertical_padding = 60; // Space for title
+        let available_width = panel_width - (horizontal_padding * 2);
+        let available_height = inventory_height - vertical_padding - 20; // Extra bottom margin
+        
+        // Calculate optimal slot size and spacing
+        let slots_per_row = 10; // Increase from 8 to 10 for better use of width
+        let slot_spacing = 4; // Reduce spacing slightly
+        let total_spacing_width = (slots_per_row - 1) * slot_spacing;
+        let slot_size = (available_width - total_spacing_width) / slots_per_row;
+        
+        // Calculate number of rows that fit in the available height
+        let rows_that_fit = available_height / (slot_size + slot_spacing);
+        let max_slots = (slots_per_row * rows_that_fit) as usize;
+        
         Self {
             panel_x,
             panel_y,
             panel_width,
             panel_height,
-            start_x: panel_x + 20,
-            start_y: panel_y + 60,
-            slot_size: 32,
-            slot_spacing: 6,
-            slots_per_row: 8,
-            max_slots: 48,
+            start_x: panel_x + horizontal_padding,
+            start_y: panel_y + vertical_padding,
+            slot_size,
+            slot_spacing,
+            slots_per_row,
+            max_slots,
         }
     }
     
     fn draw_inventory(&self, d: &mut RaylibDrawHandle, player: &Player, assets: &AssetManager) {
         draw_panel(d, self.panel_x, self.panel_y, self.panel_width, self.panel_height);
         draw_panel_title(d, "Player Inventory", self.panel_x, self.panel_y, self.panel_width, 20);
+        
+        // Draw inventory slots
         draw_inventory_slots(
             d, player, assets, 
             self.start_x, self.start_y, 
             self.slot_size, self.slot_spacing, 
             self.slots_per_row, self.max_slots
+        );
+        
+        // Draw a subtle separator line below the inventory section
+        let separator_y = self.start_y + (self.panel_height / 4) - 10;
+        d.draw_line(
+            self.panel_x + 10, 
+            separator_y, 
+            self.panel_x + self.panel_width - 10, 
+            separator_y, 
+            Color::new(100, 100, 100, 128)
+        );
+        
+        // Add a small hint text showing how many slots are shown vs total
+        let slot_text = format!("Showing {} of {} slots", self.max_slots, player.inventory.slot_count);
+        let text_size = 10;
+        let text_width = d.measure_text(&slot_text, text_size);
+        d.draw_text(
+            &slot_text,
+            self.panel_x + self.panel_width - text_width - 10,
+            separator_y + 5,
+            text_size,
+            Color::new(150, 150, 150, 255)
         );
     }
     
@@ -891,29 +934,6 @@ impl InventoryUI {
         None
     }
     
-    fn get_slot_at_mouse(&self, mouse_pos: Vector2, panel_x: i32, panel_y: i32) -> Option<usize> {
-        let slots_per_row = 8i32;
-        let start_x = panel_x + 20;
-        let start_y = panel_y + 60;
-        
-        for row in 0..6i32 {
-            for col in 0..slots_per_row {
-                let slot_index = (row * slots_per_row + col) as usize;
-                if slot_index >= 48 { break; }
-                
-                let slot_x = start_x + (col * (self.slot_size + self.slot_spacing_x));
-                let slot_y = start_y + (row * (self.slot_size + self.slot_spacing_y));
-                
-                if mouse_pos.x >= slot_x as f32 && 
-                   mouse_pos.x <= (slot_x + self.slot_size) as f32 &&
-                   mouse_pos.y >= slot_y as f32 && 
-                   mouse_pos.y <= (slot_y + self.slot_size) as f32 {
-                    return Some(slot_index);
-                }
-            }
-        }
-        None
-    }
     
     
     pub fn draw(&self, d: &mut RaylibDrawHandle, inventory: &Inventory, crafting_system: &CraftingSystem, assets: &AssetManager, mouse_pos: Vector2, player: &Player) {
@@ -1219,7 +1239,8 @@ impl InventoryUI {
         
         // Items grid for selected category
         let items = self.selected_category.get_items();
-        let grid_start_y = tab_y + (tab_height * 2) + 20; // Account for 2 rows of tabs
+        let num_tab_rows = (categories.len() + tabs_per_row - 1) / tabs_per_row; // Calculate number of tab rows
+        let grid_start_y = tab_y + (tab_height * num_tab_rows as i32) + 20; // Account for actual number of tab rows
         let item_size = 50i32; // Reduced from 60
         let items_per_row = 7; // Reduced from 8 to fit smaller panel
         let item_spacing = 8i32; // Reduced spacing
@@ -1385,7 +1406,22 @@ impl InventoryUI {
     
     fn get_crafting_item_at_mouse(&self, mouse_pos: Vector2, panel_x: i32, panel_y: i32) -> Option<CraftableItem> {
         let items = self.selected_category.get_items();
-        let grid_start_y = panel_y + 50 + (35 * 2) + 20; // Account for tabs
+        let categories = [
+            CraftingCategory::BasicMaterials,
+            CraftingCategory::Woodworking,
+            CraftingCategory::Metallurgy,
+            CraftingCategory::CopperWorking,
+            CraftingCategory::Textiles,
+            CraftingCategory::FoodProduction,
+            CraftingCategory::SteamSystems,
+            CraftingCategory::Structures,
+            CraftingCategory::Automation,
+        ];
+        let tabs_per_row = 3;
+        let tab_height = 35;
+        let tab_y = panel_y + 50;
+        let num_tab_rows = (categories.len() + tabs_per_row - 1) / tabs_per_row;
+        let grid_start_y = tab_y + (tab_height * num_tab_rows as i32) + 20; // Account for actual number of tab rows
         let item_size = 50i32;
         let items_per_row = 7;
         let item_spacing = 8i32;
