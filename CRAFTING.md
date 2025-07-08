@@ -29,7 +29,7 @@ Specialized copper processing and alloy creation.
 Fiber processing for cloth production.
 
 ### 🌾 Food Production
-Agriculture and food processing for sustenance.
+Agriculture, farming, and food processing for sustenance.
 
 ### 🔥 Steam Systems
 Steam power generation and steam-powered machinery.
@@ -93,6 +93,7 @@ Fabric → Manual → Cloth Strips (4)
 
 ### 🌾 Wheat & Bread Production Chain
 ***
+Wheat Seeds → Wheat Farm → Wheat (seasonal harvest)
 Wheat → Windmill → Flour
 Flour + Water → Manual → Dough
 Dough → Stone Oven → Bread
@@ -135,6 +136,7 @@ Electric Path: Reinforced Conveyor + Electrical → Electric Conveyor
 ### Food Production Structures
 | Building | Materials | Time | Description |
 |----------|-----------|------|-------------|
+| **Wheat Farm** | Wood (20) + Stone (10) + Wheat Seeds (5) + Water (10) | 12.0s | Grows wheat from seeds (seasonal) |
 | **Windmill** | Wood (40) + Stone (20) + Iron Gears (4) + Cloth Strips (8) | 25.0s | Grinds wheat into flour |
 | **Stone Oven** | Stone (30) + Clay (15) + Iron Plates (4) | 15.0s | Bakes bread and other foods |
 | **Grain Silo** | Wood (50) + Stone (20) + Iron Plates (6) | 18.0s | Stores large quantities of grain |
@@ -196,6 +198,8 @@ Electric Path: Reinforced Conveyor + Electrical → Electric Conveyor
 ### 🌾 Food Production
 | Item | Inputs | Output | Time | Structure |
 |------|--------|--------|------|-----------|
+| **Wheat Farm** | Wood (20) + Stone (10) + Wheat Seeds (5) + Water (10) | Wheat Farm (1) | 12.0s | Manual |
+| **Wheat** | - | Wheat (8-12) | 120.0s | Wheat Farm (seasonal growth) |
 | **Flour** | Wheat (3) | Flour (2) | 5.0s | Windmill |
 | **Flour** | Wheat (3) | Flour (2) | 4.0s | Water Mill |
 | **Dough** | Flour (2) + Water (1) | Dough (1) | 2.0s | Manual |
@@ -222,8 +226,8 @@ Electric Path: Reinforced Conveyor + Electrical → Electric Conveyor
 | **Weaving Machine** | Wood (35) | Weaving Machine (1) | 15.0s | Manual |
 | **Advanced Forge** | Stone (25) + Iron Plates (8) + Copper Plates (4) | Advanced Forge (1) | 20.0s | Manual |
 | **Water Pump** | Iron Plates (4) + Copper Pipes (6) + Iron Gears (2) | Water Pump (1) | 12.0s | Manual |
+| **Wheat Farm** | Wood (20) + Stone (10) + Wheat Seeds (5) + Water (10) | Wheat Farm (1) | 12.0s | Manual |
 | **Windmill** | Wood (40) + Stone (20) + Iron Gears (4) + Cloth Strips (8) | Windmill (1) | 25.0s | Manual |
-| **Water Mill** | Wood (30) + Stone (25) + Iron Gears (6) + Copper Pipes (4) | Water Mill (1) | 20.0s | Manual |
 | **Stone Oven** | Stone (30) + Clay (15) + Iron Plates (4) | Stone Oven (1) | 15.0s | Manual |
 | **Grain Silo** | Wood (50) + Stone (20) + Iron Plates (6) | Grain Silo (1) | 18.0s | Manual |
 
@@ -253,7 +257,8 @@ Electric Path: Reinforced Conveyor + Electrical → Electric Conveyor
 - **Copper Ore**: From copper veins (using Pickaxe)
 - **Cotton**: From cotton patches (using Axe)
 - **Water**: From rivers/lakes (using Water Bucket)
-- **Wheat**: From wheat fields (using Scythe)
+- **Wheat Seeds**: From wild wheat patches (manual harvest)
+- **Wheat**: From Wheat Farms (using Scythe, seasonal)
 
 ### Mining Yields
 | Resource | Yield per Action | Tool Required |
@@ -266,7 +271,8 @@ Electric Path: Reinforced Conveyor + Electrical → Electric Conveyor
 | Copper Ore | 4 | Pickaxe |
 | Cotton | 3 | Axe |
 | Water | 10 | Water Bucket |
-| Wheat | 5 | Scythe |
+| Wheat Seeds | 2-3 | Manual |
+| Wheat | 8-12 (seasonal harvest) | Scythe |
 
 ---
 
@@ -315,11 +321,13 @@ Electric Path: Reinforced Conveyor + Electrical → Electric Conveyor
 - **Water Consumption**: 1 Water unit per 5 steam units produced
 
 ### Food Production Management
-- **Wheat Farming**: Establish multiple wheat fields for consistent harvests
+- **Seed Collection**: Gather Wheat Seeds from wild wheat patches before building farms
+- **Farm Placement**: Build Wheat Farms near water sources for irrigation
+- **Seasonal Timing**: Plant farms early in growing season for maximum yield
 - **Mill Placement**: Position Windmills on hills for better wind, Water Mills near rivers
-- **Bread Storage**: Use Grain Silos for bulk wheat storage before processing
-- **Production Balance**: Maintain 3:2:1 ratio of wheat fields to mills to ovens
-
+- **Bread Storage**: Use Grain Silos for bulk wheat storage between harvests
+- **Production Balance**: Maintain 3:2:1 ratio of wheat farms to mills to ovens
+- **Farm Scaling**: Each Wheat Farm produces 8-12 wheat per season, plan accordingly
 ---
 
 ## 🔧 Building Placement
@@ -352,8 +360,8 @@ Electric Path: Reinforced Conveyor + Electrical → Electric Conveyor
 | Steam Boiler | 3x3 | Requires fuel and water input |
 | Steam Hammer | 3x3 | Automated metal processing |
 | Sorting Machine | 3x3 | Automation hub |
+| Wheat Farm | 4x4 | Seasonal growth, requires water |
 | Windmill | 3x3 | Requires open area for wind |
-| Water Mill | 3x3 | Requires water source nearby |
 | Grain Silo | 3x3 | Vertical storage structure |
 | Steam Engine | 4x4 | Largest structure, power generation |
 
@@ -431,11 +439,13 @@ Electric Path: Reinforced Conveyor + Electrical → Electric Conveyor
 - [ ] Craft Scythe for wheat harvesting
 
 ### Early-Mid Game (Agricultural Age)
-- [ ] Establish wheat farming
+- [ ] Collect Wheat Seeds from wild patches
+- [ ] Build first Wheat Farm near water
 - [ ] Build Windmill or Water Mill
 - [ ] Construct Stone Oven
 - [ ] Complete bread production chain
 - [ ] Build Grain Silo for storage
+- [ ] Establish multiple farms for consistent harvests
 
 ### Mid Game (Steam Age)
 - [ ] Construct Steam Boiler system
