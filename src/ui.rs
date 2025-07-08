@@ -1141,9 +1141,9 @@ impl InventoryUI {
             return;
         }
         
-        let slot_size = 48;
-        let slot_spacing = 4;
-        let slots_per_row = 5;
+        let slot_size: i32 = 48;
+        let slot_spacing: i32 = 4;
+        let slots_per_row: i32 = 5;
         let max_visible_items = 10; // Current crafting + up to 9 queue items
         
         // Calculate how many items we have to display
@@ -1156,7 +1156,7 @@ impl InventoryUI {
         }
         
         // Calculate panel dimensions based on items
-        let rows = ((total_items + slots_per_row - 1) / slots_per_row) as i32;
+        let rows = ((total_items + slots_per_row as usize - 1) / slots_per_row as usize) as i32;
         let panel_width = (slots_per_row * slot_size) + ((slots_per_row - 1) * slot_spacing) + 16;
         let panel_height = (rows * slot_size) + ((rows - 1) * slot_spacing) + 16;
         
@@ -1168,8 +1168,8 @@ impl InventoryUI {
         
         // Draw current crafting item first
         if let Some(current) = player.get_current_crafting_item() {
-            let row = (item_index / slots_per_row) as i32;
-            let col = (item_index % slots_per_row) as i32;
+            let row = (item_index / slots_per_row as usize) as i32;
+            let col = (item_index % slots_per_row as usize) as i32;
             let slot_x = x + 8 + (col * (slot_size + slot_spacing));
             let slot_y = y + 8 + (row * (slot_size + slot_spacing));
             
@@ -1179,8 +1179,8 @@ impl InventoryUI {
         
         // Draw queued items
         for queued in player.crafting_queue.iter().take(queue_count) {
-            let row = (item_index / slots_per_row) as i32;
-            let col = (item_index % slots_per_row) as i32;
+            let row = (item_index / slots_per_row as usize) as i32;
+            let col = (item_index % slots_per_row as usize) as i32;
             let slot_x = x + 8 + (col * (slot_size + slot_spacing));
             let slot_y = y + 8 + (row * (slot_size + slot_spacing));
             
