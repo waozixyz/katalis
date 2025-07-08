@@ -179,6 +179,25 @@ fn main() {
             if clay_gained > 0 { game_player.inventory.add_resource(ResourceType::Clay, clay_gained); }
             if copper_gained > 0 { game_player.inventory.add_resource(ResourceType::CopperOre, copper_gained); }
             if cotton_gained > 0 { game_player.inventory.add_resource(ResourceType::Cotton, cotton_gained); }
+            
+            // Handle completed demolitions
+            if let Some(completed_demolition) = game_player.update_demolition(delta_time) {
+                // Remove building from world
+                world.remove_building(completed_demolition.building_pos.0, completed_demolition.building_pos.1);
+                
+                // Add building back to inventory
+                let resource_type = match completed_demolition.building_type {
+                    BuildingType::CharcoalPit => ResourceType::CharcoalPit,
+                    BuildingType::BloomeryFurnace => ResourceType::BloomeryFurnace,
+                    BuildingType::StoneAnvil => ResourceType::StoneAnvil,
+                    BuildingType::SpinningWheel => ResourceType::SpinningWheel,
+                    BuildingType::WeavingMachine => ResourceType::WeavingMachine,
+                    BuildingType::ConveyorBelt => ResourceType::ConveyorBelt,
+                };
+                
+                game_player.inventory.add_resource(resource_type, 1);
+                println!("Demolished {} and returned it to inventory!", completed_demolition.building_type.get_name());
+            }
         }
     
         // Get mouse position BEFORE starting drawing

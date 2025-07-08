@@ -756,4 +756,31 @@ impl World {
             tree.collides_with_point(Vector2::new(x, y))
         })
     }
+    
+    pub fn remove_building(&mut self, origin_x: usize, origin_y: usize) {
+        if let Some(tile) = self.get_tile(origin_x, origin_y) {
+            if let Some(building_type) = tile.building {
+                let (width, height) = building_type.get_size();
+                
+                // Clear all tiles covered by the building
+                for dx in 0..width {
+                    for dy in 0..height {
+                        let x = origin_x + dx as usize;
+                        let y = origin_y + dy as usize;
+                        
+                        if let Some(tile) = self.get_tile_mut(x, y) {
+                            tile.building = None;
+                            tile.building_active = false;
+                            tile.is_building_origin = false;
+                        }
+                    }
+                }
+                
+                // Remove building inventory
+                self.building_inventories.remove(&(origin_x, origin_y));
+                
+                println!("Removed {} at ({}, {})", building_type.get_name(), origin_x, origin_y);
+            }
+        }
+    }
 }

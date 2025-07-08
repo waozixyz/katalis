@@ -17,6 +17,7 @@ pub struct Player {
     pub facing_left: bool, 
     pub current_crafting: Option<CraftingProgress>,
     pub crafting_queue: Vec<QueuedCraft>,
+    pub current_demolition: Option<DemolitionAction>,
 }
 
 #[derive(Clone, Debug)]
@@ -31,6 +32,14 @@ pub struct CraftingProgress {
 pub struct QueuedCraft {
     pub item: CraftableItem,
     pub quantity: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct DemolitionAction {
+    pub building_type: BuildingType,
+    pub building_pos: (usize, usize),
+    pub progress: f32,
+    pub total_time: f32,
 }
 
 
@@ -50,6 +59,7 @@ impl Player {
             facing_left: false,
             current_crafting: None,
             crafting_queue: Vec::new(),
+            current_demolition: None,
         }
     }
 
@@ -125,11 +135,15 @@ impl Player {
         }
         // If moving only vertically, keep current facing direction
         
-        // Cancel mining if player moves
+        // Cancel mining and demolition if player moves
         if movement.length() > 0.0 {
             if self.current_mining.is_some() {
                 println!("Mining cancelled due to movement");
                 self.current_mining = None;
+            }
+            if self.current_demolition.is_some() {
+                println!("Demolition cancelled due to movement");
+                self.current_demolition = None;
             }
         }
         
@@ -214,6 +228,46 @@ impl Player {
         self.mining_target
     }
     
+    pub fn start_demolition(&mut self, building_type: BuildingType, building_pos: (usize, usize)) {
+        let demolition_time = 2.0; // 2 seconds to demolish
+        println!("Started demolishing {:?} at ({}, {})", building_type, building_pos.0, building_pos.1);
+        self.current_demolition = Some(DemolitionAction {
+            building_type,
+            building_pos,
+            progress: 0.0,
+            total_time: demolition_time,
+        });
+    }
+    
+    pub fn is_demolishing(&self) -> bool {
+        self.current_demolition.is_some()
+    }
+    
+    pub fn get_demolition_progress(&self) -> f32 {
+        self.current_demolition.as_ref()
+            .map(|d| d.progress / d.total_time)
+            .unwrap_or(0.0)
+    }
+    
+    pub fn update_demolition(&mut self, delta_time: f32) -> Option<DemolitionAction> {
+        if let Some(demolition) = &mut self.current_demolition {
+            demolition.progress += delta_time;
+            if demolition.progress >= demolition.total_time {
+                let completed = demolition.clone();
+                self.current_demolition = None;
+                return Some(completed);
+            }
+        }
+        None
+    }
+    
+    pub fn cancel_demolition(&mut self) {
+        if self.current_demolition.is_some() {
+            println!("Demolition cancelled");
+            self.current_demolition = None;
+        }
+    }
+    
     pub fn draw(&self, d: &mut RaylibMode2D<RaylibDrawHandle>) {
         if let Some(texture) = &self.sprite_texture {
             // Draw animated sprite with scaling and flipping
@@ -276,6 +330,14 @@ impl Player {
             let progress = crafting.progress / crafting.total_time;
             let label = format!("Crafting {}", crafting.item.get_name());
             self.draw_progress_bar(d, progress, &label, Color::BLUE, bar_y_offset);
+            bar_y_offset -= 15.0; // Stack bars vertically
+        }
+        
+        // Draw demolition progress bar
+        if let Some(demolition) = &self.current_demolition {
+            let progress = demolition.progress / demolition.total_time;
+            let label = format!("Demolishing {}", demolition.building_type.get_name());
+            self.draw_progress_bar(d, progress, &label, Color::RED, bar_y_offset);
         }
     }
     

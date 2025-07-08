@@ -98,11 +98,22 @@ impl BuildingType {
         // Returns (frame_width_in_texture, frame_height_in_texture, is_animated)
         match self {
             BuildingType::CharcoalPit => (256, 256, true), // Each frame is 256x256 pixels, animated with 2 frames
-            BuildingType::BloomeryFurnace => (96, 96, false), // 3x3 tiles, static
+            BuildingType::BloomeryFurnace => (256, 256, true), // Same dimensions as charcoal pit, animated with 2 frames
             BuildingType::StoneAnvil => (64, 64, false), // 2x2 tiles, static
             BuildingType::SpinningWheel => (64, 64, false), // 2x2 tiles, static
             BuildingType::WeavingMachine => (96, 64, false), // 3x2 tiles, static
             BuildingType::ConveyorBelt => (32, 32, false), // 1x1 tile, static
+        }
+    }
+    
+    pub fn get_name(&self) -> &'static str {
+        match self {
+            BuildingType::CharcoalPit => "Charcoal Pit",
+            BuildingType::BloomeryFurnace => "Bloomery Furnace",
+            BuildingType::StoneAnvil => "Stone Anvil",
+            BuildingType::SpinningWheel => "Spinning Wheel",
+            BuildingType::WeavingMachine => "Weaving Machine",
+            BuildingType::ConveyorBelt => "Conveyor Belt",
         }
     }
 }
