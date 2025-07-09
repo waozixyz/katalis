@@ -57,6 +57,17 @@ pub enum CraftableItem {
     Bread,
     Scythe,
     
+    // Tools
+    WoodenPickaxe,
+    StonePickaxe,
+    IronPickaxe,
+    WoodenAxe,
+    StoneAxe,
+    IronAxe,
+    WoodenShovel,
+    StoneShovel,
+    IronShovel,
+    
     // Animal products
     CookedChicken,
     
@@ -186,6 +197,15 @@ impl CraftingCategory {
                 CraftableItem::Dough,
                 CraftableItem::Bread,
                 CraftableItem::Scythe,
+                CraftableItem::WoodenPickaxe,
+                CraftableItem::StonePickaxe,
+                CraftableItem::IronPickaxe,
+                CraftableItem::WoodenAxe,
+                CraftableItem::StoneAxe,
+                CraftableItem::IronAxe,
+                CraftableItem::WoodenShovel,
+                CraftableItem::StoneShovel,
+                CraftableItem::IronShovel,
             ],
             CraftingCategory::AnimalProducts => vec![
                 CraftableItem::CookedChicken,
@@ -248,7 +268,10 @@ impl CraftableItem {
             CraftableItem::ReinforcedFabric => CraftingCategory::Textiles,
             
             CraftableItem::Flour | CraftableItem::Dough | CraftableItem::Bread | 
-            CraftableItem::Scythe => CraftingCategory::FoodProduction,
+            CraftableItem::Scythe | CraftableItem::WoodenPickaxe | CraftableItem::StonePickaxe |
+            CraftableItem::IronPickaxe | CraftableItem::WoodenAxe | CraftableItem::StoneAxe |
+            CraftableItem::IronAxe | CraftableItem::WoodenShovel | CraftableItem::StoneShovel |
+            CraftableItem::IronShovel => CraftingCategory::FoodProduction,
             
             CraftableItem::CookedChicken => CraftingCategory::AnimalProducts,
             
@@ -303,6 +326,16 @@ impl CraftableItem {
             CraftableItem::Dough => "Dough",
             CraftableItem::Bread => "Bread",
             CraftableItem::Scythe => "Scythe",
+            
+            CraftableItem::WoodenPickaxe => "Wooden Pickaxe",
+            CraftableItem::StonePickaxe => "Stone Pickaxe",
+            CraftableItem::IronPickaxe => "Iron Pickaxe",
+            CraftableItem::WoodenAxe => "Wooden Axe",
+            CraftableItem::StoneAxe => "Stone Axe",
+            CraftableItem::IronAxe => "Iron Axe",
+            CraftableItem::WoodenShovel => "Wooden Shovel",
+            CraftableItem::StoneShovel => "Stone Shovel",
+            CraftableItem::IronShovel => "Iron Shovel",
             
             CraftableItem::CookedChicken => "Cooked Chicken",
             
@@ -374,6 +407,16 @@ impl CraftableItem {
             CraftableItem::Dough => "icons/dough.png",
             CraftableItem::Bread => "icons/bread.png",
             CraftableItem::Scythe => "icons/scythe.png",
+            
+            CraftableItem::WoodenPickaxe => "icons/wooden_pickaxe.png",
+            CraftableItem::StonePickaxe => "icons/stone_pickaxe.png",
+            CraftableItem::IronPickaxe => "icons/iron_pickaxe.png",
+            CraftableItem::WoodenAxe => "icons/wooden_axe.png",
+            CraftableItem::StoneAxe => "icons/stone_axe.png",
+            CraftableItem::IronAxe => "icons/iron_axe.png",
+            CraftableItem::WoodenShovel => "icons/wooden_shovel.png",
+            CraftableItem::StoneShovel => "icons/stone_shovel.png",
+            CraftableItem::IronShovel => "icons/iron_shovel.png",
             
             CraftableItem::CookedChicken => "icons/cooked_chicken.png",
             
@@ -645,6 +688,79 @@ impl CraftingSystem {
         recipes.insert(CraftableItem::Scythe, CraftingRecipe {
             inputs: vec![(ResourceType::Wood, 3), (ResourceType::MetalRods, 2), (ResourceType::IronPlates, 1)],
             output: (ResourceType::Scythe, 1),
+            crafting_time: 4.0,
+            requires_structure: Some(StructureType::Manual),
+        });
+        
+        // === BASIC TOOLS ===
+        // Wooden Pickaxe (manual from Sticks + Twigs)
+        recipes.insert(CraftableItem::WoodenPickaxe, CraftingRecipe {
+            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Twigs, 3)],
+            output: (ResourceType::WoodenPickaxe, 1),
+            crafting_time: 2.0,
+            requires_structure: Some(StructureType::Manual),
+        });
+        
+        // Stone Pickaxe (manual from Sticks + Stones + Plant Fiber)
+        recipes.insert(CraftableItem::StonePickaxe, CraftingRecipe {
+            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Stones, 3), (ResourceType::PlantFiber, 1)],
+            output: (ResourceType::StonePickaxe, 1),
+            crafting_time: 3.0,
+            requires_structure: Some(StructureType::Manual),
+        });
+        
+        // Iron Pickaxe (manual from Sticks + Iron Plates)
+        recipes.insert(CraftableItem::IronPickaxe, CraftingRecipe {
+            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::IronPlates, 2)],
+            output: (ResourceType::IronPickaxe, 1),
+            crafting_time: 4.0,
+            requires_structure: Some(StructureType::Manual),
+        });
+        
+        // Wooden Axe (manual from Sticks + Flint)
+        recipes.insert(CraftableItem::WoodenAxe, CraftingRecipe {
+            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Flint, 1)],
+            output: (ResourceType::WoodenAxe, 1),
+            crafting_time: 2.0,
+            requires_structure: Some(StructureType::Manual),
+        });
+        
+        // Stone Axe (manual from Sticks + Stones + Plant Fiber)
+        recipes.insert(CraftableItem::StoneAxe, CraftingRecipe {
+            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Stones, 2), (ResourceType::PlantFiber, 1)],
+            output: (ResourceType::StoneAxe, 1),
+            crafting_time: 3.0,
+            requires_structure: Some(StructureType::Manual),
+        });
+        
+        // Iron Axe (manual from Sticks + Iron Plates)
+        recipes.insert(CraftableItem::IronAxe, CraftingRecipe {
+            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::IronPlates, 2)],
+            output: (ResourceType::IronAxe, 1),
+            crafting_time: 4.0,
+            requires_structure: Some(StructureType::Manual),
+        });
+        
+        // Wooden Shovel (manual from Sticks + Twigs)
+        recipes.insert(CraftableItem::WoodenShovel, CraftingRecipe {
+            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Twigs, 2)],
+            output: (ResourceType::WoodenShovel, 1),
+            crafting_time: 2.0,
+            requires_structure: Some(StructureType::Manual),
+        });
+        
+        // Stone Shovel (manual from Sticks + Stones + Plant Fiber)
+        recipes.insert(CraftableItem::StoneShovel, CraftingRecipe {
+            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Stones, 2), (ResourceType::PlantFiber, 1)],
+            output: (ResourceType::StoneShovel, 1),
+            crafting_time: 3.0,
+            requires_structure: Some(StructureType::Manual),
+        });
+        
+        // Iron Shovel (manual from Sticks + Iron Plates)
+        recipes.insert(CraftableItem::IronShovel, CraftingRecipe {
+            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::IronPlates, 2)],
+            output: (ResourceType::IronShovel, 1),
             crafting_time: 4.0,
             requires_structure: Some(StructureType::Manual),
         });

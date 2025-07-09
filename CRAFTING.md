@@ -216,6 +216,19 @@ Electric Path: Reinforced Conveyor + Electrical → Electric Conveyor
 | **Bread** | Dough (1) | Bread (2) | 8.0s | Stone Oven |
 | **Scythe** | Wood (3) + Metal Rods (2) + Iron Plates (1) | Scythe (1) | 4.0s | Manual |
 
+### 🔨 Basic Tools
+| Item | Inputs | Output | Time | Structure |
+|------|--------|--------|------|-----------|
+| **Wooden Pickaxe** | Sticks (2) + Twigs (3) | Wooden Pickaxe (1) | 2.0s | Manual |
+| **Stone Pickaxe** | Sticks (2) + Stones (3) + Plant Fiber (1) | Stone Pickaxe (1) | 3.0s | Manual |
+| **Iron Pickaxe** | Sticks (2) + Iron Plates (2) | Iron Pickaxe (1) | 4.0s | Manual |
+| **Wooden Axe** | Sticks (2) + Flint (1) | Wooden Axe (1) | 2.0s | Manual |
+| **Stone Axe** | Sticks (2) + Stones (2) + Plant Fiber (1) | Stone Axe (1) | 3.0s | Manual |
+| **Iron Axe** | Sticks (2) + Iron Plates (2) | Iron Axe (1) | 4.0s | Manual |
+| **Wooden Shovel** | Sticks (2) + Twigs (2) | Wooden Shovel (1) | 2.0s | Manual |
+| **Stone Shovel** | Sticks (2) + Stones (2) + Plant Fiber (1) | Stone Shovel (1) | 3.0s | Manual |
+| **Iron Shovel** | Sticks (2) + Iron Plates (2) | Iron Shovel (1) | 4.0s | Manual |
+
 ### 🐔 Animal Products
 | Item | Inputs | Output | Time | Structure |
 |------|--------|--------|------|-----------|
@@ -275,6 +288,13 @@ Electric Path: Reinforced Conveyor + Electrical → Electric Conveyor
 - **Wheat Seeds**: From wild wheat patches (manual harvest)
 - **Wheat**: From Wheat Farms (using Scythe, seasonal)
 
+### Ground Collectibles
+- **Sticks**: Found scattered on grass tiles (1-3 per location)
+- **Stones**: Found on stone terrain and rarely on grass (1-2 per location)
+- **Twigs**: Found on grass tiles, less common than sticks (1-2 per location)
+- **Plant Fiber**: Rare, found only on grass tiles (1 per location)
+- **Flint**: Very rare, found only on stone terrain (1 per location)
+
 ### Animal Resources
 - **Egg**: From wild chickens (collected manually, spawns every 30 seconds)
 - **Raw Chicken**: From killed wild chickens (1 per chicken)
@@ -296,6 +316,38 @@ Electric Path: Reinforced Conveyor + Electrical → Electric Conveyor
 | Egg | 1 | Manual (from wild chickens) |
 | Raw Chicken | 1 | Manual (kill wild chicken) |
 | Chicken Feathers | 2-4 | Manual (kill wild chicken) |
+
+---
+
+## 🔨 Tool Progression & Ground Collection
+
+### Getting Started
+1. **Collect Ground Resources**: Walk around and click on small colored circles on the ground
+   - **Sticks**: Most common, found on grass (brown circles)
+   - **Stones**: Found on stone terrain (gray circles)  
+   - **Twigs**: Less common, found on grass (darker brown circles)
+   - **Plant Fiber**: Rare, found on grass (green circles)
+   - **Flint**: Very rare, found on stone terrain (dark gray circles)
+
+2. **Craft Your First Tools**: Use ground resources to make basic tools
+   - **Wooden Pickaxe**: 2 Sticks + 3 Twigs → Can mine stone quarries and iron/copper veins
+   - **Wooden Axe**: 2 Sticks + 1 Flint → Can cut down trees and harvest cotton
+   - **Wooden Shovel**: 2 Sticks + 2 Twigs → Can dig clay deposits
+
+3. **Tool Upgrade Path**: 
+   - **Wooden → Stone**: Better durability and efficiency
+   - **Stone → Iron**: Best performance, requires iron plates from smelting
+
+### Tool Efficiency
+- **Wooden Tools**: Slow but accessible early game
+- **Stone Tools**: 50% faster than wooden, more durable
+- **Iron Tools**: 100% faster than wooden, highest durability
+
+### Ground Collection Tips
+- **Respawn Rate**: Ground items respawn slowly over time
+- **Seasonal Variation**: Some items are more common in certain seasons
+- **Terrain Preference**: Different items prefer different terrain types
+- **Collection Range**: Use the same range as mining/building interactions
 
 ---
 
@@ -462,12 +514,16 @@ Electric Path: Reinforced Conveyor + Electrical → Electric Conveyor
 
 ## 🎯 Progression Milestones
 
-### Early Game (Wood & Stone Age)
-- [ ] Build Charcoal Pit
+### Early Game (Ground Collection & Basic Tools)
+- [ ] Collect ground resources (Sticks, Stones, Twigs, Plant Fiber, Flint)
+- [ ] Craft Wooden Pickaxe (first tool)
+- [ ] Craft Wooden Axe for tree cutting
+- [ ] Craft Wooden Shovel for clay digging
+- [ ] Mine basic resources (Wood, Stone, Iron Ore, Clay)
+- [ ] Build Charcoal Pit for fuel production
 - [ ] Establish basic wood processing (Planks → Beams)
-- [ ] Create first Basic Conveyor Belt
 - [ ] Set up Crude Furnace and Stone Anvil
-- [ ] Craft Scythe for wheat harvesting
+- [ ] Upgrade to Stone tools for better efficiency
 
 ### Early-Mid Game (Agricultural Age)
 - [ ] Collect Wheat Seeds from wild patches

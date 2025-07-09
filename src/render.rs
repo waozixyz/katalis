@@ -311,6 +311,24 @@ pub fn draw_world(d: &mut RaylibMode2D<RaylibDrawHandle>, world: &World, camera:
                 }
             }
             
+            // Draw ground items
+            if let Some(ground_item) = &tile.ground_item {
+                // Draw a small colored circle for ground items
+                let item_color = ground_item.resource_type.get_color();
+                let center_x = pos_x + TILE_SIZE / 2;
+                let center_y = pos_y + TILE_SIZE / 2;
+                
+                // Draw a small circle with outline
+                d.draw_circle(center_x, center_y, 4.0, item_color);
+                d.draw_circle_lines(center_x, center_y, 4.0, Color::BLACK);
+                
+                // Draw amount indicator if more than 1
+                if ground_item.amount > 1 {
+                    let text = format!("{}", ground_item.amount);
+                    d.draw_text(&text, center_x - 4, center_y - 12, 10, Color::WHITE);
+                }
+            }
+            
             // Grid lines (subtle) - only if no terrain texture
             if !assets.has_terrain_texture(tile.tile_type) {
                 d.draw_rectangle_lines(pos_x, pos_y, TILE_SIZE, TILE_SIZE, Color::new(255, 255, 255, 20));

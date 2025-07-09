@@ -14,6 +14,13 @@ pub enum ResourceType {
     WheatSeeds,
     Wheat,
     
+    // Ground collectibles
+    Sticks,
+    Stones,
+    Twigs,
+    PlantFiber,
+    Flint,
+    
     // Animal resources
     Egg,
     RawChicken,
@@ -64,6 +71,15 @@ pub enum ResourceType {
     
     // Tools
     Scythe,
+    WoodenPickaxe,
+    StonePickaxe,
+    IronPickaxe,
+    WoodenAxe,
+    StoneAxe,
+    IronAxe,
+    WoodenShovel,
+    StoneShovel,
+    IronShovel,
     
     // Automation components
     BasicConveyorBelt,
@@ -109,6 +125,13 @@ impl ResourceType {
             ResourceType::Water => "Water",
             ResourceType::WheatSeeds => "Wheat Seeds",
             ResourceType::Wheat => "Wheat",
+            
+            // Ground collectibles
+            ResourceType::Sticks => "Sticks",
+            ResourceType::Stones => "Stones",
+            ResourceType::Twigs => "Twigs",
+            ResourceType::PlantFiber => "Plant Fiber",
+            ResourceType::Flint => "Flint",
             
             // Animal resources
             ResourceType::Egg => "Egg",
@@ -160,6 +183,15 @@ impl ResourceType {
             
             // Tools
             ResourceType::Scythe => "Scythe",
+            ResourceType::WoodenPickaxe => "Wooden Pickaxe",
+            ResourceType::StonePickaxe => "Stone Pickaxe",
+            ResourceType::IronPickaxe => "Iron Pickaxe",
+            ResourceType::WoodenAxe => "Wooden Axe",
+            ResourceType::StoneAxe => "Stone Axe",
+            ResourceType::IronAxe => "Iron Axe",
+            ResourceType::WoodenShovel => "Wooden Shovel",
+            ResourceType::StoneShovel => "Stone Shovel",
+            ResourceType::IronShovel => "Iron Shovel",
             
             // Automation
             ResourceType::BasicConveyorBelt => "Basic Conveyor Belt",
@@ -205,6 +237,13 @@ impl ResourceType {
             ResourceType::Water => Color::new(100, 149, 237, 255),
             ResourceType::WheatSeeds => Color::new(255, 215, 0, 255),
             ResourceType::Wheat => Color::new(255, 215, 0, 255),
+            
+            // Ground collectibles
+            ResourceType::Sticks => Color::new(139, 69, 19, 255),
+            ResourceType::Stones => Color::new(128, 128, 128, 255),
+            ResourceType::Twigs => Color::new(101, 67, 33, 255),
+            ResourceType::PlantFiber => Color::new(34, 139, 34, 255),
+            ResourceType::Flint => Color::new(105, 105, 105, 255),
             
             // Animal resources
             ResourceType::Egg => Color::new(255, 248, 220, 255),
@@ -256,6 +295,15 @@ impl ResourceType {
             
             // Tools
             ResourceType::Scythe => Color::new(139, 69, 19, 255),
+            ResourceType::WoodenPickaxe => Color::new(160, 82, 45, 255),
+            ResourceType::StonePickaxe => Color::new(128, 128, 128, 255),
+            ResourceType::IronPickaxe => Color::new(192, 192, 192, 255),
+            ResourceType::WoodenAxe => Color::new(139, 69, 19, 255),
+            ResourceType::StoneAxe => Color::new(105, 105, 105, 255),
+            ResourceType::IronAxe => Color::new(169, 169, 169, 255),
+            ResourceType::WoodenShovel => Color::new(101, 67, 33, 255),
+            ResourceType::StoneShovel => Color::new(128, 128, 128, 255),
+            ResourceType::IronShovel => Color::new(192, 192, 192, 255),
             
             // Automation
             ResourceType::BasicConveyorBelt => Color::BROWN,
@@ -301,6 +349,13 @@ impl ResourceType {
             ResourceType::Water => "icons/water.png",
             ResourceType::WheatSeeds => "icons/wheat_seeds.png",
             ResourceType::Wheat => "icons/wheat.png",
+            
+            // Ground collectibles
+            ResourceType::Sticks => "icons/sticks.png",
+            ResourceType::Stones => "icons/stones.png",
+            ResourceType::Twigs => "icons/twigs.png",
+            ResourceType::PlantFiber => "icons/plant_fiber.png",
+            ResourceType::Flint => "icons/flint.png",
             
             // Animal resources
             ResourceType::Egg => "icons/egg.png",
@@ -352,6 +407,15 @@ impl ResourceType {
             
             // Tools
             ResourceType::Scythe => "icons/scythe.png",
+            ResourceType::WoodenPickaxe => "icons/wooden_pickaxe.png",
+            ResourceType::StonePickaxe => "icons/stone_pickaxe.png",
+            ResourceType::IronPickaxe => "icons/iron_pickaxe.png",
+            ResourceType::WoodenAxe => "icons/wooden_axe.png",
+            ResourceType::StoneAxe => "icons/stone_axe.png",
+            ResourceType::IronAxe => "icons/iron_axe.png",
+            ResourceType::WoodenShovel => "icons/wooden_shovel.png",
+            ResourceType::StoneShovel => "icons/stone_shovel.png",
+            ResourceType::IronShovel => "icons/iron_shovel.png",
             
             // Automation
             ResourceType::BasicConveyorBelt => "icons/basic_conveyor_belt.png",
@@ -391,7 +455,9 @@ impl ResourceType {
             ResourceType::Coal | ResourceType::Clay | ResourceType::CopperOre | 
             ResourceType::Cotton | ResourceType::Water | ResourceType::WheatSeeds | 
             ResourceType::Wheat | ResourceType::Egg | ResourceType::RawChicken | 
-            ResourceType::CookedChicken | ResourceType::ChickenFeathers => 200,
+            ResourceType::CookedChicken | ResourceType::ChickenFeathers |
+            ResourceType::Sticks | ResourceType::Stones | ResourceType::Twigs |
+            ResourceType::PlantFiber | ResourceType::Flint => 200,
             
             // Processed materials - medium stack size
             ResourceType::WoodenPlanks | ResourceType::WoodenBeams | ResourceType::WoodenGears |
@@ -406,7 +472,10 @@ impl ResourceType {
             ResourceType::SteamPipes | ResourceType::PressureValve | ResourceType::PowerCables => 100,
             
             // Tools - low stack size
-            ResourceType::Scythe => 10,
+            ResourceType::Scythe | ResourceType::WoodenPickaxe | ResourceType::StonePickaxe |
+            ResourceType::IronPickaxe | ResourceType::WoodenAxe | ResourceType::StoneAxe |
+            ResourceType::IronAxe | ResourceType::WoodenShovel | ResourceType::StoneShovel |
+            ResourceType::IronShovel => 10,
             
             // Automation - medium stack size
             ResourceType::BasicConveyorBelt | ResourceType::ReinforcedConveyor | 
@@ -529,7 +598,14 @@ impl Inventory {
         slots[6] = InventorySlot::with_resource(ResourceType::Cotton, 15);
         slots[7] = InventorySlot::with_resource(ResourceType::Water, 40);
         slots[8] = InventorySlot::with_resource(ResourceType::WheatSeeds, 10);
-        slots[9] = InventorySlot::with_resource(ResourceType::Wheat, 20); 
+        slots[9] = InventorySlot::with_resource(ResourceType::Wheat, 20);
+        
+        // Add some basic ground collectibles
+        slots[10] = InventorySlot::with_resource(ResourceType::Sticks, 10);
+        slots[11] = InventorySlot::with_resource(ResourceType::Stones, 15);
+        slots[12] = InventorySlot::with_resource(ResourceType::Twigs, 8);
+        slots[13] = InventorySlot::with_resource(ResourceType::PlantFiber, 5);
+        slots[14] = InventorySlot::with_resource(ResourceType::Flint, 3); 
         
         Self { 
             slots,

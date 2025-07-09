@@ -7,6 +7,13 @@ pub struct Tile {
     pub building: Option<BuildingType>,
     pub building_active: bool, // Whether the building is currently crafting/active
     pub is_building_origin: bool, // True only for the top-left tile of a building
+    pub ground_item: Option<GroundItem>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GroundItem {
+    pub resource_type: super::resources::ResourceType,
+    pub amount: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -241,6 +248,7 @@ impl Tile {
             building: None,
             building_active: false,
             is_building_origin: false,
+            ground_item: None,
         }
     }
     
@@ -251,6 +259,7 @@ impl Tile {
             building: None,
             building_active: false,
             is_building_origin: false,
+            ground_item: None,
         }
     }
     
@@ -260,5 +269,28 @@ impl Tile {
     
     pub fn can_place_building(&self) -> bool {
         self.building.is_none() && matches!(self.tile_type, TileType::Grass | TileType::Stone | TileType::Sand)
+    }
+    
+    pub fn has_ground_item(&self) -> bool {
+        self.ground_item.is_some()
+    }
+    
+    pub fn add_ground_item(&mut self, resource_type: super::resources::ResourceType, amount: u32) {
+        if let Some(existing) = &mut self.ground_item {
+            if existing.resource_type == resource_type {
+                existing.amount += amount;
+            } else {
+                // Replace with new item if different type
+                self.ground_item = Some(GroundItem { resource_type, amount });
+            }
+        } else {
+            self.ground_item = Some(GroundItem { resource_type, amount });
+        }
+    }
+    
+    pub fn collect_ground_item(&mut self) -> Option<GroundItem> {
+        let item = self.ground_item;
+        self.ground_item = None;
+        item
     }
 }

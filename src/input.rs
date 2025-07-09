@@ -27,6 +27,17 @@ pub fn handle_input(
             inventory_ui.open_building((origin_x, origin_y), building_type);
             return true; // Handled the click
         }
+        
+        // Check for ground item collection (only if no building was clicked)
+        if world.is_valid_position(tile_x, tile_y) {
+            let distance = player.position.distance_to(mouse_world_pos);
+            if distance <= MINING_RANGE {
+                if let Some(ground_item) = world.collect_ground_item(tile_x, tile_y) {
+                    player.inventory.add_resource(ground_item.resource_type, ground_item.amount);
+                    return true; // Handled the click
+                }
+            }
+        }
     }
     
     // Check for building demolition with right-click hold

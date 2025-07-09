@@ -141,6 +141,9 @@ impl World {
         // Third pass: Generate trees
         self.generate_trees();
         
+        // Fourth pass: Generate ground items
+        self.generate_ground_items();
+        
         self.print_generation_stats();
     }
     
@@ -311,6 +314,79 @@ impl World {
                     
                     let tree = Tree::new(tree_type, tree_x, tree_y, size);
                     self.trees.push(tree);
+                }
+            }
+        }
+    }
+    
+    fn generate_ground_items(&mut self) {
+        use noise::{NoiseFn, Perlin};
+        
+        let stick_noise = Perlin::new(987);
+        let stone_noise = Perlin::new(654);
+        let twig_noise = Perlin::new(321);
+        let fiber_noise = Perlin::new(147);
+        let flint_noise = Perlin::new(258);
+        
+        for x in 0..self.width {
+            for y in 0..self.height {
+                let tile = &mut self.tiles[x][y];
+                
+                // Only spawn ground items on grass and stone, not on buildings or resource veins
+                if !matches!(tile.tile_type, TileType::Grass | TileType::Stone) || 
+                   tile.resource_vein.is_some() || 
+                   tile.building.is_some() {
+                    continue;
+                }
+                
+                let base_x = x as f64 * 0.1;
+                let base_y = y as f64 * 0.1;
+                
+                // Sticks - most common, especially on grass
+                if matches!(tile.tile_type, TileType::Grass) {
+                    let stick_value = stick_noise.get([base_x, base_y]);
+                    if stick_value > 0.3 {
+                        let amount = 1 + ((stick_value * 3.0) as u32).min(3);
+                        tile.add_ground_item(ResourceType::Sticks, amount);
+                        continue; // Only one item per tile
+                    }
+                }
+                
+                // Stones - common on stone terrain, rare on grass
+                let stone_threshold = if matches!(tile.tile_type, TileType::Stone) { 0.2 } else { 0.6 };
+                let stone_value = stone_noise.get([base_x, base_y]);
+                if stone_value > stone_threshold {
+                    let amount = 1 + ((stone_value * 2.0) as u32).min(2);
+                    tile.add_ground_item(ResourceType::Stones, amount);
+                    continue;
+                }
+                
+                // Twigs - less common, mainly on grass
+                if matches!(tile.tile_type, TileType::Grass) {
+                    let twig_value = twig_noise.get([base_x, base_y]);
+                    if twig_value > 0.5 {
+                        let amount = 1 + ((twig_value * 2.0) as u32).min(2);
+                        tile.add_ground_item(ResourceType::Twigs, amount);
+                        continue;
+                    }
+                }
+                
+                // Plant fiber - rare, only on grass
+                if matches!(tile.tile_type, TileType::Grass) {
+                    let fiber_value = fiber_noise.get([base_x, base_y]);
+                    if fiber_value > 0.7 {
+                        tile.add_ground_item(ResourceType::PlantFiber, 1);
+                        continue;
+                    }
+                }
+                
+                // Flint - very rare, only on stone
+                if matches!(tile.tile_type, TileType::Stone) {
+                    let flint_value = flint_noise.get([base_x, base_y]);
+                    if flint_value > 0.8 {
+                        tile.add_ground_item(ResourceType::Flint, 1);
+                        continue;
+                    }
                 }
             }
         }
@@ -799,6 +875,18 @@ impl World {
         self.trees.iter().find(|tree| {
             tree.collides_with_point(Vector2::new(x, y))
         })
+    }
+    
+    pub fn is_valid_position(&self, x: usize, y: usize) -> bool {
+        x < self.width && y < self.height
+    }
+    
+    pub fn collect_ground_item(&mut self, x: usize, y: usize) -> Option<GroundItem> {
+        if let Some(tile) = self.get_tile_mut(x, y) {
+            tile.collect_ground_item()
+        } else {
+            None
+        }
     }
     
     pub fn remove_building(&mut self, origin_x: usize, origin_y: usize) {
