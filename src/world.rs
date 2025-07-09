@@ -1,6 +1,7 @@
 use crate::types::*;
 use raylib::math::Vector2;
 use crate::Player;
+use crate::crafting::CraftingSystem;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
@@ -86,6 +87,7 @@ pub struct World {
     pub width: usize,
     pub height: usize,
     pub building_inventories: HashMap<(usize, usize), BuildingInventory>,
+    pub crafting_system: CraftingSystem,
 }
 
 impl World {
@@ -97,6 +99,7 @@ impl World {
             width, 
             height,
             building_inventories: HashMap::new(),
+            crafting_system: CraftingSystem::new(),
         }
     }
 
@@ -480,10 +483,18 @@ impl World {
             
             // Start next item in queue if any
             if !player.crafting_queue.is_empty() {
-                let next_queued = player.crafting_queue.remove(0);
-                // You'd need to get the recipe again here
-                // This is a simplified version - you might want to store recipes in the queue
-                println!("Starting next queued craft: {}", next_queued.item.get_name());
+                let mut next_queued = player.crafting_queue.remove(0);
+                
+                // Find the recipe for the next item
+                if let Some(recipe) = self.crafting_system.recipes.get(&next_queued.item) {
+                    player.start_crafting(next_queued.item, recipe.clone());
+                    
+                    // If quantity > 1, add the remaining back to the queue
+                    if next_queued.quantity > 1 {
+                        next_queued.quantity -= 1;
+                        player.crafting_queue.insert(0, next_queued);
+                    }
+                }
             }
         }
         

@@ -17,8 +17,7 @@ use camera::update_camera;
 use input::handle_input;
 use render::{draw_world, draw_time_display};
 use assets::AssetManager;
-use crafting::CraftingSystem; // NEW
-use ui::{InventoryUI, PauseMenu, BuildingUI}; // NEW
+use ui::{InventoryUI, PauseMenu, BuildingUI, CraftingQueueUI}; // NEW
 
 const SCREEN_WIDTH: i32 = 1200;
 const SCREEN_HEIGHT: i32 = 800;
@@ -64,11 +63,11 @@ fn main() {
         println!("Warning: Could not load player spritesheet, using fallback graphics");
     }
 
-    // NEW: Initialize crafting and UI systems
-    let crafting_system = CraftingSystem::new();
+    // NEW: Initialize UI systems
     let mut inventory_ui = InventoryUI::new();
     let mut pause_menu = PauseMenu::new();
     let mut building_ui = BuildingUI::new();
+    let crafting_queue_ui = CraftingQueueUI::new();
 
     let mut camera = Camera2D {
         target: game_player.position,
@@ -147,7 +146,7 @@ fn main() {
             } else {
                 let building_clicked = handle_input(&mut world, &camera, &rl, &mut game_player, &mut building_ui, &mut inventory_ui);
                 if !building_clicked {
-                    if let Some(new_placement) = inventory_ui.handle_mouse_input(&rl, &mut game_player, &crafting_system) {
+                    if let Some(new_placement) = inventory_ui.handle_mouse_input(&rl, &mut game_player, &world.crafting_system) {
                         placement_state = Some(new_placement);
                     }
                 }
@@ -162,7 +161,7 @@ fn main() {
         
         // Handle inventory UI mouse input when open
         if inventory_ui.is_open {
-            if let Some(new_placement) = inventory_ui.handle_mouse_input(&rl, &mut game_player, &crafting_system) {
+            if let Some(new_placement) = inventory_ui.handle_mouse_input(&rl, &mut game_player, &world.crafting_system) {
                 placement_state = Some(new_placement);
             }
         }
@@ -325,7 +324,7 @@ fn main() {
         }
         
         // Draw inventory UI (supports both crafting and building modes)
-        inventory_ui.draw_with_world(&mut d, &world, &game_player.inventory, &crafting_system, &assets, mouse_screen_pos, &game_player);
+        inventory_ui.draw_with_world(&mut d, &world, &game_player.inventory, &world.crafting_system, &assets, mouse_screen_pos, &game_player);
         
         // Draw building UI (deprecated - for compatibility)
         if !inventory_ui.is_open {
@@ -339,6 +338,9 @@ fn main() {
         
         // Always draw quick slot bar at bottom (even when inventory is open)
         draw_quick_slot_bar(&mut d, &game_player, &assets);
+        
+        // Always draw crafting queue UI (persists even when inventory is closed)
+        crafting_queue_ui.draw(&mut d, &game_player, &assets);
         
         draw_time_display(&mut d, &world.game_time);
         
