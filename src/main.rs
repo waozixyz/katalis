@@ -17,7 +17,7 @@ use camera::update_camera;
 use input::handle_input;
 use render::{draw_world, draw_time_display};
 use assets::AssetManager;
-use ui::{InventoryUI, PauseMenu, BuildingUI, CraftingQueueUI}; // NEW
+use ui::{InventoryUI, PauseMenu, BuildingUI, CraftingQueueUI};
 
 const SCREEN_WIDTH: i32 = 1200;
 const SCREEN_HEIGHT: i32 = 800;
