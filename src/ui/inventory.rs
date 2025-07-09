@@ -373,7 +373,7 @@ impl InventoryUI {
         
         for (i, item) in items.iter().enumerate() {
             let grid_x = x + 15 + ((i % items_per_row) * (item_size + item_spacing) as usize) as i32;
-            let grid_y = grid_start_y + ((i / items_per_row) * (item_size + item_spacing + 25) as usize) as i32;
+            let grid_y = grid_start_y + ((i / items_per_row) * (item_size + item_spacing + 10) as usize) as i32;
             
             let craft_status = crafting_system.get_craft_status(item, inventory);
             
