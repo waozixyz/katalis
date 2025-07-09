@@ -168,7 +168,7 @@ fn main() {
         
         // Update world and collect resources only if not paused
         if !pause_menu.is_open {
-            let (wood_gained, stone_gained, iron_gained, coal_gained, clay_gained, copper_gained, cotton_gained) = world.update(delta_time, &mut game_player);
+            let (wood_gained, stone_gained, iron_gained, coal_gained, clay_gained, copper_gained, cotton_gained, eggs_gained) = world.update(delta_time, &mut game_player);
             
             // Add gained resources to inventory
             if wood_gained > 0 { game_player.inventory.add_resource(ResourceType::Wood, wood_gained); }
@@ -178,6 +178,7 @@ fn main() {
             if clay_gained > 0 { game_player.inventory.add_resource(ResourceType::Clay, clay_gained); }
             if copper_gained > 0 { game_player.inventory.add_resource(ResourceType::CopperOre, copper_gained); }
             if cotton_gained > 0 { game_player.inventory.add_resource(ResourceType::Cotton, cotton_gained); }
+            if eggs_gained > 0 { game_player.inventory.add_resource(ResourceType::Egg, eggs_gained); }
             
             // Handle completed demolitions
             if let Some(completed_demolition) = game_player.update_demolition(delta_time) {

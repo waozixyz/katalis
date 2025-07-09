@@ -88,6 +88,7 @@ pub struct World {
     pub height: usize,
     pub building_inventories: HashMap<(usize, usize), BuildingInventory>,
     pub crafting_system: CraftingSystem,
+    pub animal_manager: AnimalManager,
 }
 
 impl World {
@@ -100,6 +101,7 @@ impl World {
             height,
             building_inventories: HashMap::new(),
             crafting_system: CraftingSystem::new(),
+            animal_manager: AnimalManager::new(),
         }
     }
 
@@ -333,14 +335,15 @@ impl World {
         println!("  Resource distribution: {:?}", resource_counts);
     }
     
-    pub fn update(&mut self, delta_time: f32, player: &mut Player) -> (u32, u32, u32, u32, u32, u32, u32) { // Returns (wood, stone, iron, coal, clay, copper, cotton)
+    pub fn update(&mut self, delta_time: f32, player: &mut Player) -> (u32, u32, u32, u32, u32, u32, u32, u32) { // Returns (wood, stone, iron, coal, clay, copper, cotton, eggs)
         let mut wood_gained = 0;
         let mut stone_gained = 0;
         let mut iron_gained = 0;
         let mut coal_gained = 0;
         let mut clay_gained = 0;
         let mut copper_gained = 0; 
-        let mut cotton_gained = 0; 
+        let mut cotton_gained = 0;
+        let mut eggs_gained = 0; 
         
         // Update game time
         self.game_time.update(delta_time);
@@ -448,6 +451,9 @@ impl World {
                 ResourceType::ClothStrips => {
                     player.inventory.add_resource(ResourceType::ClothStrips, *output_amount);
                 }
+                ResourceType::CookedChicken => {
+                    player.inventory.add_resource(ResourceType::CookedChicken, *output_amount);
+                }
                 // Structures/Buildings
                 ResourceType::CharcoalPit => {
                     player.inventory.add_resource(ResourceType::CharcoalPit, *output_amount);
@@ -532,7 +538,18 @@ impl World {
         // Remove fully faded stumps
         self.trees.retain(|tree| !tree.should_remove());
         
-        (wood_gained, stone_gained, iron_gained, coal_gained, clay_gained, copper_gained, cotton_gained)
+        // Update animals
+        let animal_drops = self.animal_manager.update(delta_time, player.position, self.width, self.height);
+        for (resource_type, amount) in animal_drops {
+            match resource_type {
+                ResourceType::Egg => eggs_gained += amount,
+                ResourceType::RawChicken => { player.inventory.add_resource(ResourceType::RawChicken, amount); },
+                ResourceType::ChickenFeathers => { player.inventory.add_resource(ResourceType::ChickenFeathers, amount); },
+                _ => {}
+            }
+        }
+        
+        (wood_gained, stone_gained, iron_gained, coal_gained, clay_gained, copper_gained, cotton_gained, eggs_gained)
     }
     
     fn cut_tree_at_position(&mut self, target_pos: Vector2) -> u32 {
@@ -637,6 +654,22 @@ impl World {
                 player.start_mining(mining_action);
                 return;
             }
+        }
+        
+        // Try to collect eggs
+        if let Some((resource_type, amount)) = self.animal_manager.try_collect_egg(target_pos) {
+            player.inventory.add_resource(resource_type, amount);
+            println!("Collected {} {}", amount, resource_type.get_name());
+            return;
+        }
+        
+        // Try to kill animals
+        if let Some(drops) = self.animal_manager.try_kill_animal(target_pos) {
+            for (resource_type, amount) in drops {
+                player.inventory.add_resource(resource_type, amount);
+                println!("Killed animal, got {} {}", amount, resource_type.get_name());
+            }
+            return;
         }
     }
     

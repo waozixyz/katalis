@@ -3,6 +3,7 @@ pub mod time;
 pub mod trees;
 pub mod terrain;
 pub mod tools; // NEW
+pub mod animals;
 
 // Re-export commonly used types
 pub use resources::*;
@@ -10,6 +11,7 @@ pub use time::*;
 pub use trees::*;
 pub use terrain::*;
 pub use tools::*; // NEW
+pub use animals::*;
 
 // Keep shared constants here
 pub const TILE_SIZE: i32 = 32;

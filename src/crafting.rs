@@ -9,6 +9,7 @@ pub enum CraftingCategory {
     CopperWorking,
     Textiles,
     FoodProduction,
+    AnimalProducts,
     SteamSystems,
     Structures,
     Automation,
@@ -55,6 +56,9 @@ pub enum CraftableItem {
     Dough,
     Bread,
     Scythe,
+    
+    // Animal products
+    CookedChicken,
     
     // Steam systems
     WaterBucket,
@@ -134,6 +138,7 @@ impl CraftingCategory {
             CraftingCategory::CopperWorking => "Copper",
             CraftingCategory::Textiles => "Textiles",
             CraftingCategory::FoodProduction => "Food",
+            CraftingCategory::AnimalProducts => "Animals",
             CraftingCategory::SteamSystems => "Steam",
             CraftingCategory::Structures => "Buildings",
             CraftingCategory::Automation => "Automation",
@@ -181,6 +186,9 @@ impl CraftingCategory {
                 CraftableItem::Dough,
                 CraftableItem::Bread,
                 CraftableItem::Scythe,
+            ],
+            CraftingCategory::AnimalProducts => vec![
+                CraftableItem::CookedChicken,
             ],
             CraftingCategory::SteamSystems => vec![
                 CraftableItem::WaterBucket,
@@ -242,6 +250,8 @@ impl CraftableItem {
             CraftableItem::Flour | CraftableItem::Dough | CraftableItem::Bread | 
             CraftableItem::Scythe => CraftingCategory::FoodProduction,
             
+            CraftableItem::CookedChicken => CraftingCategory::AnimalProducts,
+            
             CraftableItem::WaterBucket | CraftableItem::SteamPipes | CraftableItem::PressureValve | 
             CraftableItem::SteamBoiler | CraftableItem::SteamDistributionHub => CraftingCategory::SteamSystems,
             
@@ -293,6 +303,8 @@ impl CraftableItem {
             CraftableItem::Dough => "Dough",
             CraftableItem::Bread => "Bread",
             CraftableItem::Scythe => "Scythe",
+            
+            CraftableItem::CookedChicken => "Cooked Chicken",
             
             CraftableItem::WaterBucket => "Water Bucket",
             CraftableItem::SteamPipes => "Steam Pipes",
@@ -362,6 +374,8 @@ impl CraftableItem {
             CraftableItem::Dough => "icons/dough.png",
             CraftableItem::Bread => "icons/bread.png",
             CraftableItem::Scythe => "icons/scythe.png",
+            
+            CraftableItem::CookedChicken => "icons/cooked_chicken.png",
             
             CraftableItem::WaterBucket => "icons/water_bucket.png",
             CraftableItem::SteamPipes => "icons/steam_pipes.png",
@@ -633,6 +647,15 @@ impl CraftingSystem {
             output: (ResourceType::Scythe, 1),
             crafting_time: 4.0,
             requires_structure: Some(StructureType::Manual),
+        });
+        
+        // === ANIMAL PRODUCTS ===
+        // Cooked Chicken (requires Stone Oven + Raw Chicken)
+        recipes.insert(CraftableItem::CookedChicken, CraftingRecipe {
+            inputs: vec![(ResourceType::RawChicken, 1)],
+            output: (ResourceType::CookedChicken, 1),
+            crafting_time: 5.0,
+            requires_structure: Some(StructureType::StoneOven),
         });
         
         // === STEAM SYSTEMS ===

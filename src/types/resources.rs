@@ -13,7 +13,13 @@ pub enum ResourceType {
     Water,
     WheatSeeds,
     Wheat,
-        
+    
+    // Animal resources
+    Egg,
+    RawChicken,
+    CookedChicken,
+    ChickenFeathers,
+    
     // Processed materials - Wood
     WoodenPlanks,
     WoodenBeams,
@@ -103,6 +109,12 @@ impl ResourceType {
             ResourceType::Water => "Water",
             ResourceType::WheatSeeds => "Wheat Seeds",
             ResourceType::Wheat => "Wheat",
+            
+            // Animal resources
+            ResourceType::Egg => "Egg",
+            ResourceType::RawChicken => "Raw Chicken",
+            ResourceType::CookedChicken => "Cooked Chicken",
+            ResourceType::ChickenFeathers => "Chicken Feathers",
             
             // Wood products
             ResourceType::WoodenPlanks => "Wooden Planks",
@@ -194,6 +206,12 @@ impl ResourceType {
             ResourceType::WheatSeeds => Color::new(255, 215, 0, 255),
             ResourceType::Wheat => Color::new(255, 215, 0, 255),
             
+            // Animal resources
+            ResourceType::Egg => Color::new(255, 248, 220, 255),
+            ResourceType::RawChicken => Color::new(255, 192, 203, 255),
+            ResourceType::CookedChicken => Color::new(160, 82, 45, 255),
+            ResourceType::ChickenFeathers => Color::new(245, 245, 220, 255),
+            
             // Wood products
             ResourceType::WoodenPlanks => Color::new(160, 82, 45, 255),
             ResourceType::WoodenBeams => Color::new(139, 69, 19, 255),
@@ -284,6 +302,12 @@ impl ResourceType {
             ResourceType::WheatSeeds => "icons/wheat_seeds.png",
             ResourceType::Wheat => "icons/wheat.png",
             
+            // Animal resources
+            ResourceType::Egg => "icons/egg.png",
+            ResourceType::RawChicken => "icons/raw_chicken.png",
+            ResourceType::CookedChicken => "icons/cooked_chicken.png",
+            ResourceType::ChickenFeathers => "icons/chicken_feathers.png",
+            
             // Wood products
             ResourceType::WoodenPlanks => "icons/wooden_planks.png",
             ResourceType::WoodenBeams => "icons/wooden_beams.png",
@@ -366,7 +390,8 @@ impl ResourceType {
             ResourceType::Wood | ResourceType::Stone | ResourceType::IronOre | 
             ResourceType::Coal | ResourceType::Clay | ResourceType::CopperOre | 
             ResourceType::Cotton | ResourceType::Water | ResourceType::WheatSeeds | 
-            ResourceType::Wheat => 200,
+            ResourceType::Wheat | ResourceType::Egg | ResourceType::RawChicken | 
+            ResourceType::CookedChicken | ResourceType::ChickenFeathers => 200,
             
             // Processed materials - medium stack size
             ResourceType::WoodenPlanks | ResourceType::WoodenBeams | ResourceType::WoodenGears |

@@ -325,6 +325,60 @@ pub fn draw_world(d: &mut RaylibMode2D<RaylibDrawHandle>, world: &World, camera:
         tree.draw(d);
     }
     
+    // Draw animals
+    let visible_animals = world.animal_manager.get_animals_in_bounds(min_bound, max_bound);
+    for animal in visible_animals {
+        // Draw simple colored rectangle for now (can be replaced with sprites later)
+        let rect = Rectangle::new(
+            animal.position.x - animal.size / 2.0,
+            animal.position.y - animal.size / 2.0,
+            animal.size,
+            animal.size
+        );
+        d.draw_rectangle_rec(rect, animal.get_color());
+        
+        // Draw a simple outline
+        d.draw_rectangle_lines_ex(rect, 1.0, Color::BLACK);
+        
+        // Show health bar if damaged
+        if animal.health < animal.max_health {
+            let health_bar_width = animal.size;
+            let health_bar_height = 3.0;
+            let health_percent = animal.health / animal.max_health;
+            
+            // Background (red)
+            d.draw_rectangle(
+                (animal.position.x - health_bar_width / 2.0) as i32,
+                (animal.position.y - animal.size / 2.0 - 8.0) as i32,
+                health_bar_width as i32,
+                health_bar_height as i32,
+                Color::RED
+            );
+            
+            // Health (green)
+            d.draw_rectangle(
+                (animal.position.x - health_bar_width / 2.0) as i32,
+                (animal.position.y - animal.size / 2.0 - 8.0) as i32,
+                (health_bar_width * health_percent) as i32,
+                health_bar_height as i32,
+                Color::GREEN
+            );
+        }
+    }
+    
+    // Draw dropped eggs
+    let visible_eggs = world.animal_manager.get_eggs_in_bounds(min_bound, max_bound);
+    for egg in visible_eggs {
+        let rect = Rectangle::new(
+            egg.position.x - 8.0,
+            egg.position.y - 8.0,
+            16.0,
+            16.0
+        );
+        d.draw_rectangle_rec(rect, Color::new(255, 248, 220, 255)); // Light yellow
+        d.draw_rectangle_lines_ex(rect, 1.0, Color::new(200, 200, 150, 255)); // Darker yellow border
+    }
+    
     // Apply day/night overlay
     let light_level = world.game_time.get_light_level();
     if light_level < 1.0 {

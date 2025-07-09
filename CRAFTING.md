@@ -31,6 +31,9 @@ Fiber processing for cloth production.
 ### 🌾 Food Production
 Agriculture, farming, and food processing for sustenance.
 
+### 🐔 Animal Products
+Hunting, animal husbandry, and processing animal resources.
+
 ### 🔥 Steam Systems
 Steam power generation and steam-powered machinery.
 
@@ -97,6 +100,13 @@ Wheat Seeds → Wheat Farm → Wheat (seasonal harvest)
 Wheat → Windmill → Flour
 Flour + Water → Manual → Dough
 Dough → Stone Oven → Bread
+***
+
+### 🐔 Animal Products Chain
+***
+Wild Chickens → Hunting → Raw Chicken + Feathers
+Wild Chickens → Egg Laying → Eggs (collected manually)
+Raw Chicken → Stone Oven → Cooked Chicken
 ***
 
 ### 🔥 Steam Power Chain
@@ -206,6 +216,11 @@ Electric Path: Reinforced Conveyor + Electrical → Electric Conveyor
 | **Bread** | Dough (1) | Bread (2) | 8.0s | Stone Oven |
 | **Scythe** | Wood (3) + Metal Rods (2) + Iron Plates (1) | Scythe (1) | 4.0s | Manual |
 
+### 🐔 Animal Products
+| Item | Inputs | Output | Time | Structure |
+|------|--------|--------|------|-----------|
+| **Cooked Chicken** | Raw Chicken (1) | Cooked Chicken (1) | 5.0s | Stone Oven |
+
 ### 🔥 Steam Systems
 | Item | Inputs | Output | Time | Structure |
 |------|--------|--------|------|-----------|
@@ -260,6 +275,11 @@ Electric Path: Reinforced Conveyor + Electrical → Electric Conveyor
 - **Wheat Seeds**: From wild wheat patches (manual harvest)
 - **Wheat**: From Wheat Farms (using Scythe, seasonal)
 
+### Animal Resources
+- **Egg**: From wild chickens (collected manually, spawns every 30 seconds)
+- **Raw Chicken**: From killed wild chickens (1 per chicken)
+- **Chicken Feathers**: From killed wild chickens (2-4 per chicken)
+
 ### Mining Yields
 | Resource | Yield per Action | Tool Required |
 |----------|------------------|---------------|
@@ -273,6 +293,9 @@ Electric Path: Reinforced Conveyor + Electrical → Electric Conveyor
 | Water | 10 | Water Bucket |
 | Wheat Seeds | 2-3 | Manual |
 | Wheat | 8-12 (seasonal harvest) | Scythe |
+| Egg | 1 | Manual (from wild chickens) |
+| Raw Chicken | 1 | Manual (kill wild chicken) |
+| Chicken Feathers | 2-4 | Manual (kill wild chicken) |
 
 ---
 
@@ -283,9 +306,17 @@ Electric Path: Reinforced Conveyor + Electrical → Electric Conveyor
 2. **Resource Planning**: Mine extra stone and clay early for building construction
 3. **Wood Processing**: Set up wooden plank production early for conveyor belts
 4. **Food Security**: Establish wheat farming and bread production for sustenance
-5. **Dual Metal Production**: Run iron and copper processing in parallel
-6. **Queue Management**: Use the crafting queue to batch produce items
-7. **Location Strategy**: Place buildings near resource sources to minimize transport
+5. **Animal Hunting**: Wild chickens provide renewable protein and crafting materials
+6. **Dual Metal Production**: Run iron and copper processing in parallel
+7. **Queue Management**: Use the crafting queue to batch produce items
+8. **Location Strategy**: Place buildings near resource sources to minimize transport
+
+### Animal Management Tips
+- **Egg Collection**: Wild chickens lay eggs every 30 seconds - collect them regularly
+- **Chicken Behavior**: Chickens will flee when you approach, move slowly to avoid scaring them
+- **Sustainable Hunting**: Don't kill all chickens in an area - they respawn slowly
+- **Cooked vs Raw**: Cooked chicken provides better nutrition than raw meat
+- **Feather Uses**: Chicken feathers can be used for future crafting recipes
 
 ### Optimal Build Order
 1. **Charcoal Pit** - Essential for fuel production

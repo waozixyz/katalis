@@ -437,6 +437,7 @@ impl InventoryUI {
                     CraftingCategory::CopperWorking => Color::new(184, 115, 51, 255),
                     CraftingCategory::Textiles => Color::BEIGE,
                     CraftingCategory::FoodProduction => Color::new(255, 215, 0, 255),
+                    CraftingCategory::AnimalProducts => Color::PINK,
                     CraftingCategory::SteamSystems => Color::new(128, 128, 128, 255),
                     CraftingCategory::Structures => Color::DARKGRAY,
                     CraftingCategory::Automation => Color::BLUE,
