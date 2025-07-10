@@ -16,7 +16,7 @@ pub enum ResourceType {
     
     // Ground collectibles
     Sticks,
-    Stones,
+    Rocks,
     Twigs,
     PlantFiber,
     Flint,
@@ -80,6 +80,9 @@ pub enum ResourceType {
     WoodenShovel,
     StoneShovel,
     IronShovel,
+    WoodenSword,
+    StoneSword,
+    IronSword,
     
     // Automation components
     BasicConveyorBelt,
@@ -89,6 +92,7 @@ pub enum ResourceType {
     PowerCables,
     
     // Buildings/Structures
+    Campfire,
     CharcoalPit,
     CrudeFurnace,
     BloomeryFurnace,
@@ -128,7 +132,7 @@ impl ResourceType {
             
             // Ground collectibles
             ResourceType::Sticks => "Sticks",
-            ResourceType::Stones => "Stones",
+            ResourceType::Rocks => "Rocks",
             ResourceType::Twigs => "Twigs",
             ResourceType::PlantFiber => "Plant Fiber",
             ResourceType::Flint => "Flint",
@@ -192,6 +196,9 @@ impl ResourceType {
             ResourceType::WoodenShovel => "Wooden Shovel",
             ResourceType::StoneShovel => "Stone Shovel",
             ResourceType::IronShovel => "Iron Shovel",
+            ResourceType::WoodenSword => "Wooden Sword",
+            ResourceType::StoneSword => "Stone Sword",
+            ResourceType::IronSword => "Iron Sword",
             
             // Automation
             ResourceType::BasicConveyorBelt => "Basic Conveyor Belt",
@@ -201,6 +208,7 @@ impl ResourceType {
             ResourceType::PowerCables => "Power Cables",
             
             // Buildings
+            ResourceType::Campfire => "Campfire",
             ResourceType::CharcoalPit => "Charcoal Pit",
             ResourceType::CrudeFurnace => "Crude Furnace",
             ResourceType::BloomeryFurnace => "Bloomery Furnace",
@@ -240,7 +248,7 @@ impl ResourceType {
             
             // Ground collectibles
             ResourceType::Sticks => Color::new(139, 69, 19, 255),
-            ResourceType::Stones => Color::new(128, 128, 128, 255),
+            ResourceType::Rocks => Color::new(128, 128, 128, 255),
             ResourceType::Twigs => Color::new(101, 67, 33, 255),
             ResourceType::PlantFiber => Color::new(34, 139, 34, 255),
             ResourceType::Flint => Color::new(105, 105, 105, 255),
@@ -304,6 +312,9 @@ impl ResourceType {
             ResourceType::WoodenShovel => Color::new(101, 67, 33, 255),
             ResourceType::StoneShovel => Color::new(128, 128, 128, 255),
             ResourceType::IronShovel => Color::new(192, 192, 192, 255),
+            ResourceType::WoodenSword => Color::new(139, 69, 19, 255),
+            ResourceType::StoneSword => Color::new(105, 105, 105, 255),
+            ResourceType::IronSword => Color::new(169, 169, 169, 255),
             
             // Automation
             ResourceType::BasicConveyorBelt => Color::BROWN,
@@ -313,6 +324,7 @@ impl ResourceType {
             ResourceType::PowerCables => Color::new(255, 140, 0, 255),
             
             // Buildings
+            ResourceType::Campfire => Color::new(255, 140, 0, 255),
             ResourceType::CharcoalPit => Color::new(101, 67, 33, 255),
             ResourceType::CrudeFurnace => Color::new(139, 69, 19, 255),
             ResourceType::BloomeryFurnace => Color::new(139, 69, 19, 255),
@@ -352,7 +364,7 @@ impl ResourceType {
             
             // Ground collectibles
             ResourceType::Sticks => "icons/sticks.png",
-            ResourceType::Stones => "icons/stones.png",
+            ResourceType::Rocks => "icons/rocks.png",
             ResourceType::Twigs => "icons/twigs.png",
             ResourceType::PlantFiber => "icons/plant_fiber.png",
             ResourceType::Flint => "icons/flint.png",
@@ -416,6 +428,9 @@ impl ResourceType {
             ResourceType::WoodenShovel => "icons/wooden_shovel.png",
             ResourceType::StoneShovel => "icons/stone_shovel.png",
             ResourceType::IronShovel => "icons/iron_shovel.png",
+            ResourceType::WoodenSword => "icons/wooden_sword.png",
+            ResourceType::StoneSword => "icons/stone_sword.png",
+            ResourceType::IronSword => "icons/iron_sword.png",
             
             // Automation
             ResourceType::BasicConveyorBelt => "icons/basic_conveyor_belt.png",
@@ -425,6 +440,7 @@ impl ResourceType {
             ResourceType::PowerCables => "icons/power_cables.png",
             
             // Buildings
+            ResourceType::Campfire => "icons/campfire.png",
             ResourceType::CharcoalPit => "icons/charcoal_pit.png",
             ResourceType::CrudeFurnace => "icons/crude_furnace.png",
             ResourceType::BloomeryFurnace => "icons/bloomery_furnace.png",
@@ -456,7 +472,7 @@ impl ResourceType {
             ResourceType::Cotton | ResourceType::Water | ResourceType::WheatSeeds | 
             ResourceType::Wheat | ResourceType::Egg | ResourceType::RawChicken | 
             ResourceType::CookedChicken | ResourceType::ChickenFeathers |
-            ResourceType::Sticks | ResourceType::Stones | ResourceType::Twigs |
+            ResourceType::Sticks | ResourceType::Rocks | ResourceType::Twigs |
             ResourceType::PlantFiber | ResourceType::Flint => 200,
             
             // Processed materials - medium stack size
@@ -475,15 +491,16 @@ impl ResourceType {
             ResourceType::Scythe | ResourceType::WoodenPickaxe | ResourceType::StonePickaxe |
             ResourceType::IronPickaxe | ResourceType::WoodenAxe | ResourceType::StoneAxe |
             ResourceType::IronAxe | ResourceType::WoodenShovel | ResourceType::StoneShovel |
-            ResourceType::IronShovel => 10,
+            ResourceType::IronShovel | ResourceType::WoodenSword | ResourceType::StoneSword |
+            ResourceType::IronSword => 10,
             
             // Automation - medium stack size
             ResourceType::BasicConveyorBelt | ResourceType::ReinforcedConveyor | 
             ResourceType::SteamConveyor | ResourceType::ElectricConveyor | ResourceType::ConveyorBelt => 50,
             
             // Small buildings - low stack size
-            ResourceType::CharcoalPit | ResourceType::CrudeFurnace | ResourceType::StoneAnvil | 
-            ResourceType::SpinningWheel | ResourceType::WaterPump => 5,
+            ResourceType::Campfire | ResourceType::CharcoalPit | ResourceType::CrudeFurnace | 
+            ResourceType::StoneAnvil | ResourceType::SpinningWheel | ResourceType::WaterPump => 5,
             
             // Medium buildings - very low stack size
             ResourceType::BloomeryFurnace | ResourceType::WeavingMachine | ResourceType::AdvancedForge |
@@ -498,15 +515,38 @@ impl ResourceType {
     
     pub fn is_building(&self) -> bool {
         matches!(self, 
-            ResourceType::CharcoalPit | ResourceType::CrudeFurnace | ResourceType::BloomeryFurnace | 
-            ResourceType::StoneAnvil | ResourceType::SpinningWheel | ResourceType::WeavingMachine | 
-            ResourceType::AdvancedForge | ResourceType::WheatFarm | ResourceType::Windmill | 
-            ResourceType::WaterMill | ResourceType::StoneOven | ResourceType::GrainSilo | 
-            ResourceType::SteamBoiler | ResourceType::SteamDistributionHub | ResourceType::WaterPump | 
-            ResourceType::SteamPump | ResourceType::SteamHammer | ResourceType::SortingMachine | 
-            ResourceType::SteamEngine | ResourceType::ConveyorBelt | ResourceType::BasicConveyorBelt |
-            ResourceType::ReinforcedConveyor | ResourceType::SteamConveyor | ResourceType::ElectricConveyor
+            ResourceType::Campfire | ResourceType::CharcoalPit | ResourceType::CrudeFurnace | 
+            ResourceType::BloomeryFurnace | ResourceType::StoneAnvil | ResourceType::SpinningWheel | 
+            ResourceType::WeavingMachine | ResourceType::AdvancedForge | ResourceType::WheatFarm | 
+            ResourceType::Windmill | ResourceType::WaterMill | ResourceType::StoneOven | 
+            ResourceType::GrainSilo | ResourceType::SteamBoiler | ResourceType::SteamDistributionHub | 
+            ResourceType::WaterPump | ResourceType::SteamPump | ResourceType::SteamHammer | 
+            ResourceType::SortingMachine | ResourceType::SteamEngine | ResourceType::ConveyorBelt | 
+            ResourceType::BasicConveyorBelt | ResourceType::ReinforcedConveyor | 
+            ResourceType::SteamConveyor | ResourceType::ElectricConveyor
         )
+    }
+    
+    pub fn get_ground_item_spritesheet_info(&self) -> Option<(u32, u32, u32)> {
+        // Returns (frame_width, frame_height, frame_count)
+        match self {
+            ResourceType::Flint => Some((64, 64, 4)),      // 4 frames in 1 row
+            ResourceType::Sticks => Some((64, 64, 9)),     // 3x3 grid
+            ResourceType::Rocks => Some((64, 64, 9)),     // 3x3 grid
+            ResourceType::Twigs => Some((64, 64, 4)),      // First row 3 frames + bundle frame
+            _ => None,
+        }
+    }
+    
+    pub fn get_ground_item_spritesheet_layout(&self) -> Option<(u32, u32)> {
+        // Returns (columns, rows)
+        match self {
+            ResourceType::Flint => Some((4, 1)),
+            ResourceType::Sticks => Some((3, 3)),
+            ResourceType::Rocks => Some((3, 3)),
+            ResourceType::Twigs => Some((3, 2)),  // 3 columns, 2 rows (but only using first 3 + 1 bundle)
+            _ => None,
+        }
     }
 }
 
@@ -588,24 +628,8 @@ impl Inventory {
         let slot_count = 100; // Expanded from 48 to 100 for future expansion
         let mut slots = vec![InventorySlot::new(); slot_count];
         
-        // Add starting resources to first few slots for testing
-        slots[0] = InventorySlot::with_resource(ResourceType::Wood, 50);
-        slots[1] = InventorySlot::with_resource(ResourceType::Stone, 100);
-        slots[2] = InventorySlot::with_resource(ResourceType::Clay, 25);
-        slots[3] = InventorySlot::with_resource(ResourceType::IronOre, 30);
-        slots[4] = InventorySlot::with_resource(ResourceType::Coal, 20);
-        slots[5] = InventorySlot::with_resource(ResourceType::CopperOre, 25);
-        slots[6] = InventorySlot::with_resource(ResourceType::Cotton, 15);
-        slots[7] = InventorySlot::with_resource(ResourceType::Water, 40);
-        slots[8] = InventorySlot::with_resource(ResourceType::WheatSeeds, 10);
-        slots[9] = InventorySlot::with_resource(ResourceType::Wheat, 20);
-        
-        // Add some basic ground collectibles
-        slots[10] = InventorySlot::with_resource(ResourceType::Sticks, 10);
-        slots[11] = InventorySlot::with_resource(ResourceType::Stones, 15);
-        slots[12] = InventorySlot::with_resource(ResourceType::Twigs, 8);
-        slots[13] = InventorySlot::with_resource(ResourceType::PlantFiber, 5);
-        slots[14] = InventorySlot::with_resource(ResourceType::Flint, 3); 
+        // Start with completely empty inventory - player must collect everything
+        // No starting resources - survival from scratch! 
         
         Self { 
             slots,

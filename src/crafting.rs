@@ -1,18 +1,19 @@
 use crate::types::*;
+use crate::world::World;
+use raylib::prelude::*;
 use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CraftingCategory {
-    BasicMaterials,
-    Woodworking,
-    Metallurgy,
-    CopperWorking,
+    Tools,
+    Materials,
+    Metals,
     Textiles,
-    FoodProduction,
-    AnimalProducts,
-    SteamSystems,
-    Structures,
+    Food,
+    Power,
+    Buildings,
     Automation,
+    Consumables,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -67,6 +68,9 @@ pub enum CraftableItem {
     WoodenShovel,
     StoneShovel,
     IronShovel,
+    WoodenSword,
+    StoneSword,
+    IronSword,
     
     // Animal products
     CookedChicken,
@@ -79,6 +83,7 @@ pub enum CraftableItem {
     SteamDistributionHub,
     
     // Structures
+    Campfire,
     CharcoalPit,
     CrudeFurnace,
     BloomeryFurnace,
@@ -118,6 +123,7 @@ pub struct CraftingRecipe {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StructureType {
+    Campfire,
     CharcoalPit,
     CrudeFurnace,
     BloomeryFurnace,
@@ -143,32 +149,51 @@ pub enum StructureType {
 impl CraftingCategory {
     pub fn get_name(&self) -> &'static str {
         match self {
-            CraftingCategory::BasicMaterials => "Basic",
-            CraftingCategory::Woodworking => "Wood",
-            CraftingCategory::Metallurgy => "Metal",
-            CraftingCategory::CopperWorking => "Copper",
+            CraftingCategory::Tools => "Tools",
+            CraftingCategory::Materials => "Materials",
+            CraftingCategory::Metals => "Metals",
             CraftingCategory::Textiles => "Textiles",
-            CraftingCategory::FoodProduction => "Food",
-            CraftingCategory::AnimalProducts => "Animals",
-            CraftingCategory::SteamSystems => "Steam",
-            CraftingCategory::Structures => "Buildings",
+            CraftingCategory::Food => "Food",
+            CraftingCategory::Power => "Power",
+            CraftingCategory::Buildings => "Buildings",
             CraftingCategory::Automation => "Automation",
+            CraftingCategory::Consumables => "Consumables",
         }
     }
     
     pub fn get_items(&self) -> Vec<CraftableItem> {
         match self {
-            CraftingCategory::BasicMaterials => vec![
-                CraftableItem::Charcoal,
+            CraftingCategory::Tools => vec![
+                // Basic wooden tools (available from start)
+                CraftableItem::WoodenSword,
+                CraftableItem::WoodenPickaxe,
+                CraftableItem::WoodenAxe,
+                CraftableItem::WoodenShovel,
+                // Stone tools (early progression)
+                CraftableItem::StoneSword,
+                CraftableItem::StonePickaxe,
+                CraftableItem::StoneAxe,
+                CraftableItem::StoneShovel,
+                // Iron tools (advanced progression)
+                CraftableItem::IronSword,
+                CraftableItem::IronPickaxe,
+                CraftableItem::IronAxe,
+                CraftableItem::IronShovel,
+                // Specialized tools
+                CraftableItem::Scythe,
             ],
-            CraftingCategory::Woodworking => vec![
+            CraftingCategory::Materials => vec![
+                // Basic materials
+                CraftableItem::Charcoal,
+                // Wood processing
                 CraftableItem::WoodenPlanks,
                 CraftableItem::WoodenBeams,
                 CraftableItem::WoodenGears,
                 CraftableItem::WoodenFrames,
                 CraftableItem::WoodenRollers,
             ],
-            CraftingCategory::Metallurgy => vec![
+            CraftingCategory::Metals => vec![
+                // Iron processing
                 CraftableItem::IronBloom,
                 CraftableItem::WroughtIron,
                 CraftableItem::IronPlates,
@@ -176,8 +201,7 @@ impl CraftingCategory {
                 CraftableItem::MetalRods,
                 CraftableItem::SteelIngots,
                 CraftableItem::SteelPlates,
-            ],
-            CraftingCategory::CopperWorking => vec![
+                // Copper processing
                 CraftableItem::CopperIngots,
                 CraftableItem::CopperPlates,
                 CraftableItem::CopperWire,
@@ -192,57 +216,56 @@ impl CraftingCategory {
                 CraftableItem::ClothStrips,
                 CraftableItem::ReinforcedFabric,
             ],
-            CraftingCategory::FoodProduction => vec![
+            CraftingCategory::Food => vec![
                 CraftableItem::Flour,
                 CraftableItem::Dough,
                 CraftableItem::Bread,
-                CraftableItem::Scythe,
-                CraftableItem::WoodenPickaxe,
-                CraftableItem::StonePickaxe,
-                CraftableItem::IronPickaxe,
-                CraftableItem::WoodenAxe,
-                CraftableItem::StoneAxe,
-                CraftableItem::IronAxe,
-                CraftableItem::WoodenShovel,
-                CraftableItem::StoneShovel,
-                CraftableItem::IronShovel,
             ],
-            CraftingCategory::AnimalProducts => vec![
-                CraftableItem::CookedChicken,
-            ],
-            CraftingCategory::SteamSystems => vec![
+            CraftingCategory::Power => vec![
+                // Steam systems
                 CraftableItem::WaterBucket,
                 CraftableItem::SteamPipes,
                 CraftableItem::PressureValve,
                 CraftableItem::SteamBoiler,
                 CraftableItem::SteamDistributionHub,
+                // Steam machinery
+                CraftableItem::SteamPump,
+                CraftableItem::SteamHammer,
+                CraftableItem::SteamEngine,
+                CraftableItem::PowerCables,
             ],
-            CraftingCategory::Structures => vec![
+            CraftingCategory::Buildings => vec![
+                // Basic structures (available from start)
+                CraftableItem::Campfire,
                 CraftableItem::CharcoalPit,
                 CraftableItem::CrudeFurnace,
-                CraftableItem::BloomeryFurnace,
                 CraftableItem::StoneAnvil,
+                // Intermediate structures
+                CraftableItem::BloomeryFurnace,
                 CraftableItem::SpinningWheel,
                 CraftableItem::WeavingMachine,
+                CraftableItem::StoneOven,
+                CraftableItem::WaterPump,
+                // Advanced structures
                 CraftableItem::AdvancedForge,
                 CraftableItem::WheatFarm,
                 CraftableItem::Windmill,
                 CraftableItem::WaterMill,
-                CraftableItem::StoneOven,
                 CraftableItem::GrainSilo,
-                CraftableItem::WaterPump,
             ],
             CraftingCategory::Automation => vec![
+                // Conveyor systems
                 CraftableItem::BasicConveyorBelt,
                 CraftableItem::ReinforcedConveyor,
                 CraftableItem::SteamConveyor,
                 CraftableItem::ElectricConveyor,
-                CraftableItem::SteamPump,
-                CraftableItem::SteamHammer,
-                CraftableItem::SortingMachine,
-                CraftableItem::SteamEngine,
-                CraftableItem::PowerCables,
                 CraftableItem::ConveyorBelt,
+                // Processing machines
+                CraftableItem::SortingMachine,
+            ],
+            CraftingCategory::Consumables => vec![
+                // Animal products
+                CraftableItem::CookedChicken,
             ],
         }
     }
@@ -251,43 +274,49 @@ impl CraftingCategory {
 impl CraftableItem {
     pub fn get_category(&self) -> CraftingCategory {
         match self {
-            CraftableItem::Charcoal => CraftingCategory::BasicMaterials,
+            // Tools
+            CraftableItem::WoodenPickaxe | CraftableItem::StonePickaxe | CraftableItem::IronPickaxe |
+            CraftableItem::WoodenAxe | CraftableItem::StoneAxe | CraftableItem::IronAxe |
+            CraftableItem::WoodenShovel | CraftableItem::StoneShovel | CraftableItem::IronShovel |
+            CraftableItem::WoodenSword | CraftableItem::StoneSword | CraftableItem::IronSword |
+            CraftableItem::Scythe => CraftingCategory::Tools,
             
-            CraftableItem::WoodenPlanks | CraftableItem::WoodenBeams | CraftableItem::WoodenGears |
-            CraftableItem::WoodenFrames | CraftableItem::WoodenRollers => CraftingCategory::Woodworking,
+            // Materials
+            CraftableItem::Charcoal | CraftableItem::WoodenPlanks | CraftableItem::WoodenBeams | 
+            CraftableItem::WoodenGears | CraftableItem::WoodenFrames | CraftableItem::WoodenRollers => CraftingCategory::Materials,
             
+            // Metals
             CraftableItem::IronBloom | CraftableItem::WroughtIron | CraftableItem::IronPlates | 
             CraftableItem::IronGears | CraftableItem::MetalRods | CraftableItem::SteelIngots | 
-            CraftableItem::SteelPlates => CraftingCategory::Metallurgy,
+            CraftableItem::SteelPlates | CraftableItem::CopperIngots | CraftableItem::CopperPlates | 
+            CraftableItem::CopperWire | CraftableItem::CopperCoils | CraftableItem::CopperPipes | 
+            CraftableItem::BronzeAlloy | CraftableItem::ElectricalComponents => CraftingCategory::Metals,
             
-            CraftableItem::CopperIngots | CraftableItem::CopperPlates | CraftableItem::CopperWire | 
-            CraftableItem::CopperCoils | CraftableItem::CopperPipes | CraftableItem::BronzeAlloy | 
-            CraftableItem::ElectricalComponents => CraftingCategory::CopperWorking,
-            
+            // Textiles
             CraftableItem::Threads | CraftableItem::Fabric | CraftableItem::ClothStrips | 
             CraftableItem::ReinforcedFabric => CraftingCategory::Textiles,
             
-            CraftableItem::Flour | CraftableItem::Dough | CraftableItem::Bread | 
-            CraftableItem::Scythe | CraftableItem::WoodenPickaxe | CraftableItem::StonePickaxe |
-            CraftableItem::IronPickaxe | CraftableItem::WoodenAxe | CraftableItem::StoneAxe |
-            CraftableItem::IronAxe | CraftableItem::WoodenShovel | CraftableItem::StoneShovel |
-            CraftableItem::IronShovel => CraftingCategory::FoodProduction,
+            // Food
+            CraftableItem::Flour | CraftableItem::Dough | CraftableItem::Bread => CraftingCategory::Food,
             
-            CraftableItem::CookedChicken => CraftingCategory::AnimalProducts,
-            
+            // Power
             CraftableItem::WaterBucket | CraftableItem::SteamPipes | CraftableItem::PressureValve | 
-            CraftableItem::SteamBoiler | CraftableItem::SteamDistributionHub => CraftingCategory::SteamSystems,
+            CraftableItem::SteamBoiler | CraftableItem::SteamDistributionHub | CraftableItem::SteamPump | 
+            CraftableItem::SteamHammer | CraftableItem::SteamEngine | CraftableItem::PowerCables => CraftingCategory::Power,
             
-            CraftableItem::CharcoalPit | CraftableItem::CrudeFurnace | CraftableItem::BloomeryFurnace | 
-            CraftableItem::StoneAnvil | CraftableItem::SpinningWheel | CraftableItem::WeavingMachine | 
-            CraftableItem::AdvancedForge | CraftableItem::WheatFarm | CraftableItem::Windmill | 
-            CraftableItem::WaterMill | CraftableItem::StoneOven | CraftableItem::GrainSilo | 
-            CraftableItem::WaterPump => CraftingCategory::Structures,
+            // Buildings
+            CraftableItem::Campfire | CraftableItem::CharcoalPit | CraftableItem::CrudeFurnace | 
+            CraftableItem::BloomeryFurnace | CraftableItem::StoneAnvil | CraftableItem::SpinningWheel | 
+            CraftableItem::WeavingMachine | CraftableItem::AdvancedForge | CraftableItem::WheatFarm | 
+            CraftableItem::Windmill | CraftableItem::WaterMill | CraftableItem::StoneOven | 
+            CraftableItem::GrainSilo | CraftableItem::WaterPump => CraftingCategory::Buildings,
             
+            // Automation
             CraftableItem::BasicConveyorBelt | CraftableItem::ReinforcedConveyor | CraftableItem::SteamConveyor | 
-            CraftableItem::ElectricConveyor | CraftableItem::SteamPump | CraftableItem::SteamHammer | 
-            CraftableItem::SortingMachine | CraftableItem::SteamEngine | CraftableItem::PowerCables | 
-            CraftableItem::ConveyorBelt => CraftingCategory::Automation,
+            CraftableItem::ElectricConveyor | CraftableItem::ConveyorBelt | CraftableItem::SortingMachine => CraftingCategory::Automation,
+            
+            // Consumables
+            CraftableItem::CookedChicken => CraftingCategory::Consumables,
         }
     }
 
@@ -336,6 +365,9 @@ impl CraftableItem {
             CraftableItem::WoodenShovel => "Wooden Shovel",
             CraftableItem::StoneShovel => "Stone Shovel",
             CraftableItem::IronShovel => "Iron Shovel",
+            CraftableItem::WoodenSword => "Wooden Sword",
+            CraftableItem::StoneSword => "Stone Sword",
+            CraftableItem::IronSword => "Iron Sword",
             
             CraftableItem::CookedChicken => "Cooked Chicken",
             
@@ -345,6 +377,7 @@ impl CraftableItem {
             CraftableItem::SteamBoiler => "Steam Boiler",
             CraftableItem::SteamDistributionHub => "Steam Distribution Hub",
             
+            CraftableItem::Campfire => "Campfire",
             CraftableItem::CharcoalPit => "Charcoal Pit",
             CraftableItem::CrudeFurnace => "Crude Furnace",
             CraftableItem::BloomeryFurnace => "Bloomery Furnace",
@@ -417,6 +450,9 @@ impl CraftableItem {
             CraftableItem::WoodenShovel => "icons/wooden_shovel.png",
             CraftableItem::StoneShovel => "icons/stone_shovel.png",
             CraftableItem::IronShovel => "icons/iron_shovel.png",
+            CraftableItem::WoodenSword => "icons/wooden_sword.png",
+            CraftableItem::StoneSword => "icons/stone_sword.png",
+            CraftableItem::IronSword => "icons/iron_sword.png",
             
             CraftableItem::CookedChicken => "icons/cooked_chicken.png",
             
@@ -426,6 +462,7 @@ impl CraftableItem {
             CraftableItem::SteamBoiler => "icons/steam_boiler.png",
             CraftableItem::SteamDistributionHub => "icons/steam_distribution_hub.png",
             
+            CraftableItem::Campfire => "icons/campfire.png",
             CraftableItem::CharcoalPit => "icons/charcoal_pit.png",
             CraftableItem::CrudeFurnace => "icons/crude_furnace.png",
             CraftableItem::BloomeryFurnace => "icons/bloomery_furnace.png",
@@ -693,17 +730,17 @@ impl CraftingSystem {
         });
         
         // === BASIC TOOLS ===
-        // Wooden Pickaxe (manual from Sticks + Twigs)
+        // Wooden Pickaxe (manual from Sticks + Twigs for binding)
         recipes.insert(CraftableItem::WoodenPickaxe, CraftingRecipe {
-            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Twigs, 3)],
+            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Twigs, 2)],
             output: (ResourceType::WoodenPickaxe, 1),
             crafting_time: 2.0,
             requires_structure: Some(StructureType::Manual),
         });
         
-        // Stone Pickaxe (manual from Sticks + Stones + Plant Fiber)
+        // Stone Pickaxe (manual from Sticks + Rocks + Plant Fiber)
         recipes.insert(CraftableItem::StonePickaxe, CraftingRecipe {
-            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Stones, 3), (ResourceType::PlantFiber, 1)],
+            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Rocks, 3), (ResourceType::PlantFiber, 1)],
             output: (ResourceType::StonePickaxe, 1),
             crafting_time: 3.0,
             requires_structure: Some(StructureType::Manual),
@@ -717,17 +754,17 @@ impl CraftingSystem {
             requires_structure: Some(StructureType::Manual),
         });
         
-        // Wooden Axe (manual from Sticks + Flint)
+        // Wooden Axe (manual from Sticks + Flint + Twigs for binding)
         recipes.insert(CraftableItem::WoodenAxe, CraftingRecipe {
-            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Flint, 1)],
+            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Flint, 1), (ResourceType::Twigs, 1)],
             output: (ResourceType::WoodenAxe, 1),
             crafting_time: 2.0,
             requires_structure: Some(StructureType::Manual),
         });
         
-        // Stone Axe (manual from Sticks + Stones + Plant Fiber)
+        // Stone Axe (manual from Sticks + Rocks + Plant Fiber)
         recipes.insert(CraftableItem::StoneAxe, CraftingRecipe {
-            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Stones, 2), (ResourceType::PlantFiber, 1)],
+            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Rocks, 2), (ResourceType::PlantFiber, 1)],
             output: (ResourceType::StoneAxe, 1),
             crafting_time: 3.0,
             requires_structure: Some(StructureType::Manual),
@@ -741,17 +778,17 @@ impl CraftingSystem {
             requires_structure: Some(StructureType::Manual),
         });
         
-        // Wooden Shovel (manual from Sticks + Twigs)
+        // Wooden Shovel (manual from Sticks + Twigs for binding)
         recipes.insert(CraftableItem::WoodenShovel, CraftingRecipe {
-            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Twigs, 2)],
+            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Twigs, 3)],
             output: (ResourceType::WoodenShovel, 1),
             crafting_time: 2.0,
             requires_structure: Some(StructureType::Manual),
         });
         
-        // Stone Shovel (manual from Sticks + Stones + Plant Fiber)
+        // Stone Shovel (manual from Sticks + Rocks + Plant Fiber)
         recipes.insert(CraftableItem::StoneShovel, CraftingRecipe {
-            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Stones, 2), (ResourceType::PlantFiber, 1)],
+            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Rocks, 2), (ResourceType::PlantFiber, 1)],
             output: (ResourceType::StoneShovel, 1),
             crafting_time: 3.0,
             requires_structure: Some(StructureType::Manual),
@@ -765,13 +802,38 @@ impl CraftingSystem {
             requires_structure: Some(StructureType::Manual),
         });
         
+        // === WEAPONS ===
+        // Wooden Sword (manual from Sticks + Twigs for binding)
+        recipes.insert(CraftableItem::WoodenSword, CraftingRecipe {
+            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Twigs, 1)],
+            output: (ResourceType::WoodenSword, 1),
+            crafting_time: 3.0,
+            requires_structure: Some(StructureType::Manual),
+        });
+        
+        // Stone Sword (manual from Sticks + Rocks + Plant Fiber)
+        recipes.insert(CraftableItem::StoneSword, CraftingRecipe {
+            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::Rocks, 2), (ResourceType::PlantFiber, 1)],
+            output: (ResourceType::StoneSword, 1),
+            crafting_time: 4.0,
+            requires_structure: Some(StructureType::Manual),
+        });
+        
+        // Iron Sword (manual from Sticks + Iron Plates)
+        recipes.insert(CraftableItem::IronSword, CraftingRecipe {
+            inputs: vec![(ResourceType::Sticks, 2), (ResourceType::IronPlates, 3)],
+            output: (ResourceType::IronSword, 1),
+            crafting_time: 5.0,
+            requires_structure: Some(StructureType::Manual),
+        });
+        
         // === ANIMAL PRODUCTS ===
-        // Cooked Chicken (requires Stone Oven + Raw Chicken)
+        // Cooked Chicken (requires Campfire + Raw Chicken)
         recipes.insert(CraftableItem::CookedChicken, CraftingRecipe {
             inputs: vec![(ResourceType::RawChicken, 1)],
             output: (ResourceType::CookedChicken, 1),
-            crafting_time: 5.0,
-            requires_structure: Some(StructureType::StoneOven),
+            crafting_time: 3.0,
+            requires_structure: Some(StructureType::Campfire),
         });
         
         // === STEAM SYSTEMS ===
@@ -816,6 +878,14 @@ impl CraftingSystem {
         });
         
         // === STRUCTURES ===
+        // Campfire (manual from Sticks + Rocks)
+        recipes.insert(CraftableItem::Campfire, CraftingRecipe {
+            inputs: vec![(ResourceType::Sticks, 5), (ResourceType::Rocks, 3)],
+            output: (ResourceType::Campfire, 1),
+            crafting_time: 2.0,
+            requires_structure: Some(StructureType::Manual),
+        });
+        
         // Charcoal Pit (manual from Stone + Clay)
         recipes.insert(CraftableItem::CharcoalPit, CraftingRecipe {
             inputs: vec![(ResourceType::Stone, 10), (ResourceType::Clay, 5)],
@@ -1004,6 +1074,82 @@ impl CraftingSystem {
         Self { recipes }
     }
     
+    // Helper function to check if a building is nearby
+    fn has_nearby_building(&self, structure_type: StructureType, player_pos: Vector2, world: &World) -> bool {
+        let search_radius = 3; // Search within 3 tiles
+        let player_tile_x = (player_pos.x / TILE_SIZE as f32) as i32;
+        let player_tile_y = (player_pos.y / TILE_SIZE as f32) as i32;
+        
+        for dx in -search_radius..=search_radius {
+            for dy in -search_radius..=search_radius {
+                let tile_x = player_tile_x + dx;
+                let tile_y = player_tile_y + dy;
+                
+                if tile_x >= 0 && tile_y >= 0 && 
+                   tile_x < world.width as i32 && tile_y < world.height as i32 {
+                    if let Some(tile) = world.get_tile(tile_x as usize, tile_y as usize) {
+                        if let Some(building) = tile.building {
+                            if self.building_type_to_structure(building) == Some(structure_type) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+    
+    // Helper function to convert BuildingType to StructureType
+    fn building_type_to_structure(&self, building_type: BuildingType) -> Option<StructureType> {
+        match building_type {
+            BuildingType::Campfire => Some(StructureType::Campfire),
+            BuildingType::CharcoalPit => Some(StructureType::CharcoalPit),
+            BuildingType::CrudeFurnace => Some(StructureType::CrudeFurnace),
+            BuildingType::BloomeryFurnace => Some(StructureType::BloomeryFurnace),
+            BuildingType::StoneAnvil => Some(StructureType::StoneAnvil),
+            BuildingType::SpinningWheel => Some(StructureType::SpinningWheel),
+            BuildingType::WeavingMachine => Some(StructureType::WeavingMachine),
+            _ => None,
+        }
+    }
+    
+    // Helper function to convert StructureType to ResourceType
+    fn structure_to_resource_type(&self, structure_type: StructureType) -> ResourceType {
+        match structure_type {
+            StructureType::Campfire => ResourceType::Campfire,
+            StructureType::CharcoalPit => ResourceType::CharcoalPit,
+            StructureType::CrudeFurnace => ResourceType::CrudeFurnace,
+            StructureType::BloomeryFurnace => ResourceType::BloomeryFurnace,
+            StructureType::StoneAnvil => ResourceType::StoneAnvil,
+            StructureType::SpinningWheel => ResourceType::SpinningWheel,
+            StructureType::WeavingMachine => ResourceType::WeavingMachine,
+            StructureType::AdvancedForge => ResourceType::AdvancedForge,
+            StructureType::StoneOven => ResourceType::StoneOven,
+            _ => ResourceType::Wood, // Fallback
+        }
+    }
+    
+    pub fn get_recipes_for_building(&self, building_type: BuildingType) -> Vec<CraftableItem> {
+        let structure_type = self.building_type_to_structure(building_type);
+        if structure_type.is_none() {
+            return vec![];
+        }
+        
+        let structure = structure_type.unwrap();
+        let mut recipes = Vec::new();
+        
+        for (item, recipe) in &self.recipes {
+            if let Some(required_structure) = &recipe.requires_structure {
+                if *required_structure == structure {
+                    recipes.push(*item);
+                }
+            }
+        }
+        
+        recipes
+    }
+    
     pub fn can_craft(&self, item: &CraftableItem, inventory: &Inventory) -> bool {
         if let Some(recipe) = self.recipes.get(item) {
             // Check if we have all required resources
@@ -1022,12 +1168,28 @@ impl CraftingSystem {
         self.recipes.keys().cloned().collect()
     }
     
-    pub fn get_craft_status(&self, item: &CraftableItem, inventory: &Inventory) -> CraftStatus {
+    pub fn get_craft_status(&self, item: &CraftableItem, inventory: &Inventory, world: Option<&World>, player_pos: Option<Vector2>) -> CraftStatus {
         if let Some(recipe) = self.recipes.get(item) {
             // Check structure requirement
             if let Some(structure) = &recipe.requires_structure {
                 if *structure != StructureType::Manual {
-                    return CraftStatus::NeedsStructure(format!("Requires {}", structure.get_name()));
+                    // Check if player has the building nearby
+                    if let (Some(world), Some(player_pos)) = (world, player_pos) {
+                        if self.has_nearby_building(*structure, player_pos, world) {
+                            // Building is available - continue to resource check
+                        } else {
+                            // Check if player has the building in inventory
+                            let building_resource = self.structure_to_resource_type(*structure);
+                            if inventory.get_amount(&building_resource) > 0 {
+                                return CraftStatus::NeedsStructure(format!("Place {}", structure.get_name()));
+                            } else {
+                                return CraftStatus::BuildingNotAvailable(format!("Need to build {}", structure.get_name()));
+                            }
+                        }
+                    } else {
+                        // Fallback to old behavior when world/player pos not available
+                        return CraftStatus::NeedsStructure(format!("Requires {}", structure.get_name()));
+                    }
                 }
             }
             
@@ -1051,12 +1213,14 @@ pub enum CraftStatus {
     CanCraft,
     MissingResources(String),
     NeedsStructure(String),
+    BuildingNotAvailable(String),
     NoRecipe,
 }
 
 impl StructureType {
     pub fn get_name(&self) -> &'static str {
         match self {
+            StructureType::Campfire => "Campfire",
             StructureType::CharcoalPit => "Charcoal Pit",
             StructureType::CrudeFurnace => "Crude Furnace",
             StructureType::BloomeryFurnace => "Bloomery Furnace",

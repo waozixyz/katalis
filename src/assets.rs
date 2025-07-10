@@ -9,7 +9,9 @@ pub struct AssetManager {
     icon_textures: HashMap<ResourceType, Texture2D>,
     ui_textures: HashMap<String, Texture2D>, 
     building_textures: HashMap<CraftableItem, Texture2D>,
-    crafting_icons: HashMap<CraftableItem, Texture2D>, 
+    crafting_icons: HashMap<CraftableItem, Texture2D>,
+    ground_item_textures: HashMap<ResourceType, Texture2D>,
+    animal_textures: HashMap<String, Texture2D>,
 }
 
 impl AssetManager {
@@ -21,6 +23,8 @@ impl AssetManager {
             ui_textures: HashMap::new(),
             building_textures: HashMap::new(),
             crafting_icons: HashMap::new(),
+            ground_item_textures: HashMap::new(),
+            animal_textures: HashMap::new(),
         }
     }
     
@@ -72,6 +76,7 @@ impl AssetManager {
         
         // Load icon textures for all available icons
         let icon_types = [
+            // Basic resources
             (ResourceType::Wood, "wood.png"),
             (ResourceType::Stone, "stone.png"),
             (ResourceType::IronOre, "iron_ore.png"),
@@ -80,16 +85,48 @@ impl AssetManager {
             (ResourceType::Clay, "clay.png"),
             (ResourceType::Coal, "coal.png"),
             (ResourceType::Charcoal, "charcoal.png"),
+            
+            // Ground collectibles
+            (ResourceType::Sticks, "sticks.png"),
+            (ResourceType::Rocks, "rocks.png"),
+            (ResourceType::Twigs, "twigs.png"),
+            (ResourceType::Flint, "flint.png"),
+            
+            // Processed materials
             (ResourceType::IronBloom, "iron_bloom.png"),
             (ResourceType::WroughtIron, "wrought_iron.png"),
             (ResourceType::IronPlates, "iron_plates.png"),
             (ResourceType::IronGears, "iron_gears.png"),
             (ResourceType::MetalRods, "metal_rods.png"),
+            
+            // Animal resources  
+            (ResourceType::Egg, "egg.png"),
+            (ResourceType::RawChicken, "raw_chicken.png"),
+            (ResourceType::CookedChicken, "cooked_chicken.png"),
+            (ResourceType::ChickenFeathers, "chicken_feathers.png"),
+            
+            // Buildings
+            (ResourceType::Campfire, "campfire.png"),
             (ResourceType::CharcoalPit, "charcoal_pit.png"),
             (ResourceType::BloomeryFurnace, "bloomery_furnace.png"),
             (ResourceType::StoneAnvil, "stone_anvil.png"),
             (ResourceType::SpinningWheel, "spinning wheel.png"),
             (ResourceType::WeavingMachine, "weaving_machine.png"),
+            (ResourceType::ConveyorBelt, "conveyor_belt.png"),
+            
+            // Tools
+            (ResourceType::WoodenPickaxe, "wooden_pickaxe.png"),
+            (ResourceType::StonePickaxe, "stone_pickaxe.png"),
+            (ResourceType::IronPickaxe, "iron_pickaxe.png"),
+            (ResourceType::WoodenAxe, "wooden_axe.png"),
+            (ResourceType::StoneAxe, "stone_axe.png"),
+            (ResourceType::IronAxe, "iron_axe.png"),
+            (ResourceType::WoodenShovel, "wooden_shovel.png"),
+            (ResourceType::StoneShovel, "stone_shovel.png"),
+            (ResourceType::IronShovel, "iron_shovel.png"),
+            
+            // Other items
+            (ResourceType::WaterBucket, "water_bucket.png"),
         ];
         
         for (resource_type, filename) in icon_types.iter() {
@@ -124,11 +161,13 @@ impl AssetManager {
 
 
         let crafting_icon_types = [
+            (CraftableItem::Campfire, "campfire.png"),
             (CraftableItem::CharcoalPit, "charcoal_pit.png"),
             (CraftableItem::BloomeryFurnace, "bloomery_furnace.png"),
             (CraftableItem::StoneAnvil, "stone_anvil.png"),
             (CraftableItem::SpinningWheel, "spinning wheel.png"),
             (CraftableItem::WeavingMachine, "weaving_machine.png"),
+            (CraftableItem::ConveyorBelt, "conveyor_belt.png"),
         ];
 
         for (craftable_item, filename) in crafting_icon_types.iter() {
@@ -146,6 +185,7 @@ impl AssetManager {
 
         // Load building sprites
         let building_types = [
+            (CraftableItem::Campfire, "campfire.png"),
             (CraftableItem::CharcoalPit, "charcoal_pit.png"),
             (CraftableItem::BloomeryFurnace, "bloomery_furnace.png"),
             (CraftableItem::StoneAnvil, "stone_anvil.png"),
@@ -163,6 +203,46 @@ impl AssetManager {
                 }
                 Err(e) => {
                     println!("Warning: Could not load building texture {}: {}", filepath, e);
+                }
+            }
+        }
+        
+        // Load ground item spritesheets
+        let ground_item_types = [
+            (ResourceType::Flint, "flints.png"),
+            (ResourceType::Sticks, "sticks.png"),
+            (ResourceType::Rocks, "rocks.png"),
+            (ResourceType::Twigs, "twigs.png"),
+        ];
+        
+        for (resource_type, filename) in ground_item_types.iter() {
+            let filepath = format!("assets/items/{}", filename);
+            match rl.load_texture(thread, &filepath) {
+                Ok(texture) => {
+                    println!("Loaded ground item texture: {}", filepath);
+                    self.ground_item_textures.insert(*resource_type, texture);
+                }
+                Err(e) => {
+                    println!("Warning: Could not load ground item texture {}: {}", filepath, e);
+                }
+            }
+        }
+        
+        // Load animal textures
+        let animal_textures = [
+            ("wild_chicken", "animals/wild_chicken.png"),
+            ("wild_chicken_dead", "animals/wild_chicken_dead.png"),
+        ];
+        
+        for (name, filename) in animal_textures.iter() {
+            let filepath = format!("assets/{}", filename);
+            match rl.load_texture(thread, &filepath) {
+                Ok(texture) => {
+                    println!("Loaded animal texture: {}", filepath);
+                    self.animal_textures.insert(name.to_string(), texture);
+                }
+                Err(e) => {
+                    println!("Warning: Could not load animal texture {}: {}", filepath, e);
                 }
             }
         }
@@ -217,5 +297,17 @@ impl AssetManager {
     
     pub fn has_crafting_icon(&self, item: CraftableItem) -> bool {
         self.crafting_icons.contains_key(&item)
+    }
+    
+    pub fn get_ground_item_texture(&self, resource_type: ResourceType) -> Option<&Texture2D> {
+        self.ground_item_textures.get(&resource_type)
+    }
+    
+    pub fn has_ground_item_texture(&self, resource_type: ResourceType) -> bool {
+        self.ground_item_textures.contains_key(&resource_type)
+    }
+    
+    pub fn get_animal_texture(&self, name: &str) -> Option<&Texture2D> {
+        self.animal_textures.get(name)
     }
 }

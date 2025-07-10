@@ -18,6 +18,7 @@ pub struct Player {
     pub current_crafting: Option<CraftingProgress>,
     pub crafting_queue: Vec<QueuedCraft>,
     pub current_demolition: Option<DemolitionAction>,
+    pub attack_timer: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -60,6 +61,7 @@ impl Player {
             current_crafting: None,
             crafting_queue: Vec::new(),
             current_demolition: None,
+            attack_timer: 0.0,
         }
     }
 
@@ -171,6 +173,14 @@ impl Player {
         
         // Update animation based on current state
         self.update_animation();
+        
+        // Update attack timer (decreases over time)
+        if self.attack_timer > 0.0 {
+            self.attack_timer -= rl.get_frame_time();
+            if self.attack_timer < 0.0 {
+                self.attack_timer = 0.0;
+            }
+        }
         
         // Update the animator
         self.animator.update(rl.get_frame_time());
@@ -391,5 +401,13 @@ impl Player {
     
     pub fn get_scaled_size(&self) -> f32 {
         self.size * self.scale
+    }
+    
+    pub fn is_attacking(&self) -> bool {
+        self.attack_timer > 0.0
+    }
+    
+    pub fn trigger_attack(&mut self) {
+        self.attack_timer = 0.5; // Attack lasts for 0.5 seconds
     }
 }

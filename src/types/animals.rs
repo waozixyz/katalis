@@ -31,6 +31,7 @@ pub struct Animal {
     pub size: f32,
     pub direction: f32, // Rotation angle in degrees
     pub animation_timer: f32,
+    pub current_frame: usize,
     pub is_alive: bool,
     pub despawn_timer: f32,
 }
@@ -56,12 +57,13 @@ impl Animal {
             size,
             direction: 0.0,
             animation_timer: 0.0,
+            current_frame: 0,
             is_alive: true,
             despawn_timer: 0.0,
         }
     }
     
-    pub fn update(&mut self, delta_time: f32, player_pos: Vector2) {
+    pub fn update(&mut self, delta_time: f32, player_pos: Vector2, player_attacking: bool) {
         if !self.is_alive {
             self.despawn_timer += delta_time;
             return;
@@ -70,16 +72,28 @@ impl Animal {
         self.animation_timer += delta_time;
         self.state_timer += delta_time;
         
+        // Update animation frame based on state
+        self.update_animation_frame();
+        
         // Check if player is nearby and flee if so
         let distance_to_player = self.position.distance_to(player_pos);
-        if distance_to_player < 80.0 && self.state != AnimalState::Fleeing {
+        let flee_distance = if player_attacking { 120.0 } else { 80.0 }; // Flee from farther if player is attacking
+        
+        if distance_to_player < flee_distance && self.state != AnimalState::Fleeing {
             self.start_fleeing(player_pos);
         }
         
         match self.state {
             AnimalState::Idle => {
-                if self.state_timer > 3.0 {
-                    self.start_wandering();
+                // More varied idle durations (1-5 seconds)
+                let idle_duration = 1.0 + (rand::random::<f32>() * 4.0);
+                if self.state_timer > idle_duration {
+                    // 70% chance to wander, 30% chance to stay idle for another cycle
+                    if rand::random::<f32>() < 0.7 {
+                        self.start_wandering();
+                    } else {
+                        self.state_timer = 0.0; // Reset idle timer
+                    }
                 }
             }
             AnimalState::Wandering => {
@@ -90,19 +104,12 @@ impl Animal {
                     // Update visual direction
                     self.direction = direction.x.atan2(direction.y).to_degrees();
                     
-                    // Check if reached target
-                    if self.position.distance_to(target) < 10.0 {
+                    // Check if reached target or been wandering too long
+                    if self.position.distance_to(target) < 10.0 || self.state_timer > 8.0 {
                         self.state = AnimalState::Idle;
                         self.wander_target = None;
                         self.state_timer = 0.0;
                     }
-                }
-                
-                // Stop wandering after some time
-                if self.state_timer > 5.0 {
-                    self.state = AnimalState::Idle;
-                    self.wander_target = None;
-                    self.state_timer = 0.0;
                 }
             }
             AnimalState::Fleeing => {
@@ -140,9 +147,9 @@ impl Animal {
         self.state = AnimalState::Wandering;
         self.state_timer = 0.0;
         
-        // Pick a random nearby target
+        // Pick a random nearby target with more varied distances
         let angle = rand::random::<f32>() * 2.0 * std::f32::consts::PI;
-        let distance = 50.0 + rand::random::<f32>() * 100.0;
+        let distance = 30.0 + rand::random::<f32>() * 80.0; // 30-110 pixel range
         let offset = Vector2::new(angle.cos() * distance, angle.sin() * distance);
         self.wander_target = Some(self.position + offset);
     }
@@ -151,10 +158,14 @@ impl Animal {
         self.state = AnimalState::Fleeing;
         self.state_timer = 0.0;
         
-        // Flee in opposite direction from player
-        let direction = (self.position - player_pos).normalized();
-        let flee_distance = 120.0;
-        self.flee_target = Some(self.position + direction * flee_distance);
+        // Flee in opposite direction from player with some randomness
+        let base_direction = (self.position - player_pos).normalized();
+        let random_angle = (rand::random::<f32>() - 0.5) * 0.5; // ±0.25 radians (~14 degrees)
+        let flee_angle = base_direction.y.atan2(base_direction.x) + random_angle;
+        let flee_direction = Vector2::new(flee_angle.cos(), flee_angle.sin());
+        
+        let flee_distance = 150.0 + rand::random::<f32>() * 50.0; // 150-200 pixels
+        self.flee_target = Some(self.position + flee_direction * flee_distance);
     }
     
     pub fn can_lay_egg(&self) -> bool {
@@ -206,7 +217,7 @@ impl Animal {
     }
     
     pub fn should_despawn(&self) -> bool {
-        !self.is_alive && self.despawn_timer > 10.0 // Despawn after 10 seconds
+        !self.is_alive && self.despawn_timer > 60.0 // Despawn after 60 seconds (gives time to pick up)
     }
     
     pub fn get_collision_rect(&self) -> Rectangle {
@@ -236,6 +247,61 @@ impl Animal {
                 } else {
                     Color::new(160, 160, 160, 255) // Gray when dead
                 }
+            }
+        }
+    }
+    
+    fn update_animation_frame(&mut self) {
+        match self.animal_type {
+            AnimalType::WildChicken => {
+                match self.state {
+                    AnimalState::Idle => {
+                        // Alternate between sitting (frame 0) and standing (frame 1)
+                        if self.animation_timer % 4.0 < 2.0 {
+                            self.current_frame = 0; // Sitting
+                        } else {
+                            self.current_frame = 1; // Standing
+                        }
+                    }
+                    AnimalState::Wandering => {
+                        // Walking animation: frames 2, 3, 4 (second row)
+                        let frame_duration = 0.3;
+                        let frame_in_cycle = ((self.animation_timer / frame_duration) as usize) % 3;
+                        self.current_frame = 2 + frame_in_cycle; // Frames 2, 3, 4
+                    }
+                    AnimalState::Fleeing => {
+                        // Running animation: frame 5 (third row first frame)
+                        self.current_frame = 5;
+                    }
+                    AnimalState::Dead => {
+                        // Dead chickens will use the separate dead texture
+                        self.current_frame = 0;
+                    }
+                }
+            }
+        }
+    }
+    
+    // Get spritesheet frame information for rendering
+    pub fn get_spritesheet_frame(&self) -> (u32, u32, u32, u32) {
+        // Returns (frame_x, frame_y, frame_width, frame_height)
+        match self.animal_type {
+            AnimalType::WildChicken => {
+                let frame_width = 128;
+                let frame_height = 128;
+                
+                // Layout: first row (0,1), second row (2,3,4), third row (5,...)
+                let (row, col) = match self.current_frame {
+                    0 => (0, 0), // Sitting
+                    1 => (0, 1), // Standing
+                    2 => (1, 0), // Walking frame 1
+                    3 => (1, 1), // Walking frame 2
+                    4 => (1, 2), // Walking frame 3
+                    5 => (2, 0), // Running/fleeing
+                    _ => (0, 0), // Fallback
+                };
+                
+                (col * frame_width, row * frame_height, frame_width, frame_height)
             }
         }
     }
@@ -292,20 +358,21 @@ impl AnimalManager {
         }
     }
     
-    pub fn update(&mut self, delta_time: f32, player_pos: Vector2, world_width: usize, world_height: usize) -> Vec<(ResourceType, u32)> {
+    pub fn update(&mut self, delta_time: f32, player_pos: Vector2, player_attacking: bool, world_width: usize, world_height: usize) -> Vec<(ResourceType, u32)> {
         let collected_items = Vec::new();
         
         self.spawn_timer += delta_time;
         
-        // Spawn new animals occasionally
-        if self.spawn_timer > 20.0 && self.animals.len() < 15 { // Max 15 animals
+        // Spawn new animals occasionally (reduced to 5 seconds for testing)
+        if self.spawn_timer > 5.0 && self.animals.len() < 15 { // Max 15 animals
             self.spawn_timer = 0.0;
             self.spawn_random_animal(world_width, world_height, player_pos);
+            println!("DEBUG: Spawned chicken! Total animals: {}", self.animals.len());
         }
         
         // Update all animals
         for animal in &mut self.animals {
-            animal.update(delta_time, player_pos);
+            animal.update(delta_time, player_pos, player_attacking);
             
             // Check if animal lays egg
             if animal.can_lay_egg() {
@@ -358,11 +425,26 @@ impl AnimalManager {
         None
     }
     
-    pub fn try_kill_animal(&mut self, target_pos: Vector2) -> Option<Vec<(ResourceType, u32)>> {
+    pub fn try_attack_animal(&mut self, target_pos: Vector2) -> Option<Vec<(ResourceType, u32)>> {
         for animal in &mut self.animals {
             if animal.collides_with_point(target_pos) && animal.can_be_killed() {
-                animal.take_damage(animal.max_health); // Kill instantly
-                return Some(animal.get_drops());
+                let died = animal.take_damage(5.0); // Do 5 damage per attack (need 4 hits to kill)
+                if died {
+                    // Don't return drops immediately - they need to be picked up
+                    return Some(vec![]); // Hit and killed, but no items yet
+                }
+                return Some(vec![]); // Hit but didn't kill
+            }
+        }
+        None
+    }
+    
+    pub fn try_pickup_dead_animal(&mut self, target_pos: Vector2) -> Option<Vec<(ResourceType, u32)>> {
+        for (i, animal) in self.animals.iter().enumerate() {
+            if animal.collides_with_point(target_pos) && !animal.is_alive {
+                let drops = animal.get_drops();
+                self.animals.remove(i); // Remove the dead body
+                return Some(drops);
             }
         }
         None

@@ -28,7 +28,7 @@ impl InventoryUI {
         Self {
             is_open: false,
             selected_recipe: None,
-            selected_category: CraftingCategory::Woodworking,
+            selected_category: CraftingCategory::Tools,
             dragged_item: None,
             drag_offset: Vector2::zero(),
             slot_size: 32,
@@ -81,7 +81,7 @@ impl InventoryUI {
         false
     }
     
-    pub fn handle_mouse_input(&mut self, rl: &RaylibHandle, player: &mut Player, crafting_system: &CraftingSystem) -> Option<crate::PlacementState> {
+    pub fn handle_mouse_input(&mut self, rl: &RaylibHandle, player: &mut Player, crafting_system: &CraftingSystem, world: &World, tech_tree: &crate::tech_tree::TechTree) -> Option<crate::PlacementState> {
         if !self.is_open {
             return None;
         }
@@ -118,7 +118,7 @@ impl InventoryUI {
             
             // Handle crafting panel tabs only when in crafting mode
             if matches!(self.right_panel_mode, RightPanelMode::Crafting) {
-                self.handle_crafting_input(rl, player, crafting_system, mouse_pos);
+                self.handle_crafting_input(rl, player, crafting_system, world, mouse_pos, tech_tree);
             }
         }
         
@@ -149,7 +149,7 @@ impl InventoryUI {
         None
     }
     
-    fn handle_crafting_input(&mut self, rl: &RaylibHandle, player: &mut Player, crafting_system: &CraftingSystem, mouse_pos: Vector2) {
+    fn handle_crafting_input(&mut self, rl: &RaylibHandle, player: &mut Player, crafting_system: &CraftingSystem, world: &World, mouse_pos: Vector2, tech_tree: &crate::tech_tree::TechTree) {
         let panel_x = 650;
         let panel_y = 100;
         let tab_y = panel_y + 50;
@@ -159,15 +159,15 @@ impl InventoryUI {
         let tab_width = panel_width / tabs_per_row as i32;
         
         let categories = [
-            CraftingCategory::BasicMaterials,
-            CraftingCategory::Woodworking,
-            CraftingCategory::Metallurgy,
-            CraftingCategory::CopperWorking,
+            CraftingCategory::Tools,
+            CraftingCategory::Materials,
+            CraftingCategory::Metals,
             CraftingCategory::Textiles,
-            CraftingCategory::FoodProduction,
-            CraftingCategory::SteamSystems,
-            CraftingCategory::Structures,
+            CraftingCategory::Food,
+            CraftingCategory::Power,
+            CraftingCategory::Buildings,
             CraftingCategory::Automation,
+            CraftingCategory::Consumables,
         ];
         
         for (i, category) in categories.iter().enumerate() {
@@ -185,9 +185,9 @@ impl InventoryUI {
             }
         }
         
-        if let Some(clicked_item) = self.get_crafting_item_at_mouse(mouse_pos, 650, 100) {
+        if let Some(clicked_item) = self.get_crafting_item_at_mouse(mouse_pos, 650, 100, tech_tree) {
             if let Some(recipe) = crafting_system.recipes.get(&clicked_item) {
-                let craft_status = crafting_system.get_craft_status(&clicked_item, &player.inventory);
+                let craft_status = crafting_system.get_craft_status(&clicked_item, &player.inventory, Some(world), Some(player.position));
                 
                 // ONLY proceed if we can actually craft
                 if matches!(craft_status, CraftStatus::CanCraft) {
@@ -235,6 +235,7 @@ impl InventoryUI {
                     match craft_status {
                         CraftStatus::MissingResources(msg) => println!("Cannot craft: {}", msg),
                         CraftStatus::NeedsStructure(msg) => println!("Cannot craft: {}", msg),
+                        CraftStatus::BuildingNotAvailable(msg) => println!("Cannot craft: {}", msg),
                         CraftStatus::NoRecipe => println!("No recipe found for {:?}", clicked_item),
                         CraftStatus::CanCraft => {} // This shouldn't happen
                     }
@@ -243,7 +244,7 @@ impl InventoryUI {
         }
     }
     
-    pub fn draw_with_world(&self, d: &mut RaylibDrawHandle, world: &World, inventory: &Inventory, crafting_system: &CraftingSystem, assets: &AssetManager, mouse_pos: Vector2, player: &Player) {
+    pub fn draw_with_world(&self, d: &mut RaylibDrawHandle, world: &World, inventory: &Inventory, crafting_system: &CraftingSystem, assets: &AssetManager, mouse_pos: Vector2, player: &Player, tech_tree: &crate::tech_tree::TechTree) {
         if !self.is_open {
             return;
         }
@@ -265,7 +266,7 @@ impl InventoryUI {
         match self.right_panel_mode {
             RightPanelMode::Crafting => {
                 // Don't draw a separate panel background for crafting - the crafting panel draws its own
-                self.draw_crafting_panel(d, crafting_system, inventory, assets, right_panel_x, right_panel_y, mouse_pos);
+                self.draw_crafting_panel(d, crafting_system, inventory, assets, world, player, right_panel_x, right_panel_y, mouse_pos, tech_tree);
             }
             RightPanelMode::Building(building_type) => {
                 draw_panel(d, right_panel_x, right_panel_y, right_panel_width, right_panel_height);
@@ -277,6 +278,9 @@ impl InventoryUI {
                         self.draw_building_interface(d, assets, building_inventory, right_panel_x, right_panel_y, right_panel_width);
                     }
                 }
+                
+                // Show recipes that can be crafted with this building
+                self.draw_building_recipes(d, crafting_system, inventory, assets, world, player, building_type, right_panel_x, right_panel_y, right_panel_width, mouse_pos);
             }
         }
         
@@ -308,7 +312,7 @@ impl InventoryUI {
         }
     }
     
-    fn draw_crafting_panel(&self, d: &mut RaylibDrawHandle, crafting_system: &CraftingSystem, inventory: &Inventory, assets: &AssetManager, x: i32, y: i32, mouse_pos: Vector2) {
+    fn draw_crafting_panel(&self, d: &mut RaylibDrawHandle, crafting_system: &CraftingSystem, inventory: &Inventory, assets: &AssetManager, world: &World, player: &Player, x: i32, y: i32, mouse_pos: Vector2, tech_tree: &crate::tech_tree::TechTree) {
         let panel_width = 480;
         let panel_height = 600;
         
@@ -323,15 +327,15 @@ impl InventoryUI {
         let tab_height = 35;
         let tab_y = y + 50;
         let categories = [
-            CraftingCategory::BasicMaterials,
-            CraftingCategory::Woodworking,
-            CraftingCategory::Metallurgy,
-            CraftingCategory::CopperWorking,
+            CraftingCategory::Tools,
+            CraftingCategory::Materials,
+            CraftingCategory::Metals,
             CraftingCategory::Textiles,
-            CraftingCategory::FoodProduction,
-            CraftingCategory::SteamSystems,
-            CraftingCategory::Structures,
+            CraftingCategory::Food,
+            CraftingCategory::Power,
+            CraftingCategory::Buildings,
             CraftingCategory::Automation,
+            CraftingCategory::Consumables,
         ];
         
         let tabs_per_row = 3;
@@ -360,8 +364,11 @@ impl InventoryUI {
             d.draw_text(tab_text, text_x, current_tab_y + 12, 12, Color::WHITE);
         }
         
-        // Items grid for selected category
-        let items = self.selected_category.get_items();
+        // Items grid for selected category (filter by tech tree)
+        let all_items = self.selected_category.get_items();
+        let items: Vec<_> = all_items.into_iter()
+            .filter(|item| tech_tree.is_recipe_unlocked(item))
+            .collect();
         let num_tab_rows = (categories.len() + tabs_per_row - 1) / tabs_per_row; // Calculate number of tab rows
         let grid_start_y = tab_y + (tab_height * num_tab_rows as i32) + 20; // Account for actual number of tab rows
         let item_size = 50i32; // Reduced from 60
@@ -375,13 +382,13 @@ impl InventoryUI {
             let grid_x = x + 15 + ((i % items_per_row) * (item_size + item_spacing) as usize) as i32;
             let grid_y = grid_start_y + ((i / items_per_row) * (item_size + item_spacing + 10) as usize) as i32;
             
-            let craft_status = crafting_system.get_craft_status(item, inventory);
+            let craft_status = crafting_system.get_craft_status(item, inventory, Some(world), Some(player.position));
             
             // Check if mouse is hovering over this item
             let is_hovering = mouse_pos.x >= grid_x as f32 && 
-                             mouse_pos.x <= (grid_x + item_size) as f32 &&
+                             mouse_pos.x <= (grid_x + item_size as i32) as f32 &&
                              mouse_pos.y >= grid_y as f32 && 
-                             mouse_pos.y <= (grid_y + item_size) as f32;
+                             mouse_pos.y <= (grid_y + item_size as i32) as f32;
             
             // Remember hovered item for tooltip drawing later
             if is_hovering {
@@ -393,6 +400,7 @@ impl InventoryUI {
                 CraftStatus::CanCraft => if is_hovering { Color::new(80, 160, 80, 255) } else { Color::new(60, 120, 60, 255) },
                 CraftStatus::MissingResources(_) => if is_hovering { Color::new(160, 80, 80, 255) } else { Color::new(120, 60, 60, 255) },
                 CraftStatus::NeedsStructure(_) => if is_hovering { Color::new(160, 160, 80, 255) } else { Color::new(120, 120, 60, 255) },
+                CraftStatus::BuildingNotAvailable(_) => if is_hovering { Color::new(180, 60, 60, 255) } else { Color::new(140, 40, 40, 255) },
                 CraftStatus::NoRecipe => if is_hovering { Color::new(80, 80, 80, 255) } else { Color::new(60, 60, 60, 255) },
             };
             
@@ -402,6 +410,7 @@ impl InventoryUI {
                     CraftStatus::CanCraft => if is_hovering { Color::new(255, 255, 255, 255) } else { Color::new(200, 255, 200, 255) },
                     CraftStatus::MissingResources(_) => Color::new(255, 200, 200, 255),
                     CraftStatus::NeedsStructure(_) => Color::new(255, 255, 200, 255),
+                    CraftStatus::BuildingNotAvailable(_) => Color::new(255, 150, 150, 255),
                     CraftStatus::NoRecipe => Color::new(150, 150, 150, 255),
                 };
                 
@@ -414,7 +423,7 @@ impl InventoryUI {
                 );
             } else {
                 // Fallback to rectangle
-                d.draw_rectangle(grid_x, grid_y, item_size, item_size, slot_color);
+                d.draw_rectangle(grid_x, grid_y, item_size as i32, item_size as i32, slot_color);
                 d.draw_rectangle_lines(grid_x, grid_y, item_size, item_size, Color::new(150, 150, 150, 255));
             }
             
@@ -431,24 +440,95 @@ impl InventoryUI {
             } else {
                 // Fallback to colored square
                 let icon_color = match item.get_category() {
-                    CraftingCategory::BasicMaterials => Color::BROWN,
-                    CraftingCategory::Woodworking => Color::new(139, 69, 19, 255),
-                    CraftingCategory::Metallurgy => Color::LIGHTGRAY,
-                    CraftingCategory::CopperWorking => Color::new(184, 115, 51, 255),
+                    CraftingCategory::Tools => Color::MAROON,
+                    CraftingCategory::Materials => Color::BROWN,
+                    CraftingCategory::Metals => Color::LIGHTGRAY,
                     CraftingCategory::Textiles => Color::BEIGE,
-                    CraftingCategory::FoodProduction => Color::new(255, 215, 0, 255),
-                    CraftingCategory::AnimalProducts => Color::PINK,
-                    CraftingCategory::SteamSystems => Color::new(128, 128, 128, 255),
-                    CraftingCategory::Structures => Color::DARKGRAY,
+                    CraftingCategory::Food => Color::new(255, 215, 0, 255),
+                    CraftingCategory::Power => Color::new(128, 128, 128, 255),
+                    CraftingCategory::Buildings => Color::DARKGRAY,
                     CraftingCategory::Automation => Color::BLUE,
+                    CraftingCategory::Consumables => Color::PINK,
                 };
-                d.draw_rectangle(grid_x + 3, grid_y + 3, item_size - 6, item_size - 6, icon_color);
+                d.draw_rectangle(grid_x + 3, grid_y + 3, item_size as i32 - 6, item_size as i32 - 6, icon_color);
             }
         }
         
         // Draw tooltip AFTER all slots to ensure it appears on top
         if let Some(item) = hovered_item {
             self.draw_crafting_tooltip(d, crafting_system, inventory, item, mouse_pos);
+        }
+    }
+    
+    fn draw_building_recipes(&self, d: &mut RaylibDrawHandle, crafting_system: &CraftingSystem, inventory: &Inventory, assets: &AssetManager, world: &World, player: &Player, building_type: BuildingType, x: i32, y: i32, _width: i32, mouse_pos: Vector2) {
+        let recipes = crafting_system.get_recipes_for_building(building_type);
+        if recipes.is_empty() {
+            return;
+        }
+        
+        // Draw recipes section below the building interface
+        let recipes_y = y + 300; // Position below building slots
+        d.draw_text("Recipes:", x + 20, recipes_y, 18, Color::WHITE);
+        
+        let recipes_start_y = recipes_y + 25;
+        let item_size = 40;
+        let item_spacing = 8;
+        let items_per_row = 6;
+        
+        for (i, item) in recipes.iter().enumerate() {
+            let grid_x = x + 20 + ((i % items_per_row) * (item_size + item_spacing)) as i32;
+            let grid_y = recipes_start_y + ((i / items_per_row) * (item_size + item_spacing + 20)) as i32;
+            
+            let craft_status = crafting_system.get_craft_status(item, inventory, Some(world), Some(player.position));
+            
+            // Check if mouse is hovering over this item
+            let is_hovering = mouse_pos.x >= grid_x as f32 && 
+                             mouse_pos.x <= (grid_x + item_size as i32) as f32 &&
+                             mouse_pos.y >= grid_y as f32 && 
+                             mouse_pos.y <= (grid_y + item_size as i32) as f32;
+            
+            // Item slot background (with appropriate color coding)
+            let slot_color = match craft_status {
+                CraftStatus::CanCraft => if is_hovering { Color::new(80, 160, 80, 255) } else { Color::new(60, 120, 60, 255) },
+                CraftStatus::MissingResources(_) => if is_hovering { Color::new(160, 80, 80, 255) } else { Color::new(120, 60, 60, 255) },
+                CraftStatus::NeedsStructure(_) => if is_hovering { Color::new(160, 160, 80, 255) } else { Color::new(120, 120, 60, 255) },
+                CraftStatus::BuildingNotAvailable(_) => if is_hovering { Color::new(180, 60, 60, 255) } else { Color::new(140, 40, 40, 255) },
+                CraftStatus::NoRecipe => if is_hovering { Color::new(80, 80, 80, 255) } else { Color::new(60, 60, 60, 255) },
+            };
+            
+            d.draw_rectangle(grid_x, grid_y, item_size as i32, item_size as i32, slot_color);
+            d.draw_rectangle_lines(grid_x, grid_y, item_size as i32, item_size as i32, Color::BLACK);
+            
+            // Draw item icon
+            if let Some(icon_texture) = assets.get_crafting_icon(*item) {
+                d.draw_texture_pro(
+                    icon_texture,
+                    Rectangle::new(0.0, 0.0, icon_texture.width as f32, icon_texture.height as f32),
+                    Rectangle::new(grid_x as f32 + 4.0, grid_y as f32 + 4.0, (item_size - 8) as f32, (item_size - 8) as f32),
+                    Vector2::zero(),
+                    0.0,
+                    Color::WHITE
+                );
+            } else {
+                // Fallback to colored square
+                let icon_color = match item.get_category() {
+                    CraftingCategory::Tools => Color::MAROON,
+                    CraftingCategory::Materials => Color::BROWN,
+                    CraftingCategory::Metals => Color::LIGHTGRAY,
+                    CraftingCategory::Textiles => Color::BEIGE,
+                    CraftingCategory::Food => Color::new(255, 215, 0, 255),
+                    CraftingCategory::Power => Color::new(128, 128, 128, 255),
+                    CraftingCategory::Buildings => Color::DARKGRAY,
+                    CraftingCategory::Automation => Color::BLUE,
+                    CraftingCategory::Consumables => Color::PINK,
+                };
+                d.draw_rectangle(grid_x + 3, grid_y + 3, item_size as i32 - 6, item_size as i32 - 6, icon_color);
+            }
+            
+            // Draw tooltip if hovering
+            if is_hovering {
+                self.draw_crafting_tooltip(d, crafting_system, inventory, item, mouse_pos);
+            }
         }
     }
     
@@ -521,18 +601,21 @@ impl InventoryUI {
         }
     }
     
-    fn get_crafting_item_at_mouse(&self, mouse_pos: Vector2, panel_x: i32, panel_y: i32) -> Option<CraftableItem> {
-        let items = self.selected_category.get_items();
+    fn get_crafting_item_at_mouse(&self, mouse_pos: Vector2, panel_x: i32, panel_y: i32, tech_tree: &crate::tech_tree::TechTree) -> Option<CraftableItem> {
+        let all_items = self.selected_category.get_items();
+        let items: Vec<_> = all_items.into_iter()
+            .filter(|item| tech_tree.is_recipe_unlocked(item))
+            .collect();
         let categories = [
-            CraftingCategory::BasicMaterials,
-            CraftingCategory::Woodworking,
-            CraftingCategory::Metallurgy,
-            CraftingCategory::CopperWorking,
+            CraftingCategory::Tools,
+            CraftingCategory::Materials,
+            CraftingCategory::Metals,
             CraftingCategory::Textiles,
-            CraftingCategory::FoodProduction,
-            CraftingCategory::SteamSystems,
-            CraftingCategory::Structures,
+            CraftingCategory::Food,
+            CraftingCategory::Power,
+            CraftingCategory::Buildings,
             CraftingCategory::Automation,
+            CraftingCategory::Consumables,
         ];
         let tabs_per_row = 3;
         let tab_height = 35;
@@ -559,12 +642,27 @@ impl InventoryUI {
     
     fn get_building_name(&self, building_type: BuildingType) -> &'static str {
         match building_type {
+            BuildingType::Campfire => "Campfire",
             BuildingType::CharcoalPit => "Charcoal Pit",
+            BuildingType::CrudeFurnace => "Crude Furnace",
             BuildingType::BloomeryFurnace => "Bloomery Furnace",
             BuildingType::StoneAnvil => "Stone Anvil",
             BuildingType::SpinningWheel => "Spinning Wheel",
             BuildingType::WeavingMachine => "Weaving Machine",
             BuildingType::ConveyorBelt => "Conveyor Belt",
+            BuildingType::AdvancedForge => "Advanced Forge",
+            BuildingType::WheatFarm => "Wheat Farm",
+            BuildingType::Windmill => "Windmill",
+            BuildingType::WaterMill => "Water Mill",
+            BuildingType::StoneOven => "Stone Oven",
+            BuildingType::GrainSilo => "Grain Silo",
+            BuildingType::SteamBoiler => "Steam Boiler",
+            BuildingType::SteamDistributionHub => "Steam Distribution Hub",
+            BuildingType::WaterPump => "Water Pump",
+            BuildingType::SteamPump => "Steam Pump",
+            BuildingType::SteamHammer => "Steam Hammer",
+            BuildingType::SortingMachine => "Sorting Machine",
+            BuildingType::SteamEngine => "Steam Engine",
         }
     }
     

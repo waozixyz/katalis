@@ -11,6 +11,7 @@ pub fn handle_input(
     player: &mut Player, // Changed to mutable
     building_ui: &mut BuildingUI,
     inventory_ui: &mut InventoryUI,
+    tech_tree: &mut crate::tech_tree::TechTree,
 ) -> bool { // Returns true if handled a building click
     // Check for building clicks first (on press, not hold)
     if rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) {
@@ -34,10 +35,17 @@ pub fn handle_input(
             if distance <= MINING_RANGE {
                 if let Some(ground_item) = world.collect_ground_item(tile_x, tile_y) {
                     player.inventory.add_resource(ground_item.resource_type, ground_item.amount);
+                    
+                    // Track tech tree progress for manual resource collection
+                    tech_tree.update_objective_progress(&crate::tech_tree::ObjectiveType::CollectResource(ground_item.resource_type), ground_item.amount);
+                    
                     return true; // Handled the click
                 }
             }
         }
+        
+        // Trigger attack for chicken fleeing behavior
+        player.trigger_attack();
     }
     
     // Check for building demolition with right-click hold

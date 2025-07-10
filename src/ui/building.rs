@@ -191,12 +191,15 @@ impl BuildingUI {
     
     fn get_building_name(&self, building_type: BuildingType) -> &'static str {
         match building_type {
+            BuildingType::Campfire => "Campfire",
             BuildingType::CharcoalPit => "Charcoal Pit",
+            BuildingType::CrudeFurnace => "Crude Furnace",
             BuildingType::BloomeryFurnace => "Bloomery Furnace",
             BuildingType::StoneAnvil => "Stone Anvil",
             BuildingType::SpinningWheel => "Spinning Wheel",
             BuildingType::WeavingMachine => "Weaving Machine",
             BuildingType::ConveyorBelt => "Conveyor Belt",
+            _ => "Building", // Placeholder for newer building types
         }
     }
     

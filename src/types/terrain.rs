@@ -45,19 +45,36 @@ pub enum VeinType {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BuildingType {
+    Campfire,
     CharcoalPit,
+    CrudeFurnace,
     BloomeryFurnace,
     StoneAnvil,
     SpinningWheel,
     WeavingMachine,
     ConveyorBelt,
+    AdvancedForge,
+    WheatFarm,
+    Windmill,
+    WaterMill,
+    StoneOven,
+    GrainSilo,
+    SteamBoiler,
+    SteamDistributionHub,
+    WaterPump,
+    SteamPump,
+    SteamHammer,
+    SortingMachine,
+    SteamEngine,
 }
 
 impl BuildingType {
     pub fn from_resource_type(resource: &super::resources::ResourceType) -> Option<Self> {
         use super::resources::ResourceType;
         match resource {
+            ResourceType::Campfire => Some(BuildingType::Campfire),
             ResourceType::CharcoalPit => Some(BuildingType::CharcoalPit),
+            ResourceType::CrudeFurnace => Some(BuildingType::CrudeFurnace),
             ResourceType::BloomeryFurnace => Some(BuildingType::BloomeryFurnace),
             ResourceType::StoneAnvil => Some(BuildingType::StoneAnvil),
             ResourceType::SpinningWheel => Some(BuildingType::SpinningWheel),
@@ -69,58 +86,73 @@ impl BuildingType {
     
     pub fn get_size(&self) -> (i32, i32) {
         match self {
+            BuildingType::Campfire => (1, 1),
             BuildingType::CharcoalPit => (2, 2),
+            BuildingType::CrudeFurnace => (2, 2),
             BuildingType::BloomeryFurnace => (3, 3),
             BuildingType::StoneAnvil => (2, 2),
             BuildingType::SpinningWheel => (2, 2),
             BuildingType::WeavingMachine => (3, 2),
             BuildingType::ConveyorBelt => (1, 1),
+            _ => (2, 2), // Default size for new building types
         }
     }
     
     pub fn get_color(&self) -> Color {
         match self {
+            BuildingType::Campfire => Color::new(255, 140, 0, 255), // Orange for fire
             BuildingType::CharcoalPit => Color::new(101, 67, 33, 255),
+            BuildingType::CrudeFurnace => Color::new(160, 82, 45, 255), // Saddle brown
             BuildingType::BloomeryFurnace => Color::new(139, 69, 19, 255),
             BuildingType::StoneAnvil => Color::GRAY,
             BuildingType::SpinningWheel => Color::BROWN,
             BuildingType::WeavingMachine => Color::new(160, 82, 45, 255),
             BuildingType::ConveyorBelt => Color::DARKGRAY,
+            _ => Color::GRAY, // Default color for new building types
         }
     }
     
     pub fn to_craftable_item(&self) -> super::super::crafting::CraftableItem {
         use super::super::crafting::CraftableItem;
         match self {
+            BuildingType::Campfire => CraftableItem::Campfire,
             BuildingType::CharcoalPit => CraftableItem::CharcoalPit,
+            BuildingType::CrudeFurnace => CraftableItem::CrudeFurnace,
             BuildingType::BloomeryFurnace => CraftableItem::BloomeryFurnace,
             BuildingType::StoneAnvil => CraftableItem::StoneAnvil,
             BuildingType::SpinningWheel => CraftableItem::SpinningWheel,
             BuildingType::WeavingMachine => CraftableItem::WeavingMachine,
             BuildingType::ConveyorBelt => CraftableItem::ConveyorBelt,
+            _ => CraftableItem::Campfire, // Default for new building types
         }
     }
     
     pub fn get_sprite_info(&self) -> (i32, i32, bool) {
         // Returns (frame_width_in_texture, frame_height_in_texture, is_animated)
         match self {
+            BuildingType::Campfire => (32, 32, true), // 1x1 tile, animated fire
             BuildingType::CharcoalPit => (256, 256, true), // Each frame is 256x256 pixels, animated with 2 frames
+            BuildingType::CrudeFurnace => (64, 64, true), // 2x2 tiles, animated
             BuildingType::BloomeryFurnace => (256, 256, true), // Same dimensions as charcoal pit, animated with 2 frames
             BuildingType::StoneAnvil => (64, 64, false), // 2x2 tiles, static
             BuildingType::SpinningWheel => (64, 64, false), // 2x2 tiles, static
             BuildingType::WeavingMachine => (96, 64, false), // 3x2 tiles, static
             BuildingType::ConveyorBelt => (32, 32, false), // 1x1 tile, static
+            _ => (64, 64, false), // Default for new building types
         }
     }
     
     pub fn get_name(&self) -> &'static str {
         match self {
+            BuildingType::Campfire => "Campfire",
             BuildingType::CharcoalPit => "Charcoal Pit",
+            BuildingType::CrudeFurnace => "Crude Furnace",
             BuildingType::BloomeryFurnace => "Bloomery Furnace",
             BuildingType::StoneAnvil => "Stone Anvil",
             BuildingType::SpinningWheel => "Spinning Wheel",
             BuildingType::WeavingMachine => "Weaving Machine",
             BuildingType::ConveyorBelt => "Conveyor Belt",
+            _ => "Building", // Default for new building types
         }
     }
 }

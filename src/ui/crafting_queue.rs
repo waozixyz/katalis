@@ -129,16 +129,15 @@ impl CraftingQueueUI {
         } else {
             // Fallback to colored square based on category
             let icon_color = match item.get_category() {
-                CraftingCategory::BasicMaterials => Color::BROWN,
-                CraftingCategory::Woodworking => Color::new(139, 69, 19, 255),
-                CraftingCategory::Metallurgy => Color::LIGHTGRAY,
-                CraftingCategory::CopperWorking => Color::new(184, 115, 51, 255),
+                CraftingCategory::Tools => Color::MAROON,
+                CraftingCategory::Materials => Color::BROWN,
+                CraftingCategory::Metals => Color::LIGHTGRAY,
                 CraftingCategory::Textiles => Color::BEIGE,
-                CraftingCategory::FoodProduction => Color::new(255, 215, 0, 255),
-                CraftingCategory::AnimalProducts => Color::PINK,
-                CraftingCategory::SteamSystems => Color::new(128, 128, 128, 255),
-                CraftingCategory::Structures => Color::DARKGRAY,
+                CraftingCategory::Food => Color::new(255, 215, 0, 255),
+                CraftingCategory::Power => Color::new(128, 128, 128, 255),
+                CraftingCategory::Buildings => Color::DARKGRAY,
                 CraftingCategory::Automation => Color::BLUE,
+                CraftingCategory::Consumables => Color::PINK,
             };
             d.draw_rectangle(x + 3, y + 3, size - 6, size - 6, icon_color);
         }

@@ -8,6 +8,8 @@ mod assets;
 mod animation;
 mod crafting; // NEW
 mod ui; // NEW
+mod progression; // NEW
+mod tech_tree; // NEW
 
 use raylib::prelude::*;
 use types::*;
@@ -17,7 +19,9 @@ use camera::update_camera;
 use input::handle_input;
 use render::{draw_world, draw_time_display};
 use assets::AssetManager;
-use ui::{InventoryUI, PauseMenu, BuildingUI, CraftingQueueUI};
+use ui::{InventoryUI, PauseMenu, BuildingUI, CraftingQueueUI, ProgressionUI, TechTreeUI};
+use progression::ProgressionSystem;
+use tech_tree::{TechTree, ObjectiveType};
 
 const SCREEN_WIDTH: i32 = 1200;
 const SCREEN_HEIGHT: i32 = 800;
@@ -68,6 +72,12 @@ fn main() {
     let mut pause_menu = PauseMenu::new();
     let mut building_ui = BuildingUI::new();
     let crafting_queue_ui = CraftingQueueUI::new();
+    let progression_ui = ProgressionUI::new();
+    let mut tech_tree_ui = TechTreeUI::new();
+    
+    // Initialize progression system
+    let mut progression_system = ProgressionSystem::new();
+    let mut tech_tree = TechTree::new();
 
     let mut camera = Camera2D {
         target: game_player.position,
@@ -89,6 +99,7 @@ fn main() {
         // Update UI systems first
         let esc_consumed_by_inventory = inventory_ui.update(&rl);
         let esc_consumed_by_building = building_ui.update(&rl);
+        tech_tree_ui.handle_input(&rl, &mut tech_tree);
         let should_quit = pause_menu.update(&rl, esc_consumed_by_inventory || esc_consumed_by_building);
         
         // Check if we should quit the game
@@ -139,14 +150,17 @@ fn main() {
                         // Remove from inventory
                         game_player.inventory.remove_resource(placement.resource_type, 1);
                         
+                        // Update tech tree progress for building placement
+                        tech_tree.update_objective_progress(&crate::tech_tree::ObjectiveType::BuildStructure(placement.building_type), 1);
+                        
                         // Clear placement state
                         placement_state = None;
                     }
                 }
             } else {
-                let building_clicked = handle_input(&mut world, &camera, &rl, &mut game_player, &mut building_ui, &mut inventory_ui);
+                let building_clicked = handle_input(&mut world, &camera, &rl, &mut game_player, &mut building_ui, &mut inventory_ui, &mut tech_tree);
                 if !building_clicked {
-                    if let Some(new_placement) = inventory_ui.handle_mouse_input(&rl, &mut game_player, &world.crafting_system) {
+                    if let Some(new_placement) = inventory_ui.handle_mouse_input(&rl, &mut game_player, &world.crafting_system, &world, &tech_tree) {
                         placement_state = Some(new_placement);
                     }
                 }
@@ -161,24 +175,48 @@ fn main() {
         
         // Handle inventory UI mouse input when open
         if inventory_ui.is_open {
-            if let Some(new_placement) = inventory_ui.handle_mouse_input(&rl, &mut game_player, &world.crafting_system) {
+            if let Some(new_placement) = inventory_ui.handle_mouse_input(&rl, &mut game_player, &world.crafting_system, &world, &tech_tree) {
                 placement_state = Some(new_placement);
             }
         }
         
         // Update world and collect resources only if not paused
         if !pause_menu.is_open {
-            let (wood_gained, stone_gained, iron_gained, coal_gained, clay_gained, copper_gained, cotton_gained, eggs_gained) = world.update(delta_time, &mut game_player);
+            let (wood_gained, stone_gained, iron_gained, coal_gained, clay_gained, copper_gained, cotton_gained, eggs_gained) = world.update(delta_time, &mut game_player, &mut tech_tree);
             
-            // Add gained resources to inventory
-            if wood_gained > 0 { game_player.inventory.add_resource(ResourceType::Wood, wood_gained); }
-            if stone_gained > 0 { game_player.inventory.add_resource(ResourceType::Stone, stone_gained); }
-            if iron_gained > 0 { game_player.inventory.add_resource(ResourceType::IronOre, iron_gained); }
-            if coal_gained > 0 { game_player.inventory.add_resource(ResourceType::Coal, coal_gained); }
-            if clay_gained > 0 { game_player.inventory.add_resource(ResourceType::Clay, clay_gained); }
-            if copper_gained > 0 { game_player.inventory.add_resource(ResourceType::CopperOre, copper_gained); }
-            if cotton_gained > 0 { game_player.inventory.add_resource(ResourceType::Cotton, cotton_gained); }
-            if eggs_gained > 0 { game_player.inventory.add_resource(ResourceType::Egg, eggs_gained); }
+            // Add gained resources to inventory and update tech tree progress
+            if wood_gained > 0 { 
+                game_player.inventory.add_resource(ResourceType::Wood, wood_gained); 
+                tech_tree.update_objective_progress(&crate::tech_tree::ObjectiveType::CollectResource(ResourceType::Wood), wood_gained);
+            }
+            if stone_gained > 0 { 
+                game_player.inventory.add_resource(ResourceType::Stone, stone_gained); 
+                tech_tree.update_objective_progress(&crate::tech_tree::ObjectiveType::CollectResource(ResourceType::Stone), stone_gained);
+            }
+            if iron_gained > 0 { 
+                game_player.inventory.add_resource(ResourceType::IronOre, iron_gained); 
+                tech_tree.update_objective_progress(&crate::tech_tree::ObjectiveType::CollectResource(ResourceType::IronOre), iron_gained);
+            }
+            if coal_gained > 0 { 
+                game_player.inventory.add_resource(ResourceType::Coal, coal_gained); 
+                tech_tree.update_objective_progress(&crate::tech_tree::ObjectiveType::CollectResource(ResourceType::Coal), coal_gained);
+            }
+            if clay_gained > 0 { 
+                game_player.inventory.add_resource(ResourceType::Clay, clay_gained); 
+                tech_tree.update_objective_progress(&crate::tech_tree::ObjectiveType::CollectResource(ResourceType::Clay), clay_gained);
+            }
+            if copper_gained > 0 { 
+                game_player.inventory.add_resource(ResourceType::CopperOre, copper_gained); 
+                tech_tree.update_objective_progress(&crate::tech_tree::ObjectiveType::CollectResource(ResourceType::CopperOre), copper_gained);
+            }
+            if cotton_gained > 0 { 
+                game_player.inventory.add_resource(ResourceType::Cotton, cotton_gained); 
+                tech_tree.update_objective_progress(&crate::tech_tree::ObjectiveType::CollectResource(ResourceType::Cotton), cotton_gained);
+            }
+            if eggs_gained > 0 { 
+                game_player.inventory.add_resource(ResourceType::Egg, eggs_gained); 
+                tech_tree.update_objective_progress(&crate::tech_tree::ObjectiveType::CollectResource(ResourceType::Egg), eggs_gained);
+            }
             
             // Handle completed demolitions
             if let Some(completed_demolition) = game_player.update_demolition(delta_time) {
@@ -187,12 +225,15 @@ fn main() {
                 
                 // Add building back to inventory
                 let resource_type = match completed_demolition.building_type {
+                    BuildingType::Campfire => ResourceType::Campfire,
                     BuildingType::CharcoalPit => ResourceType::CharcoalPit,
+                    BuildingType::CrudeFurnace => ResourceType::CrudeFurnace,
                     BuildingType::BloomeryFurnace => ResourceType::BloomeryFurnace,
                     BuildingType::StoneAnvil => ResourceType::StoneAnvil,
                     BuildingType::SpinningWheel => ResourceType::SpinningWheel,
                     BuildingType::WeavingMachine => ResourceType::WeavingMachine,
                     BuildingType::ConveyorBelt => ResourceType::ConveyorBelt,
+                    _ => ResourceType::Wood, // Placeholder for newer building types
                 };
                 
                 game_player.inventory.add_resource(resource_type, 1);
@@ -324,8 +365,11 @@ fn main() {
             }
         }
         
+        // Draw current tech objectives first (so they appear under other UIs)
+        tech_tree_ui.draw_current_objectives(&mut d, &tech_tree);
+        
         // Draw inventory UI (supports both crafting and building modes)
-        inventory_ui.draw_with_world(&mut d, &world, &game_player.inventory, &world.crafting_system, &assets, mouse_screen_pos, &game_player);
+        inventory_ui.draw_with_world(&mut d, &world, &game_player.inventory, &world.crafting_system, &assets, mouse_screen_pos, &game_player, &tech_tree);
         
         // Draw building UI (deprecated - for compatibility)
         if !inventory_ui.is_open {
@@ -342,6 +386,9 @@ fn main() {
         
         // Always draw crafting queue UI (persists even when inventory is closed)
         crafting_queue_ui.draw(&mut d, &game_player, &assets);
+        
+        // Draw full tech tree (only when open)
+        tech_tree_ui.draw_full_tree(&mut d, &tech_tree);
         
         draw_time_display(&mut d, &world.game_time);
         

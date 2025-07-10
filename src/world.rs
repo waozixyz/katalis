@@ -352,12 +352,12 @@ impl World {
                     }
                 }
                 
-                // Stones - common on stone terrain, rare on grass
+                // Rocks - common on stone terrain, rare on grass
                 let stone_threshold = if matches!(tile.tile_type, TileType::Stone) { 0.2 } else { 0.6 };
                 let stone_value = stone_noise.get([base_x, base_y]);
                 if stone_value > stone_threshold {
                     let amount = 1 + ((stone_value * 2.0) as u32).min(2);
-                    tile.add_ground_item(ResourceType::Stones, amount);
+                    tile.add_ground_item(ResourceType::Rocks, amount);
                     continue;
                 }
                 
@@ -411,7 +411,7 @@ impl World {
         println!("  Resource distribution: {:?}", resource_counts);
     }
     
-    pub fn update(&mut self, delta_time: f32, player: &mut Player) -> (u32, u32, u32, u32, u32, u32, u32, u32) { // Returns (wood, stone, iron, coal, clay, copper, cotton, eggs)
+    pub fn update(&mut self, delta_time: f32, player: &mut Player, tech_tree: &mut crate::tech_tree::TechTree) -> (u32, u32, u32, u32, u32, u32, u32, u32) { // Returns (wood, stone, iron, coal, clay, copper, cotton, eggs)
         let mut wood_gained = 0;
         let mut stone_gained = 0;
         let mut iron_gained = 0;
@@ -496,7 +496,7 @@ impl World {
         }
         
         // Handle completed crafting
-        if let Some(craft) = completed_craft {
+        if let Some(ref craft) = completed_craft {
             // Add crafted item to inventory
             let (output_item, output_amount) = &craft.recipe.output;
             match output_item {
@@ -561,6 +561,11 @@ impl World {
         
         // Clear completed crafting and start next in queue
         if crafting_completed {
+            // Track tech tree progress for completed craft
+            if let Some(ref craft) = completed_craft {
+                tech_tree.update_objective_progress(&crate::tech_tree::ObjectiveType::CraftItem(craft.item), 1);
+            }
+            
             player.current_crafting = None;
             
             // Start next item in queue if any
@@ -615,7 +620,7 @@ impl World {
         self.trees.retain(|tree| !tree.should_remove());
         
         // Update animals
-        let animal_drops = self.animal_manager.update(delta_time, player.position, self.width, self.height);
+        let animal_drops = self.animal_manager.update(delta_time, player.position, player.is_attacking(), self.width, self.height);
         for (resource_type, amount) in animal_drops {
             match resource_type {
                 ResourceType::Egg => eggs_gained += amount,
@@ -682,6 +687,14 @@ impl World {
         }
         
         println!("Generated {} cotton patches", cotton_count);
+        
+        // DEBUG: Spawn a test chicken near the starting position for immediate testing
+        let test_chicken = crate::types::animals::Animal::new(
+            crate::types::animals::AnimalType::WildChicken,
+            Vector2::new(52.0 * TILE_SIZE as f32, 52.0 * TILE_SIZE as f32) // Near starting position
+        );
+        self.animal_manager.animals.push(test_chicken);
+        println!("DEBUG: Added test chicken at start!");
     }
 
     pub fn try_start_mining(&mut self, player: &mut Player, target_pos: Vector2) {
@@ -739,11 +752,24 @@ impl World {
             return;
         }
         
-        // Try to kill animals
-        if let Some(drops) = self.animal_manager.try_kill_animal(target_pos) {
+        // Try to pickup dead animals first
+        if let Some(drops) = self.animal_manager.try_pickup_dead_animal(target_pos) {
             for (resource_type, amount) in drops {
                 player.inventory.add_resource(resource_type, amount);
-                println!("Killed animal, got {} {}", amount, resource_type.get_name());
+                println!("Picked up dead animal, got {} {}", amount, resource_type.get_name());
+            }
+            return;
+        }
+        
+        // Try to attack living animals
+        if let Some(drops) = self.animal_manager.try_attack_animal(target_pos) {
+            if !drops.is_empty() {
+                for (resource_type, amount) in drops {
+                    player.inventory.add_resource(resource_type, amount);
+                    println!("Killed animal, got {} {}", amount, resource_type.get_name());
+                }
+            } else {
+                println!("Hit animal!");
             }
             return;
         }
@@ -812,12 +838,15 @@ impl World {
         
         // Create inventory for the building based on its type
         let mut inventory = match building_type {
+            BuildingType::Campfire => BuildingInventory::new(1, 1), // 1 input (raw chicken), 1 output (cooked chicken)
             BuildingType::CharcoalPit => BuildingInventory::new(1, 1), // 1 input (wood), 1 output (charcoal)
+            BuildingType::CrudeFurnace => BuildingInventory::new(2, 1), // 2 inputs (copper ore, charcoal), 1 output (copper ingot)
             BuildingType::BloomeryFurnace => BuildingInventory::new(2, 1), // 2 inputs (iron ore, coal), 1 output (iron ingot)
             BuildingType::StoneAnvil => BuildingInventory::new(2, 1), // 2 inputs, 1 output
             BuildingType::SpinningWheel => BuildingInventory::new(1, 1), // 1 input (cotton), 1 output (thread)
             BuildingType::WeavingMachine => BuildingInventory::new(1, 1), // 1 input (thread), 1 output (cloth)
             BuildingType::ConveyorBelt => BuildingInventory::new(1, 1), // 1 input, 1 output
+            _ => BuildingInventory::new(1, 1), // Default for new building types
         };
         
         // Set the correct max_progress for each building

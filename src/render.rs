@@ -313,14 +313,71 @@ pub fn draw_world(d: &mut RaylibMode2D<RaylibDrawHandle>, world: &World, camera:
             
             // Draw ground items
             if let Some(ground_item) = &tile.ground_item {
-                // Draw a small colored circle for ground items
-                let item_color = ground_item.resource_type.get_color();
                 let center_x = pos_x + TILE_SIZE / 2;
                 let center_y = pos_y + TILE_SIZE / 2;
                 
-                // Draw a small circle with outline
-                d.draw_circle(center_x, center_y, 4.0, item_color);
-                d.draw_circle_lines(center_x, center_y, 4.0, Color::BLACK);
+                // Try to draw spritesheet texture if available
+                if let Some(texture) = assets.get_ground_item_texture(ground_item.resource_type) {
+                    if let Some((frame_width, frame_height, _)) = ground_item.resource_type.get_ground_item_spritesheet_info() {
+                        if let Some((cols, rows)) = ground_item.resource_type.get_ground_item_spritesheet_layout() {
+                            // Calculate which frame to use based on amount or random selection
+                            let frame_index = match ground_item.resource_type {
+                                ResourceType::Twigs => {
+                                    // Use bundle frame (frame 3) if amount > 3, otherwise use single twig frames
+                                    if ground_item.amount > 3 { 3 } else { (ground_item.amount - 1).min(2) }
+                                }
+                                _ => {
+                                    // Use pseudo-random frame based on position and amount
+                                    let seed = (x * 31 + y * 17 + ground_item.amount as usize) as u32;
+                                    (seed % (cols * rows)) as u32
+                                }
+                            };
+                            
+                            // Calculate source rectangle for the frame
+                            let frame_x = (frame_index % cols) as f32 * frame_width as f32;
+                            let frame_y = (frame_index / cols) as f32 * frame_height as f32;
+                            
+                            // Draw the sprite scaled to fit nicely in the tile
+                            let sprite_size = 16.0; // Size of the sprite on screen
+                            let sprite_x = center_x as f32 - sprite_size / 2.0;
+                            let sprite_y = center_y as f32 - sprite_size / 2.0;
+                            
+                            d.draw_texture_pro(
+                                texture,
+                                Rectangle::new(frame_x, frame_y, frame_width as f32, frame_height as f32),
+                                Rectangle::new(sprite_x, sprite_y, sprite_size, sprite_size),
+                                Vector2::zero(),
+                                0.0,
+                                Color::WHITE
+                            );
+                        } else {
+                            // Fallback to simple texture draw
+                            d.draw_texture_pro(
+                                texture,
+                                Rectangle::new(0.0, 0.0, texture.width as f32, texture.height as f32),
+                                Rectangle::new(center_x as f32 - 8.0, center_y as f32 - 8.0, 16.0, 16.0),
+                                Vector2::zero(),
+                                0.0,
+                                Color::WHITE
+                            );
+                        }
+                    } else {
+                        // Fallback to simple texture draw
+                        d.draw_texture_pro(
+                            texture,
+                            Rectangle::new(0.0, 0.0, texture.width as f32, texture.height as f32),
+                            Rectangle::new(center_x as f32 - 8.0, center_y as f32 - 8.0, 16.0, 16.0),
+                            Vector2::zero(),
+                            0.0,
+                            Color::WHITE
+                        );
+                    }
+                } else {
+                    // Fallback to colored circle for items without sprites
+                    let item_color = ground_item.resource_type.get_color();
+                    d.draw_circle(center_x, center_y, 4.0, item_color);
+                    d.draw_circle_lines(center_x, center_y, 4.0, Color::BLACK);
+                }
                 
                 // Draw amount indicator if more than 1
                 if ground_item.amount > 1 {
@@ -346,20 +403,69 @@ pub fn draw_world(d: &mut RaylibMode2D<RaylibDrawHandle>, world: &World, camera:
     // Draw animals
     let visible_animals = world.animal_manager.get_animals_in_bounds(min_bound, max_bound);
     for animal in visible_animals {
-        // Draw simple colored rectangle for now (can be replaced with sprites later)
-        let rect = Rectangle::new(
-            animal.position.x - animal.size / 2.0,
-            animal.position.y - animal.size / 2.0,
-            animal.size,
-            animal.size
-        );
-        d.draw_rectangle_rec(rect, animal.get_color());
+        // Use spritesheet rendering for living animals, dead texture for dead ones
+        if animal.is_alive {
+            if let Some(texture) = assets.get_animal_texture("wild_chicken") {
+                let (frame_x, frame_y, frame_width, frame_height) = animal.get_spritesheet_frame();
+                
+                // Draw the animated sprite
+                let sprite_size = animal.size * 2.0; // Make sprites a bit larger than the collision box
+                d.draw_texture_pro(
+                    texture,
+                    Rectangle::new(frame_x as f32, frame_y as f32, frame_width as f32, frame_height as f32),
+                    Rectangle::new(
+                        animal.position.x - sprite_size / 2.0,
+                        animal.position.y - sprite_size / 2.0,
+                        sprite_size,
+                        sprite_size
+                    ),
+                    Vector2::zero(),
+                    0.0, // Could use animal.direction for rotation if needed
+                    Color::WHITE
+                );
+            } else {
+                // Fallback to colored rectangle if texture not loaded
+                let rect = Rectangle::new(
+                    animal.position.x - animal.size / 2.0,
+                    animal.position.y - animal.size / 2.0,
+                    animal.size,
+                    animal.size
+                );
+                d.draw_rectangle_rec(rect, animal.get_color());
+                d.draw_rectangle_lines_ex(rect, 1.0, Color::BLACK);
+            }
+        } else {
+            // Draw dead chicken texture
+            if let Some(dead_texture) = assets.get_animal_texture("wild_chicken_dead") {
+                let sprite_size = animal.size * 2.0;
+                d.draw_texture_pro(
+                    dead_texture,
+                    Rectangle::new(0.0, 0.0, dead_texture.width as f32, dead_texture.height as f32),
+                    Rectangle::new(
+                        animal.position.x - sprite_size / 2.0,
+                        animal.position.y - sprite_size / 2.0,
+                        sprite_size,
+                        sprite_size
+                    ),
+                    Vector2::zero(),
+                    0.0,
+                    Color::WHITE
+                );
+            } else {
+                // Fallback to colored rectangle
+                let rect = Rectangle::new(
+                    animal.position.x - animal.size / 2.0,
+                    animal.position.y - animal.size / 2.0,
+                    animal.size,
+                    animal.size
+                );
+                d.draw_rectangle_rec(rect, animal.get_color());
+                d.draw_rectangle_lines_ex(rect, 1.0, Color::BLACK);
+            }
+        }
         
-        // Draw a simple outline
-        d.draw_rectangle_lines_ex(rect, 1.0, Color::BLACK);
-        
-        // Show health bar if damaged
-        if animal.health < animal.max_health {
+        // Show health bar if damaged and alive
+        if animal.is_alive && animal.health < animal.max_health {
             let health_bar_width = animal.size;
             let health_bar_height = 3.0;
             let health_percent = animal.health / animal.max_health;
@@ -383,6 +489,15 @@ pub fn draw_world(d: &mut RaylibMode2D<RaylibDrawHandle>, world: &World, camera:
             );
         }
     }
+    
+    // DEBUG: Show total animal count
+    d.draw_text(
+        &format!("Animals: {}", world.animal_manager.animals.len()),
+        10,
+        60,
+        20,
+        Color::RED
+    );
     
     // Draw dropped eggs
     let visible_eggs = world.animal_manager.get_eggs_in_bounds(min_bound, max_bound);
