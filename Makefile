@@ -15,14 +15,24 @@ KRYON_SOURCES = $(KRYON_C_DIR)/kryon.c $(KRYON_C_DIR)/kryon_dsl.c
 
 # Source files
 TARGET = main
-APP_SOURCES = src/main.c src/game.c
+
+# Voxel engine sources
+VOXEL_SOURCES = src/voxel/block.c \
+                src/voxel/chunk.c \
+                src/voxel/world.c \
+                src/voxel/noise.c \
+                src/voxel/terrain.c \
+                src/voxel/player.c \
+                src/voxel/texture_atlas.c
+
+APP_SOURCES = src/main.c src/game.c $(VOXEL_SOURCES)
 
 .PHONY: all clean run
 
 all: $(TARGET)
 
 main: $(APP_SOURCES) $(KRYON_SOURCES)
-	$(CC) $(CFLAGS) $(INCLUDES) -Isrc $(APP_SOURCES) $(KRYON_C_DIR)/kryon.c $(KRYON_C_DIR)/kryon_dsl.c $(LDFLAGS) $(LIBS) -o $@
+	$(CC) $(CFLAGS) $(INCLUDES) -Iinclude -Isrc $(APP_SOURCES) $(KRYON_C_DIR)/kryon.c $(KRYON_C_DIR)/kryon_dsl.c $(LDFLAGS) $(LIBS) -o $@
 
 clean:
 	rm -f $(TARGET) *.kir
