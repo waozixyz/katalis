@@ -1,0 +1,27 @@
+# Kryon cache
+.kryon_cache
+
+# Build artifacts
+main
+*.kir
+*.o
+*.a
+*.so
+*.dylib
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Debug
+*.dSYM/
+vgcore.*
+core
+
+# Temporary files
+*.tmp
+*.bak

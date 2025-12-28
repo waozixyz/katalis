@@ -1,0 +1,24 @@
+[project]
+name = "katalis"
+version = "0.1.0"
+description = "Katalis application"
+author = "Waozi"
+license = "0BSD"
+
+[build]
+entry = "src/main.c"
+targets = ["desktop"]
+frontend = "c"
+output_dir = "dist"
+
+[window]
+title = "Katalis"
+width = 800
+height = 600
+resizable = true
+
+[desktop]
+renderer = "raylib"
+
+[dependencies]
+kryon = { path = "/mnt/storage/Projects/kryon" }
