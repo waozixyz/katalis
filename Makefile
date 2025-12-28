@@ -15,13 +15,14 @@ KRYON_SOURCES = $(KRYON_C_DIR)/kryon.c $(KRYON_C_DIR)/kryon_dsl.c
 
 # Source files
 TARGET = main
+APP_SOURCES = src/main.c src/game.c
 
 .PHONY: all clean run
 
 all: $(TARGET)
 
-main: src/main.c $(KRYON_SOURCES)
-	$(CC) $(CFLAGS) $(INCLUDES) src/main.c $(KRYON_C_DIR)/kryon.c $(KRYON_C_DIR)/kryon_dsl.c $(LDFLAGS) $(LIBS) -o $@
+main: $(APP_SOURCES) $(KRYON_SOURCES)
+	$(CC) $(CFLAGS) $(INCLUDES) -Isrc $(APP_SOURCES) $(KRYON_C_DIR)/kryon.c $(KRYON_C_DIR)/kryon_dsl.c $(LDFLAGS) $(LIBS) -o $@
 
 clean:
 	rm -f $(TARGET) *.kir

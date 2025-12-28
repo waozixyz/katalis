@@ -7,6 +7,7 @@
 #include <kryon_dsl.h>
 #include <stdbool.h>
 #include <raylib.h>
+#include "game.h"
 
 // Only include desktop renderer for standalone builds
 #ifndef KRYON_KIR_ONLY
@@ -17,23 +18,7 @@
 static IRComponent* title_screen = NULL;
 static IRComponent* game_screen = NULL;
 
-// Native canvas render callback for game rendering
-void render_game_canvas(uint32_t canvas_id) {
-    // This function is called every frame during rendering
-    // Full Raylib API is available here
 
-    // Example: Draw a simple game scene
-    DrawText("Native Raylib Canvas!", 50, 50, 32, WHITE);
-    DrawCircle(200, 200, 50, YELLOW);
-    DrawRectangle(300, 150, 100, 80, BLUE);
-
-    // You can add full game logic here:
-    // - Draw sprites
-    // - Render physics
-    // - Custom shaders
-    // - Particle systems
-    // etc.
-}
 
 // Event handler - switch from title to game screen
 void on_start_game(void) {
@@ -87,7 +72,7 @@ int main(void) {
             ),
 
             // Game Screen (initially hidden)
-            game_screen = NATIVE_CANVAS(render_game_canvas,
+            game_screen = NATIVE_CANVAS(game_run,
                 FULL_SIZE,
                 BG_COLOR(0x1a1a2e),
                 VISIBLE(false)
