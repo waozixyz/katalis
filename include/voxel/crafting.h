@@ -67,4 +67,17 @@ void crafting_update_output(Inventory* inv);
  */
 bool crafting_try_craft(Inventory* inv);
 
+/**
+ * Calculate how many times we can craft the current recipe
+ * Returns 0 if no valid recipe
+ */
+int crafting_get_max_craft_count(Inventory* inv);
+
+/**
+ * Craft as many items as possible and return them as ItemStack
+ * Used for shift-click on crafting output
+ * Returns the crafted items (caller must add to inventory)
+ */
+ItemStack crafting_craft_all(Inventory* inv);
+
 #endif // VOXEL_CRAFTING_H

@@ -34,7 +34,9 @@ VOXEL_SOURCES = src/voxel/block.c \
                 src/voxel/block_human.c \
                 src/voxel/sky.c \
                 src/voxel/tree.c \
-                src/voxel/network.c
+                src/voxel/network.c \
+                src/voxel/minimap.c \
+                src/voxel/light.c
 
 APP_SOURCES = src/main.c src/game.c $(VOXEL_SOURCES)
 

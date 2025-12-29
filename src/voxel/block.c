@@ -102,6 +102,86 @@ void block_system_init(void) {
         .is_fluid = false
     };
 
+    // DEEP_STONE
+    g_block_properties[BLOCK_DEEP_STONE] = (BlockProperties){
+        .name = "Deep Stone",
+        .is_solid = true,
+        .is_transparent = false,
+        .is_fluid = false
+    };
+
+    // GRAVEL
+    g_block_properties[BLOCK_GRAVEL] = (BlockProperties){
+        .name = "Gravel",
+        .is_solid = true,
+        .is_transparent = false,
+        .is_fluid = false
+    };
+
+    // COAL_ORE
+    g_block_properties[BLOCK_COAL_ORE] = (BlockProperties){
+        .name = "Coal Ore",
+        .is_solid = true,
+        .is_transparent = false,
+        .is_fluid = false
+    };
+
+    // IRON_ORE
+    g_block_properties[BLOCK_IRON_ORE] = (BlockProperties){
+        .name = "Iron Ore",
+        .is_solid = true,
+        .is_transparent = false,
+        .is_fluid = false
+    };
+
+    // GOLD_ORE
+    g_block_properties[BLOCK_GOLD_ORE] = (BlockProperties){
+        .name = "Gold Ore",
+        .is_solid = true,
+        .is_transparent = false,
+        .is_fluid = false
+    };
+
+    // DIAMOND_ORE
+    g_block_properties[BLOCK_DIAMOND_ORE] = (BlockProperties){
+        .name = "Diamond Ore",
+        .is_solid = true,
+        .is_transparent = false,
+        .is_fluid = false
+    };
+
+    // MOSSY_COBBLE (Dungeon)
+    g_block_properties[BLOCK_MOSSY_COBBLE] = (BlockProperties){
+        .name = "Mossy Cobblestone",
+        .is_solid = true,
+        .is_transparent = false,
+        .is_fluid = false
+    };
+
+    // STONE_BRICK (Dungeon)
+    g_block_properties[BLOCK_STONE_BRICK] = (BlockProperties){
+        .name = "Stone Brick",
+        .is_solid = true,
+        .is_transparent = false,
+        .is_fluid = false
+    };
+
+    // CRACKED_BRICK (Dungeon)
+    g_block_properties[BLOCK_CRACKED_BRICK] = (BlockProperties){
+        .name = "Cracked Stone Brick",
+        .is_solid = true,
+        .is_transparent = false,
+        .is_fluid = false
+    };
+
+    // CLAY
+    g_block_properties[BLOCK_CLAY] = (BlockProperties){
+        .name = "Clay",
+        .is_solid = true,
+        .is_transparent = false,
+        .is_fluid = false
+    };
+
     g_initialized = true;
     printf("[BLOCK] Block system initialized with %d block types\n", BLOCK_COUNT);
 }

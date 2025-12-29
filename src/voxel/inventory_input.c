@@ -343,7 +343,82 @@ void inventory_input_handle_shift_click(Inventory* inv, int mouse_x, int mouse_y
     InventorySection section;
     int slot_index = inventory_input_get_clicked_slot(mouse_x, mouse_y, &section);
 
+    printf("[INPUT] Shift-click at (%d, %d) -> section=%d, slot=%d\n", mouse_x, mouse_y, section, slot_index);
+
     if (slot_index == -1 || section == SECTION_NONE) {
+        return;
+    }
+
+    // Special case: Shift-click on crafting output = CRAFT ALL
+    if (section == SECTION_CRAFTING_OUTPUT) {
+        printf("[INPUT] Detected crafting output shift-click!\n");
+        ItemStack* output_slot = &inv->crafting_output[0];
+        if (output_slot->type == ITEM_NONE) {
+            printf("[INPUT] Output slot is empty, nothing to craft\n");
+            return;
+        }
+
+        printf("[INPUT] Output has %d x item type %d\n", output_slot->count, output_slot->type);
+
+        // Craft all possible items
+        ItemStack crafted = crafting_craft_all(inv);
+        printf("[INPUT] crafting_craft_all returned %d x item type %d\n", crafted.count, crafted.type);
+        if (crafted.type == ITEM_NONE || crafted.count == 0) {
+            return;
+        }
+
+        // Try to add to hotbar first, then main inventory
+        const ItemProperties* props = item_get_properties(crafted.type);
+        uint8_t remaining = crafted.count;
+
+        // Phase 1: Stack with existing items in hotbar
+        for (int i = 0; i < 9 && remaining > 0; i++) {
+            if (inv->hotbar[i].type == crafted.type) {
+                uint8_t space = props->max_stack_size - inv->hotbar[i].count;
+                uint8_t transfer = (remaining <= space) ? remaining : space;
+                inv->hotbar[i].count += transfer;
+                remaining -= transfer;
+            }
+        }
+
+        // Phase 2: Stack with existing items in main inventory
+        for (int i = 0; i < 27 && remaining > 0; i++) {
+            if (inv->main_inventory[i].type == crafted.type) {
+                uint8_t space = props->max_stack_size - inv->main_inventory[i].count;
+                uint8_t transfer = (remaining <= space) ? remaining : space;
+                inv->main_inventory[i].count += transfer;
+                remaining -= transfer;
+            }
+        }
+
+        // Phase 3: Create new stacks in empty hotbar slots
+        for (int i = 0; i < 9 && remaining > 0; i++) {
+            if (inv->hotbar[i].type == ITEM_NONE) {
+                uint8_t transfer = (remaining <= props->max_stack_size)
+                    ? remaining : props->max_stack_size;
+                inv->hotbar[i].type = crafted.type;
+                inv->hotbar[i].count = transfer;
+                inv->hotbar[i].durability = crafted.durability;
+                inv->hotbar[i].max_durability = crafted.max_durability;
+                remaining -= transfer;
+            }
+        }
+
+        // Phase 4: Create new stacks in empty main inventory slots
+        for (int i = 0; i < 27 && remaining > 0; i++) {
+            if (inv->main_inventory[i].type == ITEM_NONE) {
+                uint8_t transfer = (remaining <= props->max_stack_size)
+                    ? remaining : props->max_stack_size;
+                inv->main_inventory[i].type = crafted.type;
+                inv->main_inventory[i].count = transfer;
+                inv->main_inventory[i].durability = crafted.durability;
+                inv->main_inventory[i].max_durability = crafted.max_durability;
+                remaining -= transfer;
+            }
+        }
+
+        printf("[INPUT] Shift-click craft all: got %d items, %d couldn't fit\n",
+               crafted.count - remaining, remaining);
         return;
     }
 
@@ -356,7 +431,6 @@ void inventory_input_handle_shift_click(Inventory* inv, int mouse_x, int mouse_y
     // - Hotbar → Main Inventory
     // - Main Inventory → Hotbar
     // - Crafting Grid → Try hotbar first, then main inventory
-    // - Crafting Output → Special handling (Phase 9)
 
     ItemType item_type = clicked_slot->type;
     uint8_t count = clicked_slot->count;

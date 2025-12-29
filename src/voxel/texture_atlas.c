@@ -133,6 +133,18 @@ static Image generate_atlas_image(void) {
     generate_tile(&atlas, 0, 14, (Color){160, 160, 165, 255}, true);  // Base: Stone color
     generate_tile(&atlas, 1, 14, (Color){0, 200, 255, 255}, false);   // Diamond spots: Bright cyan
 
+    // MOSSY_COBBLE - Row 15 (Cobblestone with green moss)
+    generate_tile(&atlas, 0, 15, (Color){90, 120, 90, 255}, true);    // Mossy green-gray cobble
+
+    // STONE_BRICK - Row 16 (Clean cut stone bricks) - use column 1 for variety
+    generate_tile(&atlas, 0, 16, (Color){140, 140, 145, 255}, true);  // Clean gray bricks
+
+    // CRACKED_BRICK - Row 16 col 1 (Damaged stone bricks)
+    generate_tile(&atlas, 1, 16, (Color){120, 115, 110, 255}, true);  // Darker cracked bricks
+
+    // CLAY - Row 17 (Blue-gray clay)
+    generate_tile(&atlas, 0, 17, (Color){160, 165, 180, 255}, true);  // Blue-gray clay
+
     return atlas;
 }
 
@@ -277,6 +289,22 @@ TextureCoords texture_atlas_get_coords(BlockType block_type, BlockFace face) {
 
         case BLOCK_DIAMOND_ORE:
             tile_x = 0; tile_y = 14;
+            break;
+
+        case BLOCK_MOSSY_COBBLE:
+            tile_x = 0; tile_y = 15;
+            break;
+
+        case BLOCK_STONE_BRICK:
+            tile_x = 0; tile_y = 16;
+            break;
+
+        case BLOCK_CRACKED_BRICK:
+            tile_x = 1; tile_y = 16;
+            break;
+
+        case BLOCK_CLAY:
+            tile_x = 0; tile_y = 17;
             break;
 
         default:

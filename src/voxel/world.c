@@ -5,6 +5,7 @@
 #include "voxel/world.h"
 #include "voxel/texture_atlas.h"
 #include "voxel/terrain.h"
+#include "voxel/light.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -200,6 +201,9 @@ void world_set_block(World* world, int x, int y, int z, Block block) {
 
     Chunk* chunk = world_get_or_create_chunk(world, chunk_x, chunk_z);
     chunk_set_block(chunk, local_x, local_y, local_z, block);
+
+    // Recalculate lighting for this chunk when a block changes
+    light_calculate_chunk(chunk);
 }
 
 void world_update(World* world, int center_chunk_x, int center_chunk_z) {

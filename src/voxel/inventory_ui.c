@@ -32,19 +32,39 @@
 /**
  * Draw a single inventory slot
  */
-static void draw_slot(int x, int y, int size, bool selected) {
-    // Background
+static void draw_slot(int x, int y, int size) {
     DrawRectangle(x, y, size, size, (Color){50, 50, 50, 200});
+    DrawRectangleLines(x, y, size, size, (Color){80, 80, 80, 255});
+}
 
-    // Border
+/**
+ * Draw a hotbar slot with optional selection highlight
+ */
+static void draw_hotbar_slot(int x, int y, int size, bool selected) {
+    DrawRectangle(x, y, size, size, (Color){50, 50, 50, 200});
     if (selected) {
         DrawRectangleLines(x, y, size, size, WHITE);
         DrawRectangleLines(x + 1, y + 1, size - 2, size - 2, WHITE);
-        DrawRectangleLines(x + 2, y + 2, size - 4, size - 4, WHITE);
     } else {
-        DrawRectangleLines(x, y, size, size, (Color){100, 100, 100, 255});
-        DrawRectangleLines(x + 1, y + 1, size - 2, size - 2, (Color){80, 80, 80, 255});
+        DrawRectangleLines(x, y, size, size, (Color){80, 80, 80, 255});
     }
+}
+
+/**
+ * Draw item count in bottom-right of slot
+ */
+static void draw_item_count(int x, int y, int slot_size, uint8_t count) {
+    if (count <= 1) return;
+
+    const char* count_text = TextFormat("%d", count);
+    int font_size = 12;
+    int text_width = MeasureText(count_text, font_size);
+    int text_x = x + slot_size - text_width - 2;
+    int text_y = y + slot_size - font_size - 2;
+
+    // Simple shadow for readability
+    DrawText(count_text, text_x + 1, text_y + 1, font_size, BLACK);
+    DrawText(count_text, text_x, text_y, font_size, WHITE);
 }
 
 // ============================================================================
@@ -90,10 +110,9 @@ void inventory_ui_draw_hotbar(Inventory* inv, Texture2D atlas) {
     for (int i = 0; i < HOTBAR_SIZE; i++) {
         int x = start_x + i * (HOTBAR_SLOT_SIZE + HOTBAR_GAP);
         int y = start_y;
-
-        // Draw slot background and border
         bool selected = (i == inv->selected_hotbar_slot);
-        draw_slot(x, y, HOTBAR_SLOT_SIZE, selected);
+
+        draw_hotbar_slot(x, y, HOTBAR_SLOT_SIZE, selected);
 
         // Draw item icon if slot has an item
         ItemStack* slot = &inv->hotbar[i];
@@ -104,12 +123,8 @@ void inventory_ui_draw_hotbar(Inventory* inv, Texture2D atlas) {
 
             inventory_ui_draw_item_icon(slot->type, icon_x, icon_y, ITEM_ICON_SIZE, atlas);
 
-            // Draw item count if > 1
-            if (slot->count > 1) {
-                const char* count_text = TextFormat("%d", slot->count);
-                int text_width = MeasureText(count_text, 16);
-                DrawText(count_text, x + HOTBAR_SLOT_SIZE - text_width - 4, y + HOTBAR_SLOT_SIZE - 20, 16, WHITE);
-            }
+            // Draw item count with outline
+            draw_item_count(x, y, HOTBAR_SLOT_SIZE, slot->count);
 
             // Draw durability bar for tools
             const ItemProperties* props = item_get_properties(slot->type);
@@ -177,7 +192,7 @@ void inventory_ui_draw_full_screen(Inventory* inv, Texture2D atlas) {
             int y = craft_y + row * (SLOT_SIZE + SLOT_GAP);
             int slot_index = row * 3 + col;
 
-            draw_slot(x, y, SLOT_SIZE, false);
+            draw_slot(x, y, SLOT_SIZE);
 
             // Draw item if present
             ItemStack* slot = &inv->crafting_grid[slot_index];
@@ -185,11 +200,7 @@ void inventory_ui_draw_full_screen(Inventory* inv, Texture2D atlas) {
                 int icon_x = x + (SLOT_SIZE - 28) / 2;
                 int icon_y = y + (SLOT_SIZE - 28) / 2;
                 inventory_ui_draw_item_icon(slot->type, icon_x, icon_y, 28, atlas);
-
-                if (slot->count > 1) {
-                    const char* count_text = TextFormat("%d", slot->count);
-                    DrawText(count_text, x + SLOT_SIZE - 16, y + SLOT_SIZE - 16, 12, WHITE);
-                }
+                draw_item_count(x, y, SLOT_SIZE, slot->count);
             }
         }
     }
@@ -201,18 +212,14 @@ void inventory_ui_draw_full_screen(Inventory* inv, Texture2D atlas) {
 
     int output_x = arrow_x + 30;
     int output_y = craft_y + SLOT_SIZE - SLOT_SIZE/2;
-    draw_slot(output_x, output_y, SLOT_SIZE, false);
+    draw_slot(output_x, output_y, SLOT_SIZE);
 
     ItemStack* output_slot = &inv->crafting_output[0];
     if (output_slot->type != ITEM_NONE) {
         int icon_x = output_x + (SLOT_SIZE - 28) / 2;
         int icon_y = output_y + (SLOT_SIZE - 28) / 2;
         inventory_ui_draw_item_icon(output_slot->type, icon_x, icon_y, 28, atlas);
-
-        if (output_slot->count > 1) {
-            const char* count_text = TextFormat("%d", output_slot->count);
-            DrawText(count_text, output_x + SLOT_SIZE - 16, output_y + SLOT_SIZE - 16, 12, WHITE);
-        }
+        draw_item_count(output_x, output_y, SLOT_SIZE, output_slot->count);
     }
 
     // Section 2: Main Inventory (3 rows x 9 columns)
@@ -227,7 +234,7 @@ void inventory_ui_draw_full_screen(Inventory* inv, Texture2D atlas) {
             int y = inv_y + row * (SLOT_SIZE + SLOT_GAP);
             int slot_index = row * 9 + col;
 
-            draw_slot(x, y, SLOT_SIZE, false);
+            draw_slot(x, y, SLOT_SIZE);
 
             // Draw item if present
             ItemStack* slot = &inv->main_inventory[slot_index];
@@ -235,11 +242,7 @@ void inventory_ui_draw_full_screen(Inventory* inv, Texture2D atlas) {
                 int icon_x = x + (SLOT_SIZE - 28) / 2;
                 int icon_y = y + (SLOT_SIZE - 28) / 2;
                 inventory_ui_draw_item_icon(slot->type, icon_x, icon_y, 28, atlas);
-
-                if (slot->count > 1) {
-                    const char* count_text = TextFormat("%d", slot->count);
-                    DrawText(count_text, x + SLOT_SIZE - 16, y + SLOT_SIZE - 16, 12, WHITE);
-                }
+                draw_item_count(x, y, SLOT_SIZE, slot->count);
             }
         }
     }
@@ -252,8 +255,7 @@ void inventory_ui_draw_full_screen(Inventory* inv, Texture2D atlas) {
         int x = hotbar_x + i * (SLOT_SIZE + SLOT_GAP);
         int y = hotbar_y;
 
-        bool selected = (i == inv->selected_hotbar_slot);
-        draw_slot(x, y, SLOT_SIZE, selected);
+        draw_slot(x, y, SLOT_SIZE);
 
         // Draw item if present
         ItemStack* slot = &inv->hotbar[i];
@@ -261,16 +263,10 @@ void inventory_ui_draw_full_screen(Inventory* inv, Texture2D atlas) {
             int icon_x = x + (SLOT_SIZE - 28) / 2;
             int icon_y = y + (SLOT_SIZE - 28) / 2;
             inventory_ui_draw_item_icon(slot->type, icon_x, icon_y, 28, atlas);
-
-            if (slot->count > 1) {
-                const char* count_text = TextFormat("%d", slot->count);
-                DrawText(count_text, x + SLOT_SIZE - 16, y + SLOT_SIZE - 16, 12, WHITE);
-            }
+            draw_item_count(x, y, SLOT_SIZE, slot->count);
         }
     }
 
-    // Instructions
-    DrawText("Press E to close", panel_x + panel_w - 150, panel_y + panel_h - 25, 14, LIGHTGRAY);
 }
 
 void inventory_ui_draw_tooltip(Inventory* inv, int mouse_x, int mouse_y) {

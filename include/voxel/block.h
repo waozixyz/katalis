@@ -25,12 +25,16 @@ typedef enum {
     BLOCK_WATER,
     BLOCK_COBBLESTONE,
     BLOCK_BEDROCK,
-    BLOCK_DEEP_STONE,     // Darker stone for deep layers
-    BLOCK_GRAVEL,         // Loose sediment
-    BLOCK_COAL_ORE,       // Common ore
-    BLOCK_IRON_ORE,       // Uncommon ore
-    BLOCK_GOLD_ORE,       // Rare ore
-    BLOCK_DIAMOND_ORE,    // Very rare ore
+    BLOCK_DEEP_STONE,       // Darker stone for deep layers
+    BLOCK_GRAVEL,           // Loose sediment
+    BLOCK_COAL_ORE,         // Common ore
+    BLOCK_IRON_ORE,         // Uncommon ore
+    BLOCK_GOLD_ORE,         // Rare ore
+    BLOCK_DIAMOND_ORE,      // Very rare ore
+    BLOCK_MOSSY_COBBLE,     // Dungeon walls
+    BLOCK_STONE_BRICK,      // Dungeon structure
+    BLOCK_CRACKED_BRICK,    // Damaged dungeon walls
+    BLOCK_CLAY,             // Underground clay deposits
     BLOCK_COUNT  // Total number of block types
 } BlockType;
 

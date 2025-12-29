@@ -279,3 +279,96 @@ bool crafting_try_craft(Inventory* inv) {
 
     return true;
 }
+
+int crafting_get_max_craft_count(Inventory* inv) {
+    if (!inv) return 0;
+
+    // Extract grid item types
+    ItemType grid[9];
+    for (int i = 0; i < 9; i++) {
+        grid[i] = inv->crafting_grid[i].type;
+    }
+
+    // Find matching recipe
+    const CraftingRecipe* recipe = crafting_find_match(grid);
+    if (!recipe) return 0;
+
+    // Calculate max crafts based on ingredient counts
+    int max_crafts = 999;  // Start high
+
+    for (int i = 0; i < 9; i++) {
+        if (recipe->inputs[i] != ITEM_NONE) {
+            // Find how many of this ingredient we have
+            int have = inv->crafting_grid[i].count;
+            if (have < max_crafts) {
+                max_crafts = have;
+            }
+        }
+    }
+
+    // Also limit by stack size of output (and prevent uint8_t overflow)
+    const ItemProperties* props = item_get_properties(recipe->output);
+    int max_output = props->max_stack_size / recipe->output_count;
+    if (max_output < max_crafts) {
+        max_crafts = max_output;
+    }
+
+    // Ensure we don't overflow uint8_t (max 255)
+    int max_items = max_crafts * recipe->output_count;
+    if (max_items > 255) {
+        max_crafts = 255 / recipe->output_count;
+    }
+
+    return max_crafts > 0 ? max_crafts : 0;
+}
+
+ItemStack crafting_craft_all(Inventory* inv) {
+    ItemStack result = {ITEM_NONE, 0, 0, 0};
+    if (!inv) return result;
+
+    // Check if output slot has an item
+    if (inv->crafting_output[0].type == ITEM_NONE) {
+        return result;
+    }
+
+    // Get max craft count
+    int max_crafts = crafting_get_max_craft_count(inv);
+    if (max_crafts <= 0) return result;
+
+    // Find the recipe
+    ItemType grid[9];
+    for (int i = 0; i < 9; i++) {
+        grid[i] = inv->crafting_grid[i].type;
+    }
+    const CraftingRecipe* recipe = crafting_find_match(grid);
+    if (!recipe) return result;
+
+    // Set up result
+    result.type = recipe->output;
+    result.count = max_crafts * recipe->output_count;
+
+    const ItemProperties* props = item_get_properties(recipe->output);
+    result.durability = props->durability;
+    result.max_durability = props->durability;
+
+    // Consume input items (for all crafts)
+    for (int i = 0; i < 9; i++) {
+        if (inv->crafting_grid[i].type != ITEM_NONE) {
+            inv->crafting_grid[i].count -= max_crafts;
+            if (inv->crafting_grid[i].count <= 0) {
+                inv->crafting_grid[i].type = ITEM_NONE;
+                inv->crafting_grid[i].count = 0;
+                inv->crafting_grid[i].durability = 0;
+                inv->crafting_grid[i].max_durability = 0;
+            }
+        }
+    }
+
+    // Update output
+    crafting_update_output(inv);
+
+    printf("[CRAFTING] Craft all: %d x %s\n",
+           result.count, item_get_name(result.type));
+
+    return result;
+}

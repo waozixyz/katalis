@@ -11,6 +11,7 @@
 #include <raylib.h>
 #include "world.h"
 #include "player.h"
+#include "network.h"
 
 // Minimap configuration
 #define MINIMAP_SIZE 150         // Size in pixels (square)
@@ -38,7 +39,8 @@ void minimap_update(Minimap* minimap, World* world, Player* player);
 
 /**
  * Draw minimap on screen (top-right corner)
+ * Shows terrain, local player, and remote players from network
  */
-void minimap_draw(Minimap* minimap, Player* player);
+void minimap_draw(Minimap* minimap, Player* player, NetworkContext* network);
 
 #endif // VOXEL_MINIMAP_H

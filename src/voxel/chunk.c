@@ -4,6 +4,7 @@
 
 #include "voxel/chunk.h"
 #include "voxel/texture_atlas.h"
+#include "voxel/light.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -206,7 +207,7 @@ static float calculate_face_brightness(Vector3 normal) {
  */
 static void add_quad(float* vertices, float* texcoords, float* normals, unsigned char* colors, int* vertex_count,
                      Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4, Vector3 normal,
-                     BlockType block_type, float width, float height) {
+                     BlockType block_type, float width, float height, uint8_t block_light_level) {
     int idx = *vertex_count;
 
     // Get face type from normal
@@ -218,8 +219,18 @@ static void add_quad(float* vertices, float* texcoords, float* normals, unsigned
     // Don't scale UVs - just stretch the texture across the greedy quad
     // This prevents bleeding into other atlas tiles
 
-    // Calculate lighting brightness for this face
-    float brightness = calculate_face_brightness(normal);
+    // Calculate face brightness based on normal direction
+    float face_brightness = calculate_face_brightness(normal);
+
+    // Apply block's light level (0-15 -> 0.0-1.0)
+    float light_factor = (float)block_light_level / 15.0f;
+
+    // Minimum ambient so caves aren't pitch black (15% ambient)
+    float min_ambient = 0.15f;
+    light_factor = min_ambient + light_factor * (1.0f - min_ambient);
+
+    // Final brightness combines face direction and block light level
+    float brightness = face_brightness * light_factor;
     unsigned char light = (unsigned char)(brightness * 255.0f);
 
     // Triangle 1 (v1, v2, v3)
@@ -264,6 +275,34 @@ static void add_quad(float* vertices, float* texcoords, float* normals, unsigned
 }
 
 /**
+ * Get light level for a block face by checking the adjacent block.
+ * If adjacent block is air/transparent, use its light level.
+ * Otherwise fall back to the block's own light level.
+ */
+static uint8_t get_face_light(Chunk* chunk, int x, int y, int z, int dx, int dy, int dz) {
+    int nx = x + dx;
+    int ny = y + dy;
+    int nz = z + dz;
+
+    // Check bounds - if outside chunk, use current block's light to avoid bright edges
+    if (nx < 0 || nx >= CHUNK_SIZE || nz < 0 || nz >= CHUNK_SIZE) {
+        return chunk->blocks[x][y][z].light_level;
+    }
+    if (ny < 0) return LIGHT_MIN;
+    if (ny >= CHUNK_HEIGHT) return LIGHT_MAX;
+
+    Block neighbor = chunk->blocks[nx][ny][nz];
+
+    // If neighbor is air or transparent, use its light level
+    if (neighbor.type == BLOCK_AIR || block_is_transparent(neighbor)) {
+        return neighbor.light_level;
+    }
+
+    // Otherwise use the current block's light (shouldn't happen for visible faces)
+    return chunk->blocks[x][y][z].light_level;
+}
+
+/**
  * Simple meshing algorithm - each block face is independent (Luanti-style)
  * Does not merge adjacent faces, rendering each block separately
  */
@@ -288,73 +327,79 @@ static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** t
                 float wy = (float)y;
                 float wz = (float)z;
 
-                // Render all 6 faces - NO culling (true Luanti-style)
-                // Each block is completely independent
+                // Render all 6 faces - each face uses the light level of the adjacent block
+                // This makes faces lit based on the light in the air next to them
 
-                // Face: Top (+Y)
+                // Face: Top (+Y) - use light from block above
                 {
                     Vector3 v1 = {wx, wy + 1, wz};
                     Vector3 v2 = {wx + 1, wy + 1, wz};
                     Vector3 v3 = {wx + 1, wy + 1, wz + 1};
                     Vector3 v4 = {wx, wy + 1, wz + 1};
                     Vector3 normal = {0, 1, 0};
+                    uint8_t face_light = get_face_light(chunk, x, y, z, 0, 1, 0);
                     add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
-                            v1, v2, v3, v4, normal, block.type, 1, 1);
+                            v1, v2, v3, v4, normal, block.type, 1, 1, face_light);
                 }
 
-                // Face: Bottom (-Y)
+                // Face: Bottom (-Y) - use light from block below
                 {
                     Vector3 v1 = {wx, wy, wz + 1};
                     Vector3 v2 = {wx + 1, wy, wz + 1};
                     Vector3 v3 = {wx + 1, wy, wz};
                     Vector3 v4 = {wx, wy, wz};
                     Vector3 normal = {0, -1, 0};
+                    uint8_t face_light = get_face_light(chunk, x, y, z, 0, -1, 0);
                     add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
-                            v1, v2, v3, v4, normal, block.type, 1, 1);
+                            v1, v2, v3, v4, normal, block.type, 1, 1, face_light);
                 }
 
-                // Face: Front (-Z)
+                // Face: Front (-Z) - use light from block in front
                 {
                     Vector3 v1 = {wx, wy, wz};
                     Vector3 v2 = {wx + 1, wy, wz};
                     Vector3 v3 = {wx + 1, wy + 1, wz};
                     Vector3 v4 = {wx, wy + 1, wz};
                     Vector3 normal = {0, 0, -1};
+                    uint8_t face_light = get_face_light(chunk, x, y, z, 0, 0, -1);
                     add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
-                            v1, v2, v3, v4, normal, block.type, 1, 1);
+                            v1, v2, v3, v4, normal, block.type, 1, 1, face_light);
                 }
 
-                // Face: Back (+Z)
+                // Face: Back (+Z) - use light from block behind
                 {
                     Vector3 v1 = {wx + 1, wy, wz + 1};
                     Vector3 v2 = {wx, wy, wz + 1};
                     Vector3 v3 = {wx, wy + 1, wz + 1};
                     Vector3 v4 = {wx + 1, wy + 1, wz + 1};
                     Vector3 normal = {0, 0, 1};
+                    uint8_t face_light = get_face_light(chunk, x, y, z, 0, 0, 1);
                     add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
-                            v1, v2, v3, v4, normal, block.type, 1, 1);
+                            v1, v2, v3, v4, normal, block.type, 1, 1, face_light);
                 }
 
-                // Face: Left (-X)
+                // Face: Left (-X) - use light from block to the left
                 {
                     Vector3 v1 = {wx, wy, wz + 1};
                     Vector3 v2 = {wx, wy, wz};
                     Vector3 v3 = {wx, wy + 1, wz};
                     Vector3 v4 = {wx, wy + 1, wz + 1};
                     Vector3 normal = {-1, 0, 0};
+                    uint8_t face_light = get_face_light(chunk, x, y, z, -1, 0, 0);
                     add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
-                            v1, v2, v3, v4, normal, block.type, 1, 1);
+                            v1, v2, v3, v4, normal, block.type, 1, 1, face_light);
                 }
 
-                // Face: Right (+X)
+                // Face: Right (+X) - use light from block to the right
                 {
                     Vector3 v1 = {wx + 1, wy, wz};
                     Vector3 v2 = {wx + 1, wy, wz + 1};
                     Vector3 v3 = {wx + 1, wy + 1, wz + 1};
                     Vector3 v4 = {wx + 1, wy + 1, wz};
                     Vector3 normal = {1, 0, 0};
+                    uint8_t face_light = get_face_light(chunk, x, y, z, 1, 0, 0);
                     add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
-                            v1, v2, v3, v4, normal, block.type, 1, 1);
+                            v1, v2, v3, v4, normal, block.type, 1, 1, face_light);
                 }
             }
         }
@@ -479,10 +524,10 @@ static void chunk_generate_mesh_greedy(Chunk* chunk, float** vertices, float** t
                         // Add quad to mesh (respecting winding order based on direction)
                         if (dir > 0) {
                             add_quad(*vertices, *texcoords, *normals, *colors, vertex_count, v1, v2, v3, v4, normal,
-                                   block_type, (float)width, (float)height);
+                                   block_type, (float)width, (float)height, block.light_level);
                         } else {
                             add_quad(*vertices, *texcoords, *normals, *colors, vertex_count, v1, v4, v3, v2, normal,
-                                   block_type, (float)width, (float)height);
+                                   block_type, (float)width, (float)height, block.light_level);
                         }
 
                         u += width;

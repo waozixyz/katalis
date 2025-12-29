@@ -177,7 +177,7 @@ void minimap_update(Minimap* minimap, World* world, Player* player) {
 // MINIMAP RENDERING
 // ============================================================================
 
-void minimap_draw(Minimap* minimap, Player* player) {
+void minimap_draw(Minimap* minimap, Player* player, NetworkContext* network) {
     if (!minimap || !player) return;
 
     int screen_width = 800;  // Match game window size
@@ -193,10 +193,76 @@ void minimap_draw(Minimap* minimap, Player* player) {
     Rectangle dst = {(float)x, (float)y, (float)minimap->size, (float)minimap->size};
     DrawTexturePro(minimap->texture.texture, src, dst, (Vector2){0, 0}, 0.0f, WHITE);
 
-    // Draw player arrow in center
+    // Calculate scale for position mapping
+    float scale = (float)minimap->size / (minimap->radius * 2.0f);
     int center_x = x + minimap->size / 2;
     int center_y = y + minimap->size / 2;
+    int player_x = (int)player->position.x;
+    int player_z = (int)player->position.z;
 
+    // Draw remote players as colored dots
+    if (network) {
+        NetworkMode mode = network_get_mode(network);
+
+        if (mode == NET_MODE_HOST && network->server) {
+            // Draw connected clients
+            for (int i = 0; i < NET_MAX_CLIENTS; i++) {
+                if (network->server->clients[i].connected) {
+                    NetPlayerState* state = &network->server->clients[i].last_state;
+                    int dx = (int)state->pos_x - player_x;
+                    int dz = (int)state->pos_z - player_z;
+
+                    // Check if within minimap radius
+                    if (abs(dx) < minimap->radius && abs(dz) < minimap->radius) {
+                        int px = center_x + (int)(dx * scale);
+                        int py = center_y + (int)(dz * scale);
+
+                        // Draw player dot (blue for other players)
+                        DrawCircle(px, py, 4, (Color){0, 150, 255, 255});
+                        DrawCircleLines(px, py, 4, WHITE);
+                    }
+                }
+            }
+        } else if (mode == NET_MODE_CLIENT && network->client) {
+            // Draw other remote players
+            for (int i = 0; i < NET_MAX_CLIENTS; i++) {
+                if (network->client->player_active[i] &&
+                    i != network->client->my_client_id) {
+                    NetPlayerState* state = &network->client->remote_players[i];
+                    int dx = (int)state->pos_x - player_x;
+                    int dz = (int)state->pos_z - player_z;
+
+                    // Check if within minimap radius
+                    if (abs(dx) < minimap->radius && abs(dz) < minimap->radius) {
+                        int px = center_x + (int)(dx * scale);
+                        int py = center_y + (int)(dz * scale);
+
+                        // Draw player dot (blue for other players)
+                        DrawCircle(px, py, 4, (Color){0, 150, 255, 255});
+                        DrawCircleLines(px, py, 4, WHITE);
+                    }
+                }
+            }
+
+            // Draw host player
+            if (network->client->player_active[0]) {
+                NetPlayerState* state = &network->client->remote_players[0];
+                int dx = (int)state->pos_x - player_x;
+                int dz = (int)state->pos_z - player_z;
+
+                if (abs(dx) < minimap->radius && abs(dz) < minimap->radius) {
+                    int px = center_x + (int)(dx * scale);
+                    int py = center_y + (int)(dz * scale);
+
+                    // Draw host as green dot
+                    DrawCircle(px, py, 4, (Color){0, 255, 100, 255});
+                    DrawCircleLines(px, py, 4, WHITE);
+                }
+            }
+        }
+    }
+
+    // Draw local player arrow in center
     // Player yaw: 0 = looking at -Z, 90 = looking at +X
     float angle = player->yaw * DEG2RAD;
 

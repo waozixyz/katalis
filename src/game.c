@@ -21,6 +21,7 @@
 #include "voxel/sky.h"
 #include "voxel/tree.h"
 #include "voxel/network.h"
+#include "voxel/minimap.h"
 #include <raylib.h>
 #include <raymath.h>
 #include <rlgl.h>
@@ -52,6 +53,8 @@ typedef struct {
     bool time_paused;            // Debug: pause time
     // Network
     NetworkContext* network;     // LAN multiplayer context
+    // Minimap
+    Minimap* minimap;            // Top-right minimap overlay
 } GameState;
 
 static GameState g_state;
@@ -266,10 +269,10 @@ static void game_init(void) {
     // Initialize entity system
     g_state.entity_manager = entity_manager_create();
 
-    // Spawn test block humans at different positions
-    Vector3 human_pos1 = {5.0f, 70.0f, 0.0f};   // To the right
-    Vector3 human_pos2 = {-5.0f, 70.0f, 0.0f};  // To the left
-    Vector3 human_pos3 = {0.0f, 70.0f, 5.0f};   // In front
+    // Spawn test block humans at different positions (high up to fall to terrain)
+    Vector3 human_pos1 = {5.0f, 150.0f, 0.0f};   // To the right
+    Vector3 human_pos2 = {-5.0f, 150.0f, 0.0f};  // To the left
+    Vector3 human_pos3 = {0.0f, 150.0f, 5.0f};   // In front
 
     block_human_spawn(g_state.entity_manager, human_pos1);  // Default colors
     block_human_spawn_colored(g_state.entity_manager, human_pos2,
@@ -282,6 +285,10 @@ static void game_init(void) {
                               (Color){80, 80, 80, 255});    // Gray pants
 
     printf("[GAME] Spawned %d entities\n", entity_manager_get_count(g_state.entity_manager));
+
+    // Initialize minimap
+    g_state.minimap = minimap_create();
+    printf("[GAME] Minimap initialized\n");
 
     printf("[GAME] Procedural world initialized with %d chunks!\n", g_state.world->chunks->chunk_count);
 }
@@ -396,6 +403,9 @@ static void game_update(float dt) {
 
     // Update leaf decay
     leaf_decay_update(g_state.world, dt);
+
+    // Update minimap
+    minimap_update(g_state.minimap, g_state.world, g_state.player);
 
     // Raycast to find block player is looking at
     Camera3D camera = player_get_camera(g_state.player);
@@ -723,6 +733,9 @@ static void game_draw(void) {
     Texture2D atlas = texture_atlas_get_texture();
     inventory_ui_draw_hotbar(g_state.player->inventory, atlas);
 
+    // Draw minimap (top-right corner, shows remote players too)
+    minimap_draw(g_state.minimap, g_state.player, g_state.network);
+
     // Debug: Show time when H is held
     if (IsKeyDown(KEY_H)) {
         int hours = (int)g_state.time_of_day;
@@ -737,11 +750,11 @@ static void game_draw(void) {
         }
     }
 
-    // Draw network status indicator (top-right corner)
+    // Draw network status indicator (below minimap)
     NetworkMode net_mode = network_get_mode(g_state.network);
     if (net_mode != NET_MODE_NONE) {
         int status_x = screen_width - 160;
-        int status_y = 10;
+        int status_y = MINIMAP_SIZE + MINIMAP_MARGIN + 15;  // Below minimap
 
         // Background
         DrawRectangle(status_x - 5, status_y - 3, 155, 26, (Color){0, 0, 0, 150});
@@ -786,16 +799,32 @@ static void game_draw(void) {
             inventory_ui_draw_tooltip(g_state.player->inventory, (int)mouse_pos.x, (int)mouse_pos.y);
         }
 
-        // Draw held item following cursor
+        // Draw held item following cursor with stack count
         if (g_state.player->inventory->is_holding_item) {
             Vector2 mouse_pos = GetMousePosition();
+            int icon_x = (int)mouse_pos.x - 16;
+            int icon_y = (int)mouse_pos.y - 16;
+            int icon_size = 32;
+
             inventory_ui_draw_item_icon(
                 g_state.player->inventory->held_item.type,
-                (int)mouse_pos.x - 16,
-                (int)mouse_pos.y - 16,
-                32,
+                icon_x, icon_y,
+                icon_size,
                 atlas
             );
+
+            // Draw stack count
+            uint8_t count = g_state.player->inventory->held_item.count;
+            if (count > 1) {
+                const char* count_text = TextFormat("%d", count);
+                int font_size = 14;
+                int text_x = icon_x + icon_size - MeasureText(count_text, font_size) - 2;
+                int text_y = icon_y + icon_size - font_size - 2;
+
+                // Shadow + white text
+                DrawText(count_text, text_x + 1, text_y + 1, font_size, BLACK);
+                DrawText(count_text, text_x, text_y, font_size, WHITE);
+            }
         }
     }
 
