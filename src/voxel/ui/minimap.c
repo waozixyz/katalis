@@ -51,6 +51,12 @@ static Color get_block_color(BlockType type, int height) {
         case BLOCK_CLAY:         base = (Color){180, 140, 120, 255}; break; // Clay tan
         case BLOCK_SNOW:         base = (Color){240, 250, 255, 255}; break; // White/ice blue
         case BLOCK_CACTUS:       base = (Color){50, 180, 50, 255}; break;   // Cactus green
+        case BLOCK_BIRCH_WOOD:   base = (Color){230, 225, 210, 255}; break; // Cream
+        case BLOCK_BIRCH_LEAVES: base = (Color){100, 200, 90, 255}; break;  // Light green
+        case BLOCK_SPRUCE_WOOD:  base = (Color){60, 40, 25, 255}; break;    // Dark brown
+        case BLOCK_SPRUCE_LEAVES: base = (Color){30, 80, 50, 255}; break;   // Dark green
+        case BLOCK_ACACIA_WOOD:  base = (Color){170, 100, 50, 255}; break;  // Orange
+        case BLOCK_ACACIA_LEAVES: base = (Color){140, 180, 60, 255}; break; // Yellow-green
         case BLOCK_AIR:
         default:                base = (Color){0, 0, 0, 255}; break;        // Black
     }

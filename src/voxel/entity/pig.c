@@ -5,6 +5,7 @@
  */
 
 #include "voxel/entity/pig.h"
+#include "voxel/entity/collision.h"
 #include "voxel/world/world.h"
 #include "voxel/player/player.h"
 #include "voxel/core/block.h"
@@ -53,6 +54,14 @@ static PigData* pig_create_data(void) {
     data->walk_animation_time = 0.0f;
     data->leg_swing_angle = 0.0f;
     data->tail_wiggle_angle = 0.0f;
+    data->idle_time = 0.0f;
+    data->head_yaw_target = 0.0f;
+    data->head_yaw_current = 0.0f;
+    data->head_look_timer = pig_random_range(2.0f, 4.0f);
+    data->blink_timer = pig_random_range(3.0f, 6.0f);
+    data->blink_progress = 0.0f;
+    data->ear_twitch_timer = pig_random_range(2.0f, 5.0f);
+    data->ear_twitch_angle = 0.0f;
 
     // AI state - start wandering
     data->wander_timer = pig_random_range(PIG_WANDER_TIME_MIN, PIG_WANDER_TIME_MAX);
@@ -67,6 +76,9 @@ static PigData* pig_create_data(void) {
     // Health & damage
     data->hp = 5;                   // 5 hits to kill (more than sheep)
     data->damage_flash_timer = 0.0f;
+
+    // Jump
+    data->jump_cooldown = 0.0f;
 
     return data;
 }
@@ -167,50 +179,37 @@ void pig_update(Entity* entity, struct World* world, float dt) {
     }
 
     // ========================================================================
-    // PHYSICS
+    // PHYSICS (using AABB collision system)
     // ========================================================================
 
-    // Apply gravity
-    entity->velocity.y -= 20.0f * dt;
-
-    // Calculate new position
-    Vector3 new_pos = entity->position;
-    new_pos.x += entity->velocity.x * dt;
-    new_pos.z += entity->velocity.z * dt;
-    new_pos.y += entity->velocity.y * dt;
-
-    // Simple ground collision
-    if (world) {
-        int ground_y = (int)floorf(new_pos.y);
-        Block below = world_get_block(world, (int)floorf(new_pos.x), ground_y - 1, (int)floorf(new_pos.z));
-        Block at_feet = world_get_block(world, (int)floorf(new_pos.x), ground_y, (int)floorf(new_pos.z));
-
-        // If falling into solid, stop
-        if (block_is_solid(at_feet)) {
-            new_pos.y = entity->position.y;
-            entity->velocity.y = 0;
-        }
-        // If on ground, stay on ground
-        else if (block_is_solid(below) && entity->velocity.y < 0) {
-            new_pos.y = ground_y;
-            entity->velocity.y = 0;
-        }
-
-        // Horizontal collision - if hitting wall, pick new direction
-        Block ahead = world_get_block(world, (int)floorf(new_pos.x), (int)floorf(new_pos.y), (int)floorf(new_pos.z));
-        if (block_is_solid(ahead)) {
-            new_pos.x = entity->position.x;
-            new_pos.z = entity->position.z;
-            entity->velocity.x = 0;
-            entity->velocity.z = 0;
-            // Pick new direction when hitting wall
-            if (!data->is_fleeing) {
-                data->wander_direction = pig_random_direction();
-            }
-        }
+    // Update jump cooldown
+    if (data->jump_cooldown > 0) {
+        data->jump_cooldown -= dt;
     }
 
-    entity->position = new_pos;
+    // Check for jumpable obstacles ahead (using current movement direction)
+    Vector3 move_dir = data->is_fleeing ? flee_direction : data->wander_direction;
+    bool should_jump = false;
+    if (data->jump_cooldown <= 0 && (move_dir.x != 0 || move_dir.z != 0)) {
+        should_jump = entity_can_jump_obstacle(entity, world, move_dir);
+    }
+
+    // Apply jump if obstacle is jumpable
+    if (should_jump) {
+        entity->velocity.y = PIG_JUMP_VELOCITY;
+        data->jump_cooldown = PIG_JUMP_COOLDOWN;
+    }
+
+    // Apply gravity
+    entity_apply_gravity(entity, world, dt, 20.0f);
+
+    // Move with per-axis collision detection
+    int collision_flags = entity_move_with_collision(entity, world, dt);
+
+    // Pick new direction when hitting a wall (only if can't jump and not fleeing)
+    if (COLLISION_HIT_WALL(collision_flags) && !data->is_fleeing && !should_jump) {
+        data->wander_direction = pig_random_direction();
+    }
 
     // ========================================================================
     // ANIMATION
@@ -223,14 +222,49 @@ void pig_update(Entity* entity, struct World* world, float dt) {
         float anim_speed = data->is_fleeing ? 1.5f : 0.8f;
         data->walk_animation_time += dt * horiz_speed * anim_speed;
         data->leg_swing_angle = sinf(data->walk_animation_time) * 20.0f;
+        data->idle_time = 0.0f;  // Reset idle time when moving
     } else {
         // Idle: smoothly return to rest pose
         data->leg_swing_angle *= 0.85f;
+        data->idle_time += dt;  // Accumulate idle time for breathing
     }
 
     // Tail wiggle animation (always wiggles slightly, more when idle)
     float wiggle_speed = data->is_idle ? 8.0f : 3.0f;
     data->tail_wiggle_angle = sinf(data->walk_animation_time * wiggle_speed) * 15.0f;
+
+    // Head look-around animation (when idle and not fleeing)
+    if (!data->is_fleeing && horiz_speed < 0.1f) {
+        data->head_look_timer -= dt;
+        if (data->head_look_timer <= 0) {
+            data->head_yaw_target = pig_random_range(-30.0f, 30.0f);
+            data->head_look_timer = pig_random_range(2.0f, 4.0f);
+        }
+    } else {
+        // Reset head to forward when moving or fleeing
+        data->head_yaw_target = 0.0f;
+    }
+    // Smooth interpolation to target
+    data->head_yaw_current += (data->head_yaw_target - data->head_yaw_current) * dt * 3.0f;
+
+    // Blink animation
+    data->blink_timer -= dt;
+    if (data->blink_timer <= 0) {
+        data->blink_progress = 1.0f;  // Start blink
+        data->blink_timer = pig_random_range(3.0f, 6.0f);
+    }
+    if (data->blink_progress > 0) {
+        data->blink_progress -= dt * 8.0f;  // Fast blink (~0.125s)
+        if (data->blink_progress < 0) data->blink_progress = 0;
+    }
+
+    // Ear twitch animation
+    data->ear_twitch_timer -= dt;
+    if (data->ear_twitch_timer <= 0) {
+        data->ear_twitch_angle = 10.0f;  // Start twitch
+        data->ear_twitch_timer = pig_random_range(2.0f, 5.0f);
+    }
+    data->ear_twitch_angle *= 0.9f;  // Decay back to 0
 
     // ========================================================================
     // LIGHTING
@@ -362,9 +396,22 @@ void pig_render(Entity* entity) {
     y += PIG_LEG_LENGTH;
 
     // ========================================================================
-    // BODY (stocky cube)
+    // BODY (stocky cube) with breathing and bounce animations
     // ========================================================================
-    Vector3 body_center = {pos.x, y + PIG_BODY_HEIGHT / 2.0f, pos.z};
+
+    // Calculate breathing offset (subtle up/down when idle)
+    float breath_offset = sinf(data->idle_time * 1.5f * 2.0f * PI) * 0.02f;
+
+    // Calculate body bounce (when walking)
+    float horiz_speed = sqrtf(entity->velocity.x * entity->velocity.x +
+                              entity->velocity.z * entity->velocity.z);
+    float body_bounce = 0.0f;
+    if (horiz_speed > 0.1f) {
+        body_bounce = sinf(data->walk_animation_time * 2.0f) * 0.025f;
+    }
+
+    float body_y_offset = breath_offset + body_bounce;
+    Vector3 body_center = {pos.x, y + PIG_BODY_HEIGHT / 2.0f + body_y_offset, pos.z};
 
     rlPushMatrix();
     rlTranslatef(body_center.x, body_center.y, body_center.z);
@@ -390,7 +437,7 @@ void pig_render(Entity* entity) {
     rlPopMatrix();
 
     // ========================================================================
-    // HEAD (cube at front with snout, ears, and eyes)
+    // HEAD (cube at front with snout, ears, and eyes) with look-around animation
     // ========================================================================
     float head_forward_offset = PIG_BODY_LENGTH / 2.0f + PIG_HEAD_LENGTH / 2.0f;
 
@@ -398,26 +445,32 @@ void pig_render(Entity* entity) {
     head_center.x += forward.x * head_forward_offset;
     head_center.z += forward.z * head_forward_offset;
 
+    // Calculate head rotation with look-around offset
+    float head_yaw = yaw + data->head_yaw_current;
+    float head_yaw_rad = head_yaw * DEG2RAD;
+    Vector3 head_forward = {sinf(head_yaw_rad), 0, cosf(head_yaw_rad)};
+    Vector3 head_right = {cosf(head_yaw_rad), 0, -sinf(head_yaw_rad)};
+
     rlPushMatrix();
     rlTranslatef(head_center.x, head_center.y, head_center.z);
-    rlRotatef(yaw, 0, 1, 0);
+    rlRotatef(head_yaw, 0, 1, 0);
     DrawCube((Vector3){0, 0, 0},
              PIG_HEAD_WIDTH, PIG_HEAD_HEIGHT, PIG_HEAD_LENGTH,
              body_lit);
     rlPopMatrix();
 
     // ========================================================================
-    // SNOUT (protruding from face)
+    // SNOUT (protruding from face) - follows head rotation
     // ========================================================================
     float snout_offset = PIG_HEAD_LENGTH / 2.0f + PIG_SNOUT_LENGTH / 2.0f;
     Vector3 snout_pos = head_center;
-    snout_pos.x += forward.x * snout_offset;
-    snout_pos.z += forward.z * snout_offset;
+    snout_pos.x += head_forward.x * snout_offset;
+    snout_pos.z += head_forward.z * snout_offset;
     snout_pos.y -= 0.05f;  // Slightly lower
 
     rlPushMatrix();
     rlTranslatef(snout_pos.x, snout_pos.y, snout_pos.z);
-    rlRotatef(yaw, 0, 1, 0);
+    rlRotatef(head_yaw, 0, 1, 0);
     DrawCube((Vector3){0, 0, 0},
              PIG_SNOUT_WIDTH, PIG_SNOUT_HEIGHT, PIG_SNOUT_LENGTH,
              snout_lit);
@@ -429,51 +482,51 @@ void pig_render(Entity* entity) {
     float nostril_side = 0.03f;
 
     Vector3 left_nostril = head_center;
-    left_nostril.x += forward.x * nostril_forward - right.x * nostril_side;
-    left_nostril.z += forward.z * nostril_forward - right.z * nostril_side;
+    left_nostril.x += head_forward.x * nostril_forward - head_right.x * nostril_side;
+    left_nostril.z += head_forward.z * nostril_forward - head_right.z * nostril_side;
     left_nostril.y -= 0.05f;
     DrawSphere(left_nostril, 0.015f, nostril_color);
 
     Vector3 right_nostril = head_center;
-    right_nostril.x += forward.x * nostril_forward + right.x * nostril_side;
-    right_nostril.z += forward.z * nostril_forward + right.z * nostril_side;
+    right_nostril.x += head_forward.x * nostril_forward + head_right.x * nostril_side;
+    right_nostril.z += head_forward.z * nostril_forward + head_right.z * nostril_side;
     right_nostril.y -= 0.05f;
     DrawSphere(right_nostril, 0.015f, nostril_color);
 
     // ========================================================================
-    // EARS (two small cubes on top of head)
+    // EARS (two small cubes on top of head) with twitch animation
     // ========================================================================
     float ear_y_offset = PIG_HEAD_HEIGHT / 2.0f + PIG_EAR_SIZE / 2.0f;
     float ear_side_offset = PIG_HEAD_WIDTH / 2.0f - PIG_EAR_SIZE / 2.0f;
 
     // Left ear
     Vector3 left_ear = head_center;
-    left_ear.x -= right.x * ear_side_offset;
-    left_ear.z -= right.z * ear_side_offset;
+    left_ear.x -= head_right.x * ear_side_offset;
+    left_ear.z -= head_right.z * ear_side_offset;
     left_ear.y += ear_y_offset;
 
     rlPushMatrix();
     rlTranslatef(left_ear.x, left_ear.y, left_ear.z);
-    rlRotatef(yaw, 0, 1, 0);
-    rlRotatef(-15, 0, 0, 1);  // Tilt outward
+    rlRotatef(head_yaw, 0, 1, 0);
+    rlRotatef(-15 - data->ear_twitch_angle, 0, 0, 1);  // Tilt outward + twitch
     DrawCube((Vector3){0, 0, 0}, PIG_EAR_SIZE, PIG_EAR_SIZE * 0.6f, PIG_EAR_SIZE, body_lit);
     rlPopMatrix();
 
     // Right ear
     Vector3 right_ear = head_center;
-    right_ear.x += right.x * ear_side_offset;
-    right_ear.z += right.z * ear_side_offset;
+    right_ear.x += head_right.x * ear_side_offset;
+    right_ear.z += head_right.z * ear_side_offset;
     right_ear.y += ear_y_offset;
 
     rlPushMatrix();
     rlTranslatef(right_ear.x, right_ear.y, right_ear.z);
-    rlRotatef(yaw, 0, 1, 0);
-    rlRotatef(15, 0, 0, 1);  // Tilt outward
+    rlRotatef(head_yaw, 0, 1, 0);
+    rlRotatef(15 + data->ear_twitch_angle, 0, 0, 1);  // Tilt outward + twitch
     DrawCube((Vector3){0, 0, 0}, PIG_EAR_SIZE, PIG_EAR_SIZE * 0.6f, PIG_EAR_SIZE, body_lit);
     rlPopMatrix();
 
     // ========================================================================
-    // EYES
+    // EYES with blink animation - follows head rotation
     // ========================================================================
     Color eye_white = pig_apply_ambient(WHITE, data->ambient_light);
     Color eye_black = pig_apply_ambient((Color){30, 30, 30, 255}, data->ambient_light);
@@ -482,31 +535,48 @@ void pig_render(Entity* entity) {
     float eye_offset_side = 0.1f;
     float eye_offset_forward = PIG_HEAD_LENGTH / 2.0f * 0.9f;
 
-    // Left eye
+    // Left eye position (follows head rotation)
     Vector3 left_eye = head_center;
-    left_eye.x += forward.x * eye_offset_forward - right.x * eye_offset_side;
-    left_eye.z += forward.z * eye_offset_forward - right.z * eye_offset_side;
+    left_eye.x += head_forward.x * eye_offset_forward - head_right.x * eye_offset_side;
+    left_eye.z += head_forward.z * eye_offset_forward - head_right.z * eye_offset_side;
     left_eye.y += eye_offset_y;
-    DrawSphere(left_eye, 0.035f, eye_white);
 
-    // Left pupil
-    Vector3 left_pupil = left_eye;
-    left_pupil.x += forward.x * 0.02f;
-    left_pupil.z += forward.z * 0.02f;
-    DrawSphere(left_pupil, 0.018f, eye_black);
-
-    // Right eye
+    // Right eye position (follows head rotation)
     Vector3 right_eye = head_center;
-    right_eye.x += forward.x * eye_offset_forward + right.x * eye_offset_side;
-    right_eye.z += forward.z * eye_offset_forward + right.z * eye_offset_side;
+    right_eye.x += head_forward.x * eye_offset_forward + head_right.x * eye_offset_side;
+    right_eye.z += head_forward.z * eye_offset_forward + head_right.z * eye_offset_side;
     right_eye.y += eye_offset_y;
-    DrawSphere(right_eye, 0.035f, eye_white);
 
-    // Right pupil
-    Vector3 right_pupil = right_eye;
-    right_pupil.x += forward.x * 0.02f;
-    right_pupil.z += forward.z * 0.02f;
-    DrawSphere(right_pupil, 0.018f, eye_black);
+    // Blink animation - draw thin lines when blinking, spheres when open
+    if (data->blink_progress > 0.5f) {
+        // Eyes closed - draw thin horizontal lines
+        rlPushMatrix();
+        rlTranslatef(left_eye.x, left_eye.y, left_eye.z);
+        rlRotatef(head_yaw, 0, 1, 0);
+        DrawCube((Vector3){0, 0, 0}, 0.06f, 0.01f, 0.01f, eye_black);
+        rlPopMatrix();
+
+        rlPushMatrix();
+        rlTranslatef(right_eye.x, right_eye.y, right_eye.z);
+        rlRotatef(head_yaw, 0, 1, 0);
+        DrawCube((Vector3){0, 0, 0}, 0.06f, 0.01f, 0.01f, eye_black);
+        rlPopMatrix();
+    } else {
+        // Eyes open - draw normal spheres
+        DrawSphere(left_eye, 0.035f, eye_white);
+        DrawSphere(right_eye, 0.035f, eye_white);
+
+        // Pupils
+        Vector3 left_pupil = left_eye;
+        left_pupil.x += head_forward.x * 0.02f;
+        left_pupil.z += head_forward.z * 0.02f;
+        DrawSphere(left_pupil, 0.018f, eye_black);
+
+        Vector3 right_pupil = right_eye;
+        right_pupil.x += head_forward.x * 0.02f;
+        right_pupil.z += head_forward.z * 0.02f;
+        DrawSphere(right_pupil, 0.018f, eye_black);
+    }
 }
 
 /**

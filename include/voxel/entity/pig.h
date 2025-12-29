@@ -72,6 +72,14 @@ typedef struct {
     float walk_animation_time;      // Accumulated time for walk cycle
     float leg_swing_angle;          // Current leg rotation angle
     float tail_wiggle_angle;        // Tail wiggle animation
+    float idle_time;                // Time spent idle (for breathing animation)
+    float head_yaw_target;          // Target head yaw for look-around
+    float head_yaw_current;         // Current head yaw (interpolated)
+    float head_look_timer;          // Time until next look direction change
+    float blink_timer;              // Time until next blink
+    float blink_progress;           // Blink state (0 = open, 1 = closed)
+    float ear_twitch_timer;         // Time until next ear twitch
+    float ear_twitch_angle;         // Current ear twitch offset
 
     // AI state
     float wander_timer;             // Time until next direction change
@@ -86,7 +94,14 @@ typedef struct {
     // Health & damage
     int hp;                         // Current health (default: 5, dies at 0)
     float damage_flash_timer;       // Red flash duration (0 = no flash)
+
+    // Jump
+    float jump_cooldown;            // Cooldown to prevent jump spam
 } PigData;
+
+// Jump constants
+#define PIG_JUMP_VELOCITY 7.0f      // Enough for ~1.2 block jump
+#define PIG_JUMP_COOLDOWN 0.5f      // Minimum time between jumps
 
 // ============================================================================
 // PIG API

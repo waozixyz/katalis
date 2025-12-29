@@ -106,8 +106,44 @@ TerrainParams terrain_default_params(void) {
 // ============================================================================
 
 /**
+ * Get blended height scale at world coordinates
+ * Samples nearby biomes and blends their height_scale values
+ * to create smooth transitions instead of abrupt cliffs
+ */
+static float terrain_get_blended_height_scale(int world_x, int world_z) {
+    #define BLEND_RADIUS 8
+
+    float total_scale = 0.0f;
+    float total_weight = 0.0f;
+
+    // Sample offsets: center and 8 surrounding points
+    int offsets[] = {0, -BLEND_RADIUS, BLEND_RADIUS};
+
+    for (int dx = 0; dx < 3; dx++) {
+        for (int dz = 0; dz < 3; dz++) {
+            int sx = world_x + offsets[dx];
+            int sz = world_z + offsets[dz];
+
+            BiomeType biome = biome_get_at(sx, sz);
+            const BiomeProperties* bp = biome_get_properties(biome);
+
+            // Distance-based weight (closer = more influence)
+            float dist_sq = (float)(offsets[dx] * offsets[dx] + offsets[dz] * offsets[dz]);
+            float weight = 1.0f / (1.0f + dist_sq * 0.01f);
+
+            total_scale += bp->height_scale * weight;
+            total_weight += weight;
+        }
+    }
+
+    #undef BLEND_RADIUS
+    return total_scale / total_weight;
+}
+
+/**
  * Get terrain height at world coordinates
  * Applies biome-specific height scaling for varied terrain
+ * Uses blended height_scale for smooth biome transitions
  */
 int terrain_get_height_at(int world_x, int world_z, TerrainParams params) {
     float noise_value = noise_fbm_2d(
@@ -119,10 +155,8 @@ int terrain_get_height_at(int world_x, int world_z, TerrainParams params) {
         params.height_persistence
     );
 
-    // Apply biome height scaling
-    BiomeType biome = biome_get_at(world_x, world_z);
-    const BiomeProperties* bp = biome_get_properties(biome);
-    float biome_scale = bp->height_scale;
+    // Apply blended biome height scaling for smooth transitions
+    float biome_scale = terrain_get_blended_height_scale(world_x, world_z);
 
     // Convert noise (-1 to 1) to height with biome scaling
     float height = params.height_offset + (noise_value * params.height_scale * biome_scale);

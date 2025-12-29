@@ -9,6 +9,7 @@
 #define VOXEL_BIOME_H
 
 #include "voxel/core/block.h"
+#include "voxel/entity/tree.h"
 
 // ============================================================================
 // BIOME TYPES
@@ -34,6 +35,9 @@ typedef struct {
     float tree_density;           // 0.0-1.0, chance of tree placement
     bool has_trees;               // Whether trees generate in this biome
     bool has_cacti;               // Whether cacti generate (desert only)
+    TreeType primary_tree;        // Main tree type for this biome
+    TreeType secondary_tree;      // Secondary tree type (TREE_TYPE_COUNT = none)
+    float secondary_chance;       // Chance of secondary tree (0.0-1.0)
 } BiomeProperties;
 
 // ============================================================================

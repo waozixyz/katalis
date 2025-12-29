@@ -20,12 +20,28 @@ typedef enum {
     TREE_SIZE_COUNT
 } TreeSize;
 
+// Tree type variations (biome-specific)
+typedef enum {
+    TREE_TYPE_OAK,      // Plains, Forest - round canopy
+    TREE_TYPE_BIRCH,    // Forest - tall, thin, light bark
+    TREE_TYPE_SPRUCE,   // Tundra - conical, layered
+    TREE_TYPE_ACACIA,   // Desert - flat top, angled trunk
+    TREE_TYPE_COUNT
+} TreeType;
+
 /**
  * Place a tree at the given local chunk coordinates.
  * base_y is where the trunk starts (should be above grass).
  * Tree blocks are placed with metadata=1 to mark as natural.
  */
 void tree_place_at(Chunk* chunk, int local_x, int base_y, int local_z, TreeSize size);
+
+/**
+ * Place a typed tree at the given local chunk coordinates.
+ * Uses the specified tree type for shape and block types.
+ */
+void tree_place_at_typed(Chunk* chunk, int local_x, int base_y, int local_z,
+                         TreeSize size, TreeType type);
 
 /**
  * Generate trees for an entire chunk.

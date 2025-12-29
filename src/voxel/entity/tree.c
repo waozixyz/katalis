@@ -161,7 +161,412 @@ static const TreeBlock LARGE_OAK[] = {
 };
 #define LARGE_OAK_COUNT (sizeof(LARGE_OAK) / sizeof(TreeBlock))
 
-// Template accessor
+// ============================================================================
+// BIRCH TREE TEMPLATES (tall, thin, small canopy)
+// ============================================================================
+
+// Small Birch: 6 blocks tall trunk, small top canopy
+static const TreeBlock SMALL_BIRCH[] = {
+    // Trunk (y=0 to y=5)
+    {0, 0, 0, BLOCK_BIRCH_WOOD},
+    {0, 1, 0, BLOCK_BIRCH_WOOD},
+    {0, 2, 0, BLOCK_BIRCH_WOOD},
+    {0, 3, 0, BLOCK_BIRCH_WOOD},
+    {0, 4, 0, BLOCK_BIRCH_WOOD},
+    {0, 5, 0, BLOCK_BIRCH_WOOD},
+
+    // Leaves layer at y=4 (3x3)
+    {-1, 4, 0, BLOCK_BIRCH_LEAVES}, {1, 4, 0, BLOCK_BIRCH_LEAVES},
+    {0, 4, -1, BLOCK_BIRCH_LEAVES}, {0, 4, 1, BLOCK_BIRCH_LEAVES},
+
+    // Leaves layer at y=5 (3x3 around trunk)
+    {-1, 5, 0, BLOCK_BIRCH_LEAVES}, {1, 5, 0, BLOCK_BIRCH_LEAVES},
+    {0, 5, -1, BLOCK_BIRCH_LEAVES}, {0, 5, 1, BLOCK_BIRCH_LEAVES},
+    {-1, 5, -1, BLOCK_BIRCH_LEAVES}, {1, 5, -1, BLOCK_BIRCH_LEAVES},
+    {-1, 5, 1, BLOCK_BIRCH_LEAVES}, {1, 5, 1, BLOCK_BIRCH_LEAVES},
+
+    // Leaves top at y=6
+    {0, 6, 0, BLOCK_BIRCH_LEAVES},
+    {-1, 6, 0, BLOCK_BIRCH_LEAVES}, {1, 6, 0, BLOCK_BIRCH_LEAVES},
+    {0, 6, -1, BLOCK_BIRCH_LEAVES}, {0, 6, 1, BLOCK_BIRCH_LEAVES},
+};
+#define SMALL_BIRCH_COUNT (sizeof(SMALL_BIRCH) / sizeof(TreeBlock))
+
+// Medium Birch: 7 blocks tall trunk
+static const TreeBlock MEDIUM_BIRCH[] = {
+    // Trunk (y=0 to y=6)
+    {0, 0, 0, BLOCK_BIRCH_WOOD},
+    {0, 1, 0, BLOCK_BIRCH_WOOD},
+    {0, 2, 0, BLOCK_BIRCH_WOOD},
+    {0, 3, 0, BLOCK_BIRCH_WOOD},
+    {0, 4, 0, BLOCK_BIRCH_WOOD},
+    {0, 5, 0, BLOCK_BIRCH_WOOD},
+    {0, 6, 0, BLOCK_BIRCH_WOOD},
+
+    // Leaves layer at y=5 (3x3)
+    {-1, 5, 0, BLOCK_BIRCH_LEAVES}, {1, 5, 0, BLOCK_BIRCH_LEAVES},
+    {0, 5, -1, BLOCK_BIRCH_LEAVES}, {0, 5, 1, BLOCK_BIRCH_LEAVES},
+
+    // Leaves layer at y=6 (3x3 around trunk)
+    {-1, 6, 0, BLOCK_BIRCH_LEAVES}, {1, 6, 0, BLOCK_BIRCH_LEAVES},
+    {0, 6, -1, BLOCK_BIRCH_LEAVES}, {0, 6, 1, BLOCK_BIRCH_LEAVES},
+    {-1, 6, -1, BLOCK_BIRCH_LEAVES}, {1, 6, -1, BLOCK_BIRCH_LEAVES},
+    {-1, 6, 1, BLOCK_BIRCH_LEAVES}, {1, 6, 1, BLOCK_BIRCH_LEAVES},
+
+    // Leaves top at y=7
+    {0, 7, 0, BLOCK_BIRCH_LEAVES},
+    {-1, 7, 0, BLOCK_BIRCH_LEAVES}, {1, 7, 0, BLOCK_BIRCH_LEAVES},
+    {0, 7, -1, BLOCK_BIRCH_LEAVES}, {0, 7, 1, BLOCK_BIRCH_LEAVES},
+};
+#define MEDIUM_BIRCH_COUNT (sizeof(MEDIUM_BIRCH) / sizeof(TreeBlock))
+
+// Large Birch: 8 blocks tall trunk
+static const TreeBlock LARGE_BIRCH[] = {
+    // Trunk (y=0 to y=7)
+    {0, 0, 0, BLOCK_BIRCH_WOOD},
+    {0, 1, 0, BLOCK_BIRCH_WOOD},
+    {0, 2, 0, BLOCK_BIRCH_WOOD},
+    {0, 3, 0, BLOCK_BIRCH_WOOD},
+    {0, 4, 0, BLOCK_BIRCH_WOOD},
+    {0, 5, 0, BLOCK_BIRCH_WOOD},
+    {0, 6, 0, BLOCK_BIRCH_WOOD},
+    {0, 7, 0, BLOCK_BIRCH_WOOD},
+
+    // Leaves layer at y=6 (3x3)
+    {-1, 6, 0, BLOCK_BIRCH_LEAVES}, {1, 6, 0, BLOCK_BIRCH_LEAVES},
+    {0, 6, -1, BLOCK_BIRCH_LEAVES}, {0, 6, 1, BLOCK_BIRCH_LEAVES},
+    {-1, 6, -1, BLOCK_BIRCH_LEAVES}, {1, 6, -1, BLOCK_BIRCH_LEAVES},
+    {-1, 6, 1, BLOCK_BIRCH_LEAVES}, {1, 6, 1, BLOCK_BIRCH_LEAVES},
+
+    // Leaves layer at y=7 (3x3 around trunk)
+    {-1, 7, 0, BLOCK_BIRCH_LEAVES}, {1, 7, 0, BLOCK_BIRCH_LEAVES},
+    {0, 7, -1, BLOCK_BIRCH_LEAVES}, {0, 7, 1, BLOCK_BIRCH_LEAVES},
+    {-1, 7, -1, BLOCK_BIRCH_LEAVES}, {1, 7, -1, BLOCK_BIRCH_LEAVES},
+    {-1, 7, 1, BLOCK_BIRCH_LEAVES}, {1, 7, 1, BLOCK_BIRCH_LEAVES},
+
+    // Leaves top at y=8
+    {0, 8, 0, BLOCK_BIRCH_LEAVES},
+    {-1, 8, 0, BLOCK_BIRCH_LEAVES}, {1, 8, 0, BLOCK_BIRCH_LEAVES},
+    {0, 8, -1, BLOCK_BIRCH_LEAVES}, {0, 8, 1, BLOCK_BIRCH_LEAVES},
+};
+#define LARGE_BIRCH_COUNT (sizeof(LARGE_BIRCH) / sizeof(TreeBlock))
+
+// ============================================================================
+// SPRUCE TREE TEMPLATES (conical, layered)
+// ============================================================================
+
+// Small Spruce: 7 blocks tall, conical shape
+static const TreeBlock SMALL_SPRUCE[] = {
+    // Trunk (y=0 to y=5)
+    {0, 0, 0, BLOCK_SPRUCE_WOOD},
+    {0, 1, 0, BLOCK_SPRUCE_WOOD},
+    {0, 2, 0, BLOCK_SPRUCE_WOOD},
+    {0, 3, 0, BLOCK_SPRUCE_WOOD},
+    {0, 4, 0, BLOCK_SPRUCE_WOOD},
+    {0, 5, 0, BLOCK_SPRUCE_WOOD},
+
+    // Layer at y=2 (5x5 cross)
+    {-2, 2, 0, BLOCK_SPRUCE_LEAVES}, {2, 2, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 2, -2, BLOCK_SPRUCE_LEAVES}, {0, 2, 2, BLOCK_SPRUCE_LEAVES},
+    {-1, 2, 0, BLOCK_SPRUCE_LEAVES}, {1, 2, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 2, -1, BLOCK_SPRUCE_LEAVES}, {0, 2, 1, BLOCK_SPRUCE_LEAVES},
+
+    // Layer at y=3 (3x3)
+    {-1, 3, 0, BLOCK_SPRUCE_LEAVES}, {1, 3, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 3, -1, BLOCK_SPRUCE_LEAVES}, {0, 3, 1, BLOCK_SPRUCE_LEAVES},
+    {-1, 3, -1, BLOCK_SPRUCE_LEAVES}, {1, 3, -1, BLOCK_SPRUCE_LEAVES},
+    {-1, 3, 1, BLOCK_SPRUCE_LEAVES}, {1, 3, 1, BLOCK_SPRUCE_LEAVES},
+
+    // Layer at y=4 (3x3 cross)
+    {-1, 4, 0, BLOCK_SPRUCE_LEAVES}, {1, 4, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 4, -1, BLOCK_SPRUCE_LEAVES}, {0, 4, 1, BLOCK_SPRUCE_LEAVES},
+
+    // Layer at y=5 (around trunk)
+    {-1, 5, 0, BLOCK_SPRUCE_LEAVES}, {1, 5, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 5, -1, BLOCK_SPRUCE_LEAVES}, {0, 5, 1, BLOCK_SPRUCE_LEAVES},
+
+    // Top at y=6
+    {0, 6, 0, BLOCK_SPRUCE_LEAVES},
+};
+#define SMALL_SPRUCE_COUNT (sizeof(SMALL_SPRUCE) / sizeof(TreeBlock))
+
+// Medium Spruce: 9 blocks tall
+static const TreeBlock MEDIUM_SPRUCE[] = {
+    // Trunk (y=0 to y=7)
+    {0, 0, 0, BLOCK_SPRUCE_WOOD},
+    {0, 1, 0, BLOCK_SPRUCE_WOOD},
+    {0, 2, 0, BLOCK_SPRUCE_WOOD},
+    {0, 3, 0, BLOCK_SPRUCE_WOOD},
+    {0, 4, 0, BLOCK_SPRUCE_WOOD},
+    {0, 5, 0, BLOCK_SPRUCE_WOOD},
+    {0, 6, 0, BLOCK_SPRUCE_WOOD},
+    {0, 7, 0, BLOCK_SPRUCE_WOOD},
+
+    // Layer at y=2 (wide 5x5)
+    {-2, 2, 0, BLOCK_SPRUCE_LEAVES}, {2, 2, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 2, -2, BLOCK_SPRUCE_LEAVES}, {0, 2, 2, BLOCK_SPRUCE_LEAVES},
+    {-1, 2, 0, BLOCK_SPRUCE_LEAVES}, {1, 2, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 2, -1, BLOCK_SPRUCE_LEAVES}, {0, 2, 1, BLOCK_SPRUCE_LEAVES},
+    {-1, 2, -1, BLOCK_SPRUCE_LEAVES}, {1, 2, -1, BLOCK_SPRUCE_LEAVES},
+    {-1, 2, 1, BLOCK_SPRUCE_LEAVES}, {1, 2, 1, BLOCK_SPRUCE_LEAVES},
+    {-2, 2, -1, BLOCK_SPRUCE_LEAVES}, {-2, 2, 1, BLOCK_SPRUCE_LEAVES},
+    {2, 2, -1, BLOCK_SPRUCE_LEAVES}, {2, 2, 1, BLOCK_SPRUCE_LEAVES},
+    {-1, 2, -2, BLOCK_SPRUCE_LEAVES}, {1, 2, -2, BLOCK_SPRUCE_LEAVES},
+    {-1, 2, 2, BLOCK_SPRUCE_LEAVES}, {1, 2, 2, BLOCK_SPRUCE_LEAVES},
+
+    // Layer at y=3 (3x3)
+    {-1, 3, 0, BLOCK_SPRUCE_LEAVES}, {1, 3, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 3, -1, BLOCK_SPRUCE_LEAVES}, {0, 3, 1, BLOCK_SPRUCE_LEAVES},
+
+    // Layer at y=4 (5x5)
+    {-2, 4, 0, BLOCK_SPRUCE_LEAVES}, {2, 4, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 4, -2, BLOCK_SPRUCE_LEAVES}, {0, 4, 2, BLOCK_SPRUCE_LEAVES},
+    {-1, 4, 0, BLOCK_SPRUCE_LEAVES}, {1, 4, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 4, -1, BLOCK_SPRUCE_LEAVES}, {0, 4, 1, BLOCK_SPRUCE_LEAVES},
+    {-1, 4, -1, BLOCK_SPRUCE_LEAVES}, {1, 4, -1, BLOCK_SPRUCE_LEAVES},
+    {-1, 4, 1, BLOCK_SPRUCE_LEAVES}, {1, 4, 1, BLOCK_SPRUCE_LEAVES},
+
+    // Layer at y=5 (3x3)
+    {-1, 5, 0, BLOCK_SPRUCE_LEAVES}, {1, 5, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 5, -1, BLOCK_SPRUCE_LEAVES}, {0, 5, 1, BLOCK_SPRUCE_LEAVES},
+
+    // Layer at y=6 (3x3)
+    {-1, 6, 0, BLOCK_SPRUCE_LEAVES}, {1, 6, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 6, -1, BLOCK_SPRUCE_LEAVES}, {0, 6, 1, BLOCK_SPRUCE_LEAVES},
+    {-1, 6, -1, BLOCK_SPRUCE_LEAVES}, {1, 6, -1, BLOCK_SPRUCE_LEAVES},
+    {-1, 6, 1, BLOCK_SPRUCE_LEAVES}, {1, 6, 1, BLOCK_SPRUCE_LEAVES},
+
+    // Layer at y=7 (around trunk)
+    {-1, 7, 0, BLOCK_SPRUCE_LEAVES}, {1, 7, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 7, -1, BLOCK_SPRUCE_LEAVES}, {0, 7, 1, BLOCK_SPRUCE_LEAVES},
+
+    // Top at y=8
+    {0, 8, 0, BLOCK_SPRUCE_LEAVES},
+};
+#define MEDIUM_SPRUCE_COUNT (sizeof(MEDIUM_SPRUCE) / sizeof(TreeBlock))
+
+// Large Spruce: 11 blocks tall
+static const TreeBlock LARGE_SPRUCE[] = {
+    // Trunk (y=0 to y=9)
+    {0, 0, 0, BLOCK_SPRUCE_WOOD},
+    {0, 1, 0, BLOCK_SPRUCE_WOOD},
+    {0, 2, 0, BLOCK_SPRUCE_WOOD},
+    {0, 3, 0, BLOCK_SPRUCE_WOOD},
+    {0, 4, 0, BLOCK_SPRUCE_WOOD},
+    {0, 5, 0, BLOCK_SPRUCE_WOOD},
+    {0, 6, 0, BLOCK_SPRUCE_WOOD},
+    {0, 7, 0, BLOCK_SPRUCE_WOOD},
+    {0, 8, 0, BLOCK_SPRUCE_WOOD},
+    {0, 9, 0, BLOCK_SPRUCE_WOOD},
+
+    // Layer at y=2 (wide 5x5)
+    {-2, 2, 0, BLOCK_SPRUCE_LEAVES}, {2, 2, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 2, -2, BLOCK_SPRUCE_LEAVES}, {0, 2, 2, BLOCK_SPRUCE_LEAVES},
+    {-1, 2, 0, BLOCK_SPRUCE_LEAVES}, {1, 2, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 2, -1, BLOCK_SPRUCE_LEAVES}, {0, 2, 1, BLOCK_SPRUCE_LEAVES},
+    {-1, 2, -1, BLOCK_SPRUCE_LEAVES}, {1, 2, -1, BLOCK_SPRUCE_LEAVES},
+    {-1, 2, 1, BLOCK_SPRUCE_LEAVES}, {1, 2, 1, BLOCK_SPRUCE_LEAVES},
+    {-2, 2, -1, BLOCK_SPRUCE_LEAVES}, {-2, 2, 1, BLOCK_SPRUCE_LEAVES},
+    {2, 2, -1, BLOCK_SPRUCE_LEAVES}, {2, 2, 1, BLOCK_SPRUCE_LEAVES},
+    {-1, 2, -2, BLOCK_SPRUCE_LEAVES}, {1, 2, -2, BLOCK_SPRUCE_LEAVES},
+    {-1, 2, 2, BLOCK_SPRUCE_LEAVES}, {1, 2, 2, BLOCK_SPRUCE_LEAVES},
+
+    // Layer at y=3 (3x3)
+    {-1, 3, 0, BLOCK_SPRUCE_LEAVES}, {1, 3, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 3, -1, BLOCK_SPRUCE_LEAVES}, {0, 3, 1, BLOCK_SPRUCE_LEAVES},
+
+    // Layer at y=4 (5x5)
+    {-2, 4, 0, BLOCK_SPRUCE_LEAVES}, {2, 4, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 4, -2, BLOCK_SPRUCE_LEAVES}, {0, 4, 2, BLOCK_SPRUCE_LEAVES},
+    {-1, 4, 0, BLOCK_SPRUCE_LEAVES}, {1, 4, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 4, -1, BLOCK_SPRUCE_LEAVES}, {0, 4, 1, BLOCK_SPRUCE_LEAVES},
+    {-1, 4, -1, BLOCK_SPRUCE_LEAVES}, {1, 4, -1, BLOCK_SPRUCE_LEAVES},
+    {-1, 4, 1, BLOCK_SPRUCE_LEAVES}, {1, 4, 1, BLOCK_SPRUCE_LEAVES},
+
+    // Layer at y=5 (3x3)
+    {-1, 5, 0, BLOCK_SPRUCE_LEAVES}, {1, 5, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 5, -1, BLOCK_SPRUCE_LEAVES}, {0, 5, 1, BLOCK_SPRUCE_LEAVES},
+
+    // Layer at y=6 (5x5)
+    {-2, 6, 0, BLOCK_SPRUCE_LEAVES}, {2, 6, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 6, -2, BLOCK_SPRUCE_LEAVES}, {0, 6, 2, BLOCK_SPRUCE_LEAVES},
+    {-1, 6, 0, BLOCK_SPRUCE_LEAVES}, {1, 6, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 6, -1, BLOCK_SPRUCE_LEAVES}, {0, 6, 1, BLOCK_SPRUCE_LEAVES},
+    {-1, 6, -1, BLOCK_SPRUCE_LEAVES}, {1, 6, -1, BLOCK_SPRUCE_LEAVES},
+    {-1, 6, 1, BLOCK_SPRUCE_LEAVES}, {1, 6, 1, BLOCK_SPRUCE_LEAVES},
+
+    // Layer at y=7 (3x3)
+    {-1, 7, 0, BLOCK_SPRUCE_LEAVES}, {1, 7, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 7, -1, BLOCK_SPRUCE_LEAVES}, {0, 7, 1, BLOCK_SPRUCE_LEAVES},
+
+    // Layer at y=8 (3x3)
+    {-1, 8, 0, BLOCK_SPRUCE_LEAVES}, {1, 8, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 8, -1, BLOCK_SPRUCE_LEAVES}, {0, 8, 1, BLOCK_SPRUCE_LEAVES},
+    {-1, 8, -1, BLOCK_SPRUCE_LEAVES}, {1, 8, -1, BLOCK_SPRUCE_LEAVES},
+    {-1, 8, 1, BLOCK_SPRUCE_LEAVES}, {1, 8, 1, BLOCK_SPRUCE_LEAVES},
+
+    // Layer at y=9 (around trunk)
+    {-1, 9, 0, BLOCK_SPRUCE_LEAVES}, {1, 9, 0, BLOCK_SPRUCE_LEAVES},
+    {0, 9, -1, BLOCK_SPRUCE_LEAVES}, {0, 9, 1, BLOCK_SPRUCE_LEAVES},
+
+    // Top at y=10
+    {0, 10, 0, BLOCK_SPRUCE_LEAVES},
+};
+#define LARGE_SPRUCE_COUNT (sizeof(LARGE_SPRUCE) / sizeof(TreeBlock))
+
+// ============================================================================
+// ACACIA TREE TEMPLATES (flat top, angled trunk)
+// ============================================================================
+
+// Small Acacia: 6 blocks tall with flat canopy
+static const TreeBlock SMALL_ACACIA[] = {
+    // Trunk (y=0 to y=2, straight)
+    {0, 0, 0, BLOCK_ACACIA_WOOD},
+    {0, 1, 0, BLOCK_ACACIA_WOOD},
+    {0, 2, 0, BLOCK_ACACIA_WOOD},
+    // Diagonal section (y=3 to y=4)
+    {1, 3, 0, BLOCK_ACACIA_WOOD},
+    {1, 4, 0, BLOCK_ACACIA_WOOD},
+
+    // Flat canopy at y=5 (5x5)
+    {0, 5, 0, BLOCK_ACACIA_LEAVES}, {1, 5, 0, BLOCK_ACACIA_LEAVES}, {2, 5, 0, BLOCK_ACACIA_LEAVES},
+    {-1, 5, 0, BLOCK_ACACIA_LEAVES}, {3, 5, 0, BLOCK_ACACIA_LEAVES},
+    {0, 5, -1, BLOCK_ACACIA_LEAVES}, {1, 5, -1, BLOCK_ACACIA_LEAVES}, {2, 5, -1, BLOCK_ACACIA_LEAVES},
+    {-1, 5, -1, BLOCK_ACACIA_LEAVES}, {3, 5, -1, BLOCK_ACACIA_LEAVES},
+    {0, 5, 1, BLOCK_ACACIA_LEAVES}, {1, 5, 1, BLOCK_ACACIA_LEAVES}, {2, 5, 1, BLOCK_ACACIA_LEAVES},
+    {-1, 5, 1, BLOCK_ACACIA_LEAVES}, {3, 5, 1, BLOCK_ACACIA_LEAVES},
+    {0, 5, -2, BLOCK_ACACIA_LEAVES}, {1, 5, -2, BLOCK_ACACIA_LEAVES}, {2, 5, -2, BLOCK_ACACIA_LEAVES},
+    {0, 5, 2, BLOCK_ACACIA_LEAVES}, {1, 5, 2, BLOCK_ACACIA_LEAVES}, {2, 5, 2, BLOCK_ACACIA_LEAVES},
+
+    // Small top layer at y=6
+    {0, 6, 0, BLOCK_ACACIA_LEAVES}, {1, 6, 0, BLOCK_ACACIA_LEAVES}, {2, 6, 0, BLOCK_ACACIA_LEAVES},
+    {1, 6, -1, BLOCK_ACACIA_LEAVES}, {1, 6, 1, BLOCK_ACACIA_LEAVES},
+};
+#define SMALL_ACACIA_COUNT (sizeof(SMALL_ACACIA) / sizeof(TreeBlock))
+
+// Medium Acacia: 7 blocks tall with wider canopy
+static const TreeBlock MEDIUM_ACACIA[] = {
+    // Trunk (y=0 to y=2, straight)
+    {0, 0, 0, BLOCK_ACACIA_WOOD},
+    {0, 1, 0, BLOCK_ACACIA_WOOD},
+    {0, 2, 0, BLOCK_ACACIA_WOOD},
+    // Diagonal section (y=3 to y=5)
+    {1, 3, 0, BLOCK_ACACIA_WOOD},
+    {1, 4, 0, BLOCK_ACACIA_WOOD},
+    {2, 5, 0, BLOCK_ACACIA_WOOD},
+
+    // Flat canopy at y=6 (7x5)
+    {0, 6, 0, BLOCK_ACACIA_LEAVES}, {1, 6, 0, BLOCK_ACACIA_LEAVES}, {2, 6, 0, BLOCK_ACACIA_LEAVES},
+    {3, 6, 0, BLOCK_ACACIA_LEAVES}, {4, 6, 0, BLOCK_ACACIA_LEAVES},
+    {-1, 6, 0, BLOCK_ACACIA_LEAVES},
+    {0, 6, -1, BLOCK_ACACIA_LEAVES}, {1, 6, -1, BLOCK_ACACIA_LEAVES}, {2, 6, -1, BLOCK_ACACIA_LEAVES},
+    {3, 6, -1, BLOCK_ACACIA_LEAVES}, {4, 6, -1, BLOCK_ACACIA_LEAVES},
+    {0, 6, 1, BLOCK_ACACIA_LEAVES}, {1, 6, 1, BLOCK_ACACIA_LEAVES}, {2, 6, 1, BLOCK_ACACIA_LEAVES},
+    {3, 6, 1, BLOCK_ACACIA_LEAVES}, {4, 6, 1, BLOCK_ACACIA_LEAVES},
+    {0, 6, -2, BLOCK_ACACIA_LEAVES}, {1, 6, -2, BLOCK_ACACIA_LEAVES}, {2, 6, -2, BLOCK_ACACIA_LEAVES},
+    {3, 6, -2, BLOCK_ACACIA_LEAVES},
+    {0, 6, 2, BLOCK_ACACIA_LEAVES}, {1, 6, 2, BLOCK_ACACIA_LEAVES}, {2, 6, 2, BLOCK_ACACIA_LEAVES},
+    {3, 6, 2, BLOCK_ACACIA_LEAVES},
+
+    // Small top layer at y=7
+    {1, 7, 0, BLOCK_ACACIA_LEAVES}, {2, 7, 0, BLOCK_ACACIA_LEAVES}, {3, 7, 0, BLOCK_ACACIA_LEAVES},
+    {2, 7, -1, BLOCK_ACACIA_LEAVES}, {2, 7, 1, BLOCK_ACACIA_LEAVES},
+};
+#define MEDIUM_ACACIA_COUNT (sizeof(MEDIUM_ACACIA) / sizeof(TreeBlock))
+
+// Large Acacia: 8 blocks tall with largest canopy
+static const TreeBlock LARGE_ACACIA[] = {
+    // Trunk (y=0 to y=3, straight)
+    {0, 0, 0, BLOCK_ACACIA_WOOD},
+    {0, 1, 0, BLOCK_ACACIA_WOOD},
+    {0, 2, 0, BLOCK_ACACIA_WOOD},
+    {0, 3, 0, BLOCK_ACACIA_WOOD},
+    // Diagonal section (y=4 to y=6)
+    {1, 4, 0, BLOCK_ACACIA_WOOD},
+    {1, 5, 0, BLOCK_ACACIA_WOOD},
+    {2, 6, 0, BLOCK_ACACIA_WOOD},
+
+    // Flat canopy at y=7 (7x7)
+    {0, 7, 0, BLOCK_ACACIA_LEAVES}, {1, 7, 0, BLOCK_ACACIA_LEAVES}, {2, 7, 0, BLOCK_ACACIA_LEAVES},
+    {3, 7, 0, BLOCK_ACACIA_LEAVES}, {4, 7, 0, BLOCK_ACACIA_LEAVES},
+    {-1, 7, 0, BLOCK_ACACIA_LEAVES}, {5, 7, 0, BLOCK_ACACIA_LEAVES},
+    {0, 7, -1, BLOCK_ACACIA_LEAVES}, {1, 7, -1, BLOCK_ACACIA_LEAVES}, {2, 7, -1, BLOCK_ACACIA_LEAVES},
+    {3, 7, -1, BLOCK_ACACIA_LEAVES}, {4, 7, -1, BLOCK_ACACIA_LEAVES},
+    {-1, 7, -1, BLOCK_ACACIA_LEAVES}, {5, 7, -1, BLOCK_ACACIA_LEAVES},
+    {0, 7, 1, BLOCK_ACACIA_LEAVES}, {1, 7, 1, BLOCK_ACACIA_LEAVES}, {2, 7, 1, BLOCK_ACACIA_LEAVES},
+    {3, 7, 1, BLOCK_ACACIA_LEAVES}, {4, 7, 1, BLOCK_ACACIA_LEAVES},
+    {-1, 7, 1, BLOCK_ACACIA_LEAVES}, {5, 7, 1, BLOCK_ACACIA_LEAVES},
+    {0, 7, -2, BLOCK_ACACIA_LEAVES}, {1, 7, -2, BLOCK_ACACIA_LEAVES}, {2, 7, -2, BLOCK_ACACIA_LEAVES},
+    {3, 7, -2, BLOCK_ACACIA_LEAVES}, {4, 7, -2, BLOCK_ACACIA_LEAVES},
+    {0, 7, 2, BLOCK_ACACIA_LEAVES}, {1, 7, 2, BLOCK_ACACIA_LEAVES}, {2, 7, 2, BLOCK_ACACIA_LEAVES},
+    {3, 7, 2, BLOCK_ACACIA_LEAVES}, {4, 7, 2, BLOCK_ACACIA_LEAVES},
+    {1, 7, -3, BLOCK_ACACIA_LEAVES}, {2, 7, -3, BLOCK_ACACIA_LEAVES}, {3, 7, -3, BLOCK_ACACIA_LEAVES},
+    {1, 7, 3, BLOCK_ACACIA_LEAVES}, {2, 7, 3, BLOCK_ACACIA_LEAVES}, {3, 7, 3, BLOCK_ACACIA_LEAVES},
+
+    // Top layer at y=8
+    {1, 8, 0, BLOCK_ACACIA_LEAVES}, {2, 8, 0, BLOCK_ACACIA_LEAVES}, {3, 8, 0, BLOCK_ACACIA_LEAVES},
+    {2, 8, -1, BLOCK_ACACIA_LEAVES}, {2, 8, 1, BLOCK_ACACIA_LEAVES},
+    {1, 8, -1, BLOCK_ACACIA_LEAVES}, {3, 8, -1, BLOCK_ACACIA_LEAVES},
+    {1, 8, 1, BLOCK_ACACIA_LEAVES}, {3, 8, 1, BLOCK_ACACIA_LEAVES},
+};
+#define LARGE_ACACIA_COUNT (sizeof(LARGE_ACACIA) / sizeof(TreeBlock))
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+static bool is_wood_block(BlockType type) {
+    return type == BLOCK_WOOD ||
+           type == BLOCK_BIRCH_WOOD ||
+           type == BLOCK_SPRUCE_WOOD ||
+           type == BLOCK_ACACIA_WOOD;
+}
+
+static bool is_leaf_block(BlockType type) {
+    return type == BLOCK_LEAVES ||
+           type == BLOCK_BIRCH_LEAVES ||
+           type == BLOCK_SPRUCE_LEAVES ||
+           type == BLOCK_ACACIA_LEAVES;
+}
+
+// Template accessor for typed trees
+static const TreeBlock* get_template_typed(TreeSize size, TreeType type, int* count) {
+    switch (type) {
+        case TREE_TYPE_OAK:
+            switch (size) {
+                case TREE_SMALL:  *count = SMALL_OAK_COUNT;  return SMALL_OAK;
+                case TREE_MEDIUM: *count = MEDIUM_OAK_COUNT; return MEDIUM_OAK;
+                case TREE_LARGE:  *count = LARGE_OAK_COUNT;  return LARGE_OAK;
+                default:          *count = SMALL_OAK_COUNT;  return SMALL_OAK;
+            }
+        case TREE_TYPE_BIRCH:
+            switch (size) {
+                case TREE_SMALL:  *count = SMALL_BIRCH_COUNT;  return SMALL_BIRCH;
+                case TREE_MEDIUM: *count = MEDIUM_BIRCH_COUNT; return MEDIUM_BIRCH;
+                case TREE_LARGE:  *count = LARGE_BIRCH_COUNT;  return LARGE_BIRCH;
+                default:          *count = SMALL_BIRCH_COUNT;  return SMALL_BIRCH;
+            }
+        case TREE_TYPE_SPRUCE:
+            switch (size) {
+                case TREE_SMALL:  *count = SMALL_SPRUCE_COUNT;  return SMALL_SPRUCE;
+                case TREE_MEDIUM: *count = MEDIUM_SPRUCE_COUNT; return MEDIUM_SPRUCE;
+                case TREE_LARGE:  *count = LARGE_SPRUCE_COUNT;  return LARGE_SPRUCE;
+                default:          *count = SMALL_SPRUCE_COUNT;  return SMALL_SPRUCE;
+            }
+        case TREE_TYPE_ACACIA:
+            switch (size) {
+                case TREE_SMALL:  *count = SMALL_ACACIA_COUNT;  return SMALL_ACACIA;
+                case TREE_MEDIUM: *count = MEDIUM_ACACIA_COUNT; return MEDIUM_ACACIA;
+                case TREE_LARGE:  *count = LARGE_ACACIA_COUNT;  return LARGE_ACACIA;
+                default:          *count = SMALL_ACACIA_COUNT;  return SMALL_ACACIA;
+            }
+        default:
+            *count = SMALL_OAK_COUNT;
+            return SMALL_OAK;
+    }
+}
+
+// Template accessor (legacy, uses Oak)
 static const TreeBlock* get_template(TreeSize size, int* count) {
     switch (size) {
         case TREE_SMALL:
@@ -201,6 +606,37 @@ void tree_place_at(Chunk* chunk, int local_x, int base_y, int local_z, TreeSize 
         // Don't overwrite existing solid blocks (except air)
         Block existing = chunk_get_block(chunk, x, y, z);
         if (existing.type != BLOCK_AIR && existing.type != BLOCK_LEAVES) continue;
+
+        // Create block with metadata=1 for natural tree
+        Block block = {
+            .type = template[i].type,
+            .light_level = 0,
+            .metadata = 1  // Mark as natural tree
+        };
+
+        chunk_set_block(chunk, x, y, z, block);
+    }
+}
+
+void tree_place_at_typed(Chunk* chunk, int local_x, int base_y, int local_z,
+                         TreeSize size, TreeType type) {
+    if (!chunk) return;
+
+    int count;
+    const TreeBlock* template = get_template_typed(size, type, &count);
+
+    for (int i = 0; i < count; i++) {
+        int x = local_x + template[i].dx;
+        int y = base_y + template[i].dy;
+        int z = local_z + template[i].dz;
+
+        // Check bounds - skip blocks outside chunk
+        if (x < 0 || x >= CHUNK_SIZE || z < 0 || z >= CHUNK_SIZE) continue;
+        if (y < 0 || y >= CHUNK_HEIGHT) continue;
+
+        // Don't overwrite existing solid blocks (except air and leaves)
+        Block existing = chunk_get_block(chunk, x, y, z);
+        if (existing.type != BLOCK_AIR && !is_leaf_block(existing.type)) continue;
 
         // Create block with metadata=1 for natural tree
         Block block = {
@@ -273,13 +709,13 @@ void tree_generate_for_chunk(Chunk* chunk) {
                 (float)world_z * 0.08f + 5000.0f
             );
 
-            // Desert biome: place cacti instead of trees
+            // Desert biome: place cacti in addition to sparse trees
             if (bp->has_cacti) {
                 // Cacti are sparse (use different threshold)
                 if (veg_noise > 0.75f) {
                     place_cactus(chunk, x, surface_y, z);
+                    continue;  // Don't place a tree where we placed a cactus
                 }
-                continue;  // No trees in desert
             }
 
             // Skip if biome doesn't have trees
@@ -299,10 +735,10 @@ void tree_generate_for_chunk(Chunk* chunk) {
                         int nx = x + dx;
                         int nz = z + dz;
                         if (nx >= 0 && nx < CHUNK_SIZE && nz >= 0 && nz < CHUNK_SIZE) {
-                            // Check if there's wood or cactus near the surface
+                            // Check if there's any wood block or cactus near the surface
                             for (int dy = 0; dy <= 3; dy++) {
                                 Block neighbor = chunk_get_block(chunk, nx, surface_y + 1 + dy, nz);
-                                if (neighbor.type == BLOCK_WOOD || neighbor.type == BLOCK_CACTUS) {
+                                if (is_wood_block(neighbor.type) || neighbor.type == BLOCK_CACTUS) {
                                     too_close = true;
                                     break;
                                 }
@@ -312,12 +748,22 @@ void tree_generate_for_chunk(Chunk* chunk) {
                 }
 
                 if (!too_close) {
-                    // Pick tree size based on position hash
+                    // Pick tree size and type based on position hash
                     uint32_t hash = (uint32_t)(world_x * 73856093 ^ world_z * 19349663);
                     TreeSize size = (TreeSize)(hash % TREE_SIZE_COUNT);
 
-                    // Place tree (trunk starts above surface)
-                    tree_place_at(chunk, x, surface_y + 1, z, size);
+                    // Determine tree type from biome
+                    TreeType tree_type = bp->primary_tree;
+                    if (bp->secondary_tree != TREE_TYPE_COUNT) {
+                        // Use different hash bits for tree type selection
+                        float roll = (float)((hash >> 16) % 1000) / 1000.0f;
+                        if (roll < bp->secondary_chance) {
+                            tree_type = bp->secondary_tree;
+                        }
+                    }
+
+                    // Place tree with correct type (trunk starts above surface)
+                    tree_place_at_typed(chunk, x, surface_y + 1, z, size, tree_type);
                 }
             }
         }
@@ -384,7 +830,7 @@ void leaf_decay_on_wood_removed(struct World* world, int x, int y, int z) {
                 int nz = z + dz;
 
                 Block block = world_get_block(world, nx, ny, nz);
-                if (block.type == BLOCK_LEAVES) {
+                if (is_leaf_block(block.type)) {
                     add_to_decay_queue(nx, ny, nz);
                 }
             }
@@ -435,12 +881,12 @@ static bool leaf_is_supported(struct World* world, int x, int y, int z) {
         Block block = world_get_block(world, node.x, node.y, node.z);
 
         // Found wood! Leaf is supported
-        if (block.type == BLOCK_WOOD) {
+        if (is_wood_block(block.type)) {
             return true;
         }
 
         // Continue searching through leaves
-        if (block.type == BLOCK_LEAVES || (node.x == x && node.y == y && node.z == z)) {
+        if (is_leaf_block(block.type) || (node.x == x && node.y == y && node.z == z)) {
             // Add neighbors
             if (queue_tail < 500) {
                 queue[queue_tail++] = (SearchNode){node.x + 1, node.y, node.z, node.dist + 1};
@@ -470,7 +916,7 @@ void leaf_decay_update(struct World* world, float dt) {
 
             // Check if block is still a leaf
             Block block = world_get_block(world, x, y, z);
-            if (block.type == BLOCK_LEAVES) {
+            if (is_leaf_block(block.type)) {
                 // Check if connected to wood
                 if (!leaf_is_supported(world, x, y, z)) {
                     // Decay the leaf
@@ -483,7 +929,7 @@ void leaf_decay_update(struct World* world, float dt) {
                             for (int dz = -1; dz <= 1; dz++) {
                                 if (dx == 0 && dy == 0 && dz == 0) continue;
                                 Block neighbor = world_get_block(world, x + dx, y + dy, z + dz);
-                                if (neighbor.type == BLOCK_LEAVES) {
+                                if (is_leaf_block(neighbor.type)) {
                                     add_to_decay_queue(x + dx, y + dy, z + dz);
                                 }
                             }

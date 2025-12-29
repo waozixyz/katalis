@@ -307,6 +307,27 @@ static Image generate_atlas_image(void) {
     // CACTUS - Row 19 (dark green)
     generate_tile(&atlas, 0, 19, (Color){40, 120, 40, 255}, true);    // Cactus
 
+    // BIRCH_WOOD - Row 21 (white/cream bark with darker rings)
+    generate_tile(&atlas, 0, 21, (Color){230, 225, 210, 255}, true);  // Sides: Cream bark
+    generate_tile(&atlas, 1, 21, (Color){200, 180, 150, 255}, true);  // Top: Wood rings
+
+    // BIRCH_LEAVES - Row 22 (lighter green)
+    generate_leaf_tile(&atlas, 0, 22, (Color){100, 200, 90, 255});
+
+    // SPRUCE_WOOD - Row 23 (dark brown bark)
+    generate_tile(&atlas, 0, 23, (Color){60, 40, 25, 255}, true);     // Sides: Dark bark
+    generate_tile(&atlas, 1, 23, (Color){120, 90, 60, 255}, true);    // Top: Wood rings
+
+    // SPRUCE_LEAVES - Row 24 (dark blue-green needles)
+    generate_leaf_tile(&atlas, 0, 24, (Color){30, 80, 50, 255});
+
+    // ACACIA_WOOD - Row 25 (orange-brown bark)
+    generate_tile(&atlas, 0, 25, (Color){170, 100, 50, 255}, true);   // Sides: Orange bark
+    generate_tile(&atlas, 1, 25, (Color){180, 130, 80, 255}, true);   // Top: Wood rings
+
+    // ACACIA_LEAVES - Row 26 (yellow-green)
+    generate_leaf_tile(&atlas, 0, 26, (Color){140, 180, 60, 255});
+
     // ITEM TEXTURES (Row 0, columns 3+)
     // MEAT - Raw meat item (pinkish-red)
     generate_tile(&atlas, 6, 0, (Color){200, 100, 100, 255}, true);   // Raw meat
@@ -484,6 +505,42 @@ TextureCoords texture_atlas_get_coords(BlockType block_type, BlockFace face) {
 
         case BLOCK_CACTUS:
             tile_x = 0; tile_y = 19;
+            break;
+
+        case BLOCK_BIRCH_WOOD:
+            if (face == FACE_TOP || face == FACE_BOTTOM) {
+                tile_x = 1; tile_y = 21;  // Wood rings
+            } else {
+                tile_x = 0; tile_y = 21;  // Cream bark
+            }
+            break;
+
+        case BLOCK_BIRCH_LEAVES:
+            tile_x = 0; tile_y = 22;
+            break;
+
+        case BLOCK_SPRUCE_WOOD:
+            if (face == FACE_TOP || face == FACE_BOTTOM) {
+                tile_x = 1; tile_y = 23;  // Wood rings
+            } else {
+                tile_x = 0; tile_y = 23;  // Dark bark
+            }
+            break;
+
+        case BLOCK_SPRUCE_LEAVES:
+            tile_x = 0; tile_y = 24;
+            break;
+
+        case BLOCK_ACACIA_WOOD:
+            if (face == FACE_TOP || face == FACE_BOTTOM) {
+                tile_x = 1; tile_y = 25;  // Wood rings
+            } else {
+                tile_x = 0; tile_y = 25;  // Orange bark
+            }
+            break;
+
+        case BLOCK_ACACIA_LEAVES:
+            tile_x = 0; tile_y = 26;
             break;
 
         default:

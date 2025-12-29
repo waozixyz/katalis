@@ -30,6 +30,9 @@ static const BiomeProperties g_biome_properties[BIOME_COUNT] = {
         .tree_density = 0.5f,
         .has_trees = true,
         .has_cacti = false,
+        .primary_tree = TREE_TYPE_OAK,
+        .secondary_tree = TREE_TYPE_COUNT,  // None
+        .secondary_chance = 0.0f,
     },
     [BIOME_FOREST] = {
         .name = "Forest",
@@ -39,15 +42,21 @@ static const BiomeProperties g_biome_properties[BIOME_COUNT] = {
         .tree_density = 0.8f,       // Dense trees
         .has_trees = true,
         .has_cacti = false,
+        .primary_tree = TREE_TYPE_OAK,
+        .secondary_tree = TREE_TYPE_BIRCH,
+        .secondary_chance = 0.4f,   // 40% birch trees
     },
     [BIOME_DESERT] = {
         .name = "Desert",
         .surface_block = BLOCK_SAND,
         .subsurface_block = BLOCK_SAND,
         .height_scale = 0.6f,       // Flatter terrain
-        .tree_density = 0.0f,       // No trees
-        .has_trees = false,
+        .tree_density = 0.15f,      // Sparse acacia
+        .has_trees = true,          // Enable sparse acacia trees
         .has_cacti = true,
+        .primary_tree = TREE_TYPE_ACACIA,
+        .secondary_tree = TREE_TYPE_COUNT,
+        .secondary_chance = 0.0f,
     },
     [BIOME_TUNDRA] = {
         .name = "Tundra",
@@ -57,6 +66,9 @@ static const BiomeProperties g_biome_properties[BIOME_COUNT] = {
         .tree_density = 0.2f,       // Sparse trees
         .has_trees = true,
         .has_cacti = false,
+        .primary_tree = TREE_TYPE_SPRUCE,
+        .secondary_tree = TREE_TYPE_COUNT,
+        .secondary_chance = 0.0f,
     },
 };
 

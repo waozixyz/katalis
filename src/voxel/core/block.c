@@ -264,6 +264,72 @@ void block_system_init(void) {
         .requires_tool = false
     };
 
+    // BIRCH_WOOD
+    g_block_properties[BLOCK_BIRCH_WOOD] = (BlockProperties){
+        .name = "Birch Wood",
+        .is_solid = true,
+        .is_transparent = false,
+        .is_fluid = false,
+        .hardness = 2.0f,
+        .preferred_tool = TOOL_AXE,
+        .requires_tool = false
+    };
+
+    // BIRCH_LEAVES
+    g_block_properties[BLOCK_BIRCH_LEAVES] = (BlockProperties){
+        .name = "Birch Leaves",
+        .is_solid = true,
+        .is_transparent = true,
+        .is_fluid = false,
+        .hardness = 0.2f,
+        .preferred_tool = TOOL_NONE,
+        .requires_tool = false
+    };
+
+    // SPRUCE_WOOD
+    g_block_properties[BLOCK_SPRUCE_WOOD] = (BlockProperties){
+        .name = "Spruce Wood",
+        .is_solid = true,
+        .is_transparent = false,
+        .is_fluid = false,
+        .hardness = 2.0f,
+        .preferred_tool = TOOL_AXE,
+        .requires_tool = false
+    };
+
+    // SPRUCE_LEAVES
+    g_block_properties[BLOCK_SPRUCE_LEAVES] = (BlockProperties){
+        .name = "Spruce Leaves",
+        .is_solid = true,
+        .is_transparent = true,
+        .is_fluid = false,
+        .hardness = 0.2f,
+        .preferred_tool = TOOL_NONE,
+        .requires_tool = false
+    };
+
+    // ACACIA_WOOD
+    g_block_properties[BLOCK_ACACIA_WOOD] = (BlockProperties){
+        .name = "Acacia Wood",
+        .is_solid = true,
+        .is_transparent = false,
+        .is_fluid = false,
+        .hardness = 2.0f,
+        .preferred_tool = TOOL_AXE,
+        .requires_tool = false
+    };
+
+    // ACACIA_LEAVES
+    g_block_properties[BLOCK_ACACIA_LEAVES] = (BlockProperties){
+        .name = "Acacia Leaves",
+        .is_solid = true,
+        .is_transparent = true,
+        .is_fluid = false,
+        .hardness = 0.2f,
+        .preferred_tool = TOOL_NONE,
+        .requires_tool = false
+    };
+
     g_initialized = true;
     printf("[BLOCK] Block system initialized with %d block types\n", BLOCK_COUNT);
 }

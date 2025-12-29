@@ -34,6 +34,7 @@ VOXEL_WORLD = src/voxel/world/world.c \
 
 # Entity module
 VOXEL_ENTITY = src/voxel/entity/entity.c \
+               src/voxel/entity/collision.c \
                src/voxel/entity/pig.c \
                src/voxel/entity/sheep.c \
                src/voxel/entity/tree.c \

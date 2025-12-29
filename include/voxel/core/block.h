@@ -48,6 +48,13 @@ typedef enum {
     BLOCK_CLAY,             // Underground clay deposits
     BLOCK_SNOW,             // Tundra surface block
     BLOCK_CACTUS,           // Desert vegetation
+    // Tree variants
+    BLOCK_BIRCH_WOOD,       // White/cream bark
+    BLOCK_BIRCH_LEAVES,     // Lighter green leaves
+    BLOCK_SPRUCE_WOOD,      // Dark brown bark
+    BLOCK_SPRUCE_LEAVES,    // Dark blue-green needles
+    BLOCK_ACACIA_WOOD,      // Orange-brown bark
+    BLOCK_ACACIA_LEAVES,    // Yellow-green leaves
     BLOCK_COUNT  // Total number of block types
 } BlockType;
 
