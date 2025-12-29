@@ -185,12 +185,8 @@ static void game_init(void) {
     noise_init(seed);
     printf("[GAME] Using world seed: %u\n", seed);
 
-    // Setup terrain parameters
+    // Setup terrain parameters (use defaults for deep world)
     TerrainParams terrain_params = terrain_default_params();
-    terrain_params.height_scale = 24.0f;        // Moderate hills
-    terrain_params.height_offset = 32.0f;       // Sea level at y=32
-    terrain_params.generate_caves = true;       // Enable caves
-    terrain_params.cave_threshold = 0.35f;      // Cave density
 
     // Create world with terrain parameters
     g_state.world = world_create(terrain_params);
@@ -213,6 +209,9 @@ static void game_init(void) {
             // Generate mesh for this chunk
             chunk_generate_mesh(chunk);
 
+            // Mark as complete so world_update() won't re-enqueue to worker
+            chunk->state = CHUNK_STATE_COMPLETE;
+
             chunks_generated++;
             if (chunk->is_empty) {
                 chunks_empty++;
@@ -225,8 +224,10 @@ static void game_init(void) {
     printf("[GAME] Generated %d chunks (%d empty, %d with blocks)\n",
            chunks_generated, chunks_empty, chunks_generated - chunks_empty);
 
-    // Create player at spawn position (high up to see terrain)
-    Vector3 spawn_position = {0.0f, 200.0f, 0.0f};  // Very high above terrain
+    // Get terrain height at spawn position and spawn player on surface
+    int spawn_x = 0, spawn_z = 0;
+    int surface_height = terrain_get_height_at(spawn_x, spawn_z, terrain_params);
+    Vector3 spawn_position = {(float)spawn_x, (float)(surface_height + 2), (float)spawn_z};
     g_state.player = player_create(spawn_position);
 
     // Start in walking mode (toggle with Shift)
@@ -271,25 +272,8 @@ static void game_init(void) {
     // Initialize leaf decay system
     leaf_decay_init();
 
-    // Initialize entity system
+    // Initialize entity system (no NPCs spawned by default)
     g_state.entity_manager = entity_manager_create();
-
-    // Spawn test block humans at different positions (high up to fall to terrain)
-    Vector3 human_pos1 = {5.0f, 150.0f, 0.0f};   // To the right
-    Vector3 human_pos2 = {-5.0f, 150.0f, 0.0f};  // To the left
-    Vector3 human_pos3 = {0.0f, 150.0f, 5.0f};   // In front
-
-    block_human_spawn(g_state.entity_manager, human_pos1);  // Default colors
-    block_human_spawn_colored(g_state.entity_manager, human_pos2,
-                              (Color){200, 150, 100, 255},  // Different skin tone
-                              (Color){180, 50, 50, 255},    // Red shirt
-                              (Color){50, 50, 150, 255});   // Blue pants
-    block_human_spawn_colored(g_state.entity_manager, human_pos3,
-                              (Color){255, 200, 150, 255},  // Light skin
-                              (Color){60, 150, 60, 255},    // Green shirt
-                              (Color){80, 80, 80, 255});    // Gray pants
-
-    printf("[GAME] Spawned %d entities\n", entity_manager_get_count(g_state.entity_manager));
 
     // Initialize minimap
     g_state.minimap = minimap_create();
@@ -563,7 +547,7 @@ static void game_update(float dt) {
                 break;
 
             case 2:  // Exit Game
-                network_disconnect(g_state.network);
+                // Just set flag - game_shutdown() handles cleanup
                 g_state.should_exit = true;
                 break;
 
@@ -840,8 +824,77 @@ static void game_draw(void) {
 }
 
 // ============================================================================
+// SHUTDOWN
+// ============================================================================
+
+/**
+ * Clean up all game resources - called BEFORE CloseWindow()
+ */
+static void game_shutdown(void) {
+    if (!g_initialized) return;
+
+    printf("[GAME] Shutting down...\n"); fflush(stdout);
+
+    // Disconnect and destroy network first (may send packets)
+    printf("[GAME] Destroying network...\n"); fflush(stdout);
+    if (g_state.network) {
+        network_disconnect(g_state.network);
+        network_destroy(g_state.network);
+        g_state.network = NULL;
+    }
+
+    // Destroy minimap (has RenderTexture - GPU resource)
+    printf("[GAME] Destroying minimap...\n"); fflush(stdout);
+    if (g_state.minimap) {
+        minimap_destroy(g_state.minimap);
+        g_state.minimap = NULL;
+    }
+
+    // Destroy entity manager
+    printf("[GAME] Destroying entity manager...\n"); fflush(stdout);
+    if (g_state.entity_manager) {
+        entity_manager_destroy(g_state.entity_manager);
+        g_state.entity_manager = NULL;
+    }
+
+    // Destroy pause menu
+    printf("[GAME] Destroying pause menu...\n"); fflush(stdout);
+    if (g_state.pause_menu) {
+        pause_menu_destroy(g_state.pause_menu);
+        g_state.pause_menu = NULL;
+    }
+
+    // Destroy player
+    printf("[GAME] Destroying player...\n"); fflush(stdout);
+    if (g_state.player) {
+        player_destroy(g_state.player);
+        g_state.player = NULL;
+    }
+
+    // Destroy world (chunks have meshes - GPU resources)
+    printf("[GAME] Destroying world...\n"); fflush(stdout);
+    if (g_state.world) {
+        world_destroy(g_state.world);
+        g_state.world = NULL;
+    }
+
+    // Destroy sky shader (GPU resource)
+    printf("[GAME] Destroying sky...\n"); fflush(stdout);
+    sky_destroy();
+
+    // Destroy texture atlas (GPU resources)
+    printf("[GAME] Destroying texture atlas...\n"); fflush(stdout);
+    texture_atlas_destroy();
+
+    g_initialized = false;
+    printf("[GAME] Shutdown complete\n"); fflush(stdout);
+}
+
+// ============================================================================
 // MAIN ENTRY POINT (Public)
 // ============================================================================
+
+static bool g_window_closed = false;
 
 /**
  * Game entry point - called every frame by render callback
@@ -849,16 +902,38 @@ static void game_draw(void) {
 void game_run(uint32_t component_id) {
     (void)component_id; // Unused, suppress warning
 
-    // Check if we should exit (prevents GLFW errors after window close)
-    if (g_state.should_exit) {
-        CloseWindow();
+    static int frame = 0;
+    frame++;
+    printf("[GAME_RUN] Frame %d ENTRY\n", frame); fflush(stdout);
+
+    // Already closed - don't call ANY raylib functions
+    if (g_window_closed) {
+        printf("[GAME_RUN] Already closed, returning\n"); fflush(stdout);
         return;
     }
 
     // One-time initialization
     if (!g_initialized) {
+        printf("[GAME_RUN] Calling game_init...\n"); fflush(stdout);
         game_init();
         g_initialized = true;
+        printf("[GAME_RUN] game_init complete\n"); fflush(stdout);
+    }
+
+    // Check if window close requested (X button) - but NOT on first few frames
+    // to avoid race condition with window initialization
+    if (frame > 5 && WindowShouldClose()) {
+        printf("[GAME_RUN] WindowShouldClose triggered\n"); fflush(stdout);
+        g_state.should_exit = true;
+    }
+
+    // Clean exit - shutdown resources BEFORE closing window
+    if (g_state.should_exit) {
+        printf("[GAME_RUN] Exiting...\n"); fflush(stdout);
+        game_shutdown();  // Clean up all GPU resources first
+        g_window_closed = true;
+        CloseWindow();    // Close window - Kryon will detect via IsWindowReady()
+        return;
     }
 
     // Every frame: update then draw

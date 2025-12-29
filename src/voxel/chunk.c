@@ -3,6 +3,7 @@
  */
 
 #include "voxel/chunk.h"
+#include "voxel/chunk_worker.h"
 #include "voxel/texture_atlas.h"
 #include "voxel/light.h"
 #include <stdio.h>
@@ -44,6 +45,7 @@ Chunk* chunk_create(int x, int z) {
     chunk->is_empty = true;
     chunk->mesh_generated = false;
     chunk->solid_block_count = 0;
+    chunk->state = CHUNK_STATE_EMPTY;
 
     // Initialize all blocks to air
     memset(chunk->blocks, 0, sizeof(chunk->blocks));
@@ -274,26 +276,37 @@ static void add_quad(float* vertices, float* texcoords, float* normals, unsigned
 }
 
 /**
- * Get maximum light from all adjacent air/transparent blocks.
- * Used when a face is adjacent to a solid block to find nearby light.
+ * Get consistent light level for a block.
+ * All faces of the same block use the same light value (maximum from adjacent air).
+ * This prevents jarring differences between faces when digging.
  */
-static uint8_t get_max_adjacent_light(Chunk* chunk, int x, int y, int z) {
+static uint8_t get_block_light(Chunk* chunk, int x, int y, int z) {
+    uint8_t max_light = LIGHT_MIN;
+
+    // Check all 6 neighbors for the maximum light
     static const int offsets[6][3] = {
         {-1, 0, 0}, {1, 0, 0},
         {0, -1, 0}, {0, 1, 0},
         {0, 0, -1}, {0, 0, 1}
     };
 
-    uint8_t max_light = 0;
-
     for (int i = 0; i < 6; i++) {
         int nx = x + offsets[i][0];
         int ny = y + offsets[i][1];
         int nz = z + offsets[i][2];
 
-        // Skip out of bounds
-        if (nx < 0 || nx >= CHUNK_SIZE || nz < 0 || nz >= CHUNK_SIZE) continue;
-        if (ny < 0 || ny >= CHUNK_HEIGHT) continue;
+        // Handle chunk boundaries - assume some light at edges
+        if (nx < 0 || nx >= CHUNK_SIZE || nz < 0 || nz >= CHUNK_SIZE) {
+            // At chunk edge, assume moderate light
+            if (max_light < 8) max_light = 8;
+            continue;
+        }
+        if (ny < 0) continue;
+        if (ny >= CHUNK_HEIGHT) {
+            // Above chunk = sky = full light
+            max_light = LIGHT_MAX;
+            continue;
+        }
 
         Block neighbor = chunk->blocks[nx][ny][nz];
         if (neighbor.type == BLOCK_AIR || block_is_transparent(neighbor)) {
@@ -303,36 +316,12 @@ static uint8_t get_max_adjacent_light(Chunk* chunk, int x, int y, int z) {
         }
     }
 
+    // Ensure minimum ambient light so caves aren't pitch black
+    if (max_light < 3) {
+        max_light = 3;
+    }
+
     return max_light;
-}
-
-/**
- * Get light level for a block face by checking the adjacent block.
- * If adjacent block is air/transparent, use its light level.
- * Otherwise use max light from any adjacent air block for uniform lighting.
- */
-static uint8_t get_face_light(Chunk* chunk, int x, int y, int z, int dx, int dy, int dz) {
-    int nx = x + dx;
-    int ny = y + dy;
-    int nz = z + dz;
-
-    // Check bounds - if outside chunk, use max adjacent light
-    if (nx < 0 || nx >= CHUNK_SIZE || nz < 0 || nz >= CHUNK_SIZE) {
-        return get_max_adjacent_light(chunk, x, y, z);
-    }
-    if (ny < 0) return LIGHT_MIN;
-    if (ny >= CHUNK_HEIGHT) return LIGHT_MAX;
-
-    Block neighbor = chunk->blocks[nx][ny][nz];
-
-    // If neighbor is air or transparent, use its light level
-    if (neighbor.type == BLOCK_AIR || block_is_transparent(neighbor)) {
-        return neighbor.light_level;
-    }
-
-    // Adjacent to solid block - use max light from any adjacent air
-    // This prevents dark faces on tree trunks and similar structures
-    return get_max_adjacent_light(chunk, x, y, z);
 }
 
 /**
@@ -360,79 +349,75 @@ static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** t
                 float wy = (float)y;
                 float wz = (float)z;
 
-                // Render all 6 faces - each face uses the light level of the adjacent block
-                // This makes faces lit based on the light in the air next to them
+                // Get consistent light for this block (same for all faces)
+                uint8_t block_light = get_block_light(chunk, x, y, z);
 
-                // Face: Top (+Y) - use light from block above
-                {
+                // Only render faces adjacent to air/transparent blocks (culling)
+
+                // Face: Top (+Y) - only if neighbor above is not solid
+                if (y + 1 >= CHUNK_HEIGHT || !block_is_solid(chunk_get_block(chunk, x, y + 1, z))) {
                     Vector3 v1 = {wx, wy + 1, wz};
                     Vector3 v2 = {wx + 1, wy + 1, wz};
                     Vector3 v3 = {wx + 1, wy + 1, wz + 1};
                     Vector3 v4 = {wx, wy + 1, wz + 1};
                     Vector3 normal = {0, 1, 0};
-                    uint8_t face_light = get_face_light(chunk, x, y, z, 0, 1, 0);
                     add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
-                            v1, v2, v3, v4, normal, block.type, 1, 1, face_light);
+                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light);
                 }
 
-                // Face: Bottom (-Y) - use light from block below
-                {
+                // Face: Bottom (-Y) - only if neighbor below is not solid
+                if (y - 1 < 0 || !block_is_solid(chunk_get_block(chunk, x, y - 1, z))) {
                     Vector3 v1 = {wx, wy, wz + 1};
                     Vector3 v2 = {wx + 1, wy, wz + 1};
                     Vector3 v3 = {wx + 1, wy, wz};
                     Vector3 v4 = {wx, wy, wz};
                     Vector3 normal = {0, -1, 0};
-                    uint8_t face_light = get_face_light(chunk, x, y, z, 0, -1, 0);
                     add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
-                            v1, v2, v3, v4, normal, block.type, 1, 1, face_light);
+                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light);
                 }
 
-                // Face: Front (-Z) - use light from block in front
-                {
+                // Face: Front (-Z) - only if neighbor in front is not solid
+                if (z - 1 < 0 || !block_is_solid(chunk_get_block(chunk, x, y, z - 1))) {
                     Vector3 v1 = {wx, wy, wz};
                     Vector3 v2 = {wx + 1, wy, wz};
                     Vector3 v3 = {wx + 1, wy + 1, wz};
                     Vector3 v4 = {wx, wy + 1, wz};
                     Vector3 normal = {0, 0, -1};
-                    uint8_t face_light = get_face_light(chunk, x, y, z, 0, 0, -1);
                     add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
-                            v1, v2, v3, v4, normal, block.type, 1, 1, face_light);
+                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light);
                 }
 
-                // Face: Back (+Z) - use light from block behind
-                {
+                // Face: Back (+Z) - only if neighbor behind is not solid
+                if (z + 1 >= CHUNK_SIZE || !block_is_solid(chunk_get_block(chunk, x, y, z + 1))) {
                     Vector3 v1 = {wx + 1, wy, wz + 1};
                     Vector3 v2 = {wx, wy, wz + 1};
                     Vector3 v3 = {wx, wy + 1, wz + 1};
                     Vector3 v4 = {wx + 1, wy + 1, wz + 1};
                     Vector3 normal = {0, 0, 1};
-                    uint8_t face_light = get_face_light(chunk, x, y, z, 0, 0, 1);
                     add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
-                            v1, v2, v3, v4, normal, block.type, 1, 1, face_light);
+                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light);
                 }
 
-                // Face: Left (-X) - use light from block to the left
-                {
+                // Face: Left (-X) - only if neighbor to the left is not solid
+                if (x - 1 < 0 || !block_is_solid(chunk_get_block(chunk, x - 1, y, z))) {
                     Vector3 v1 = {wx, wy, wz + 1};
                     Vector3 v2 = {wx, wy, wz};
                     Vector3 v3 = {wx, wy + 1, wz};
                     Vector3 v4 = {wx, wy + 1, wz + 1};
                     Vector3 normal = {-1, 0, 0};
-                    uint8_t face_light = get_face_light(chunk, x, y, z, -1, 0, 0);
                     add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
-                            v1, v2, v3, v4, normal, block.type, 1, 1, face_light);
+                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light);
                 }
 
-                // Face: Right (+X) - use light from block to the right
-                {
+                // Face: Right (+X) - only if neighbor to the right is not solid
+                if (x + 1 >= CHUNK_SIZE || !block_is_solid(chunk_get_block(chunk, x + 1, y, z))) {
                     Vector3 v1 = {wx + 1, wy, wz};
                     Vector3 v2 = {wx + 1, wy, wz + 1};
                     Vector3 v3 = {wx + 1, wy + 1, wz + 1};
                     Vector3 v4 = {wx + 1, wy + 1, wz};
                     Vector3 normal = {1, 0, 0};
-                    uint8_t face_light = get_face_light(chunk, x, y, z, 1, 0, 0);
                     add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
-                            v1, v2, v3, v4, normal, block.type, 1, 1, face_light);
+                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light);
                 }
             }
         }
@@ -503,4 +488,64 @@ void chunk_update_mesh(Chunk* chunk) {
     if (chunk->needs_remesh) {
         chunk_generate_mesh(chunk);
     }
+}
+
+/**
+ * Generate mesh data without GPU upload (for worker threads)
+ * Caller must upload the mesh on the main thread using chunk_worker_upload_mesh()
+ */
+void chunk_generate_mesh_staged(Chunk* chunk, StagedMesh* out) {
+    if (!chunk || !out) return;
+
+    // Initialize output
+    out->vertices = NULL;
+    out->texcoords = NULL;
+    out->normals = NULL;
+    out->colors = NULL;
+    out->vertex_count = 0;
+    out->valid = false;
+
+    // Skip empty chunks
+    if (chunk->is_empty) {
+        out->valid = true;  // Valid but empty
+        return;
+    }
+
+    // Allocate maximum possible buffer size
+    int max_blocks = CHUNK_SIZE * CHUNK_HEIGHT * CHUNK_SIZE;
+    int max_vertices = max_blocks * 6 * 6;  // 6 faces * 6 vertices per face
+    float* vertices = (float*)malloc(max_vertices * 3 * sizeof(float));
+    float* texcoords = (float*)malloc(max_vertices * 2 * sizeof(float));
+    float* normals = (float*)malloc(max_vertices * 3 * sizeof(float));
+    unsigned char* colors = (unsigned char*)malloc(max_vertices * 4 * sizeof(unsigned char));
+
+    if (!vertices || !texcoords || !normals || !colors) {
+        if (vertices) free(vertices);
+        if (texcoords) free(texcoords);
+        if (normals) free(normals);
+        if (colors) free(colors);
+        return;
+    }
+
+    int vertex_count = 0;
+
+    // Use simple meshing algorithm
+    chunk_generate_mesh_simple(chunk, &vertices, &texcoords, &normals, &colors, &vertex_count);
+
+    if (vertex_count == 0) {
+        free(vertices);
+        free(texcoords);
+        free(normals);
+        free(colors);
+        out->valid = true;  // Valid but empty
+        return;
+    }
+
+    // Store in output (don't upload to GPU - that happens on main thread)
+    out->vertices = vertices;
+    out->texcoords = texcoords;
+    out->normals = normals;
+    out->colors = colors;
+    out->vertex_count = vertex_count;
+    out->valid = true;
 }

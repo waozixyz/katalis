@@ -17,44 +17,44 @@
 TerrainParams terrain_default_params(void) {
     TerrainParams params;
 
-    // Heightmap - VERY high terrain for massive underground
-    params.height_scale = 32.0f;          // Moderate hills
-    params.height_offset = 160.0f;        // Surface at y=160 = 150+ blocks underground!
+    // Heightmap - Surface at y=160 for underground exploration
+    params.height_scale = 24.0f;          // Moderate hills
+    params.height_offset = 160.0f;        // Surface at y=160
     params.height_octaves = 5;            // Detail
     params.height_frequency = 0.006f;     // Broad rolling hills
     params.height_lacunarity = 2.0f;
     params.height_persistence = 0.45f;
 
-    // Caves - Must be DEEP underground, not near surface
+    // Noise caves
     params.generate_caves = true;
-    params.cave_threshold = 0.48f;        // Caves are rare
-    params.cave_frequency = 0.035f;       // Smaller caves
+    params.cave_threshold = 0.48f;        // Cave density
+    params.cave_frequency = 0.035f;       // Cave size
     params.cave_octaves = 3;              // Organic shapes
-    params.cave_min_depth = 35;           // Caves start 35 blocks below surface!
+    params.cave_min_depth = 25;           // Caves start 25 blocks below surface
 
     // Biomes
     params.generate_biomes = false;
     params.biome_frequency = 0.005f;
 
-    // Layers - MASSIVE SOIL DEPTH
-    params.dirt_depth = 12;          // 12 blocks of dirt!
-    params.subsoil_depth = 10;       // 10 more blocks of mixed clay/gravel
-    params.stone_depth = 100;        // Lots of stone
+    // Layers
+    params.dirt_depth = 8;           // 8 blocks of dirt
+    params.subsoil_depth = 6;        // 6 blocks of mixed clay/gravel
+    params.stone_depth = 100;        // Stone depth
 
-    // Deep layer configuration - spread across huge underground
+    // Deep layer configuration
     params.deep_stone_start = 64;    // Deep stone below y=64
-    params.bedrock_start = 8;
-    params.bedrock_solid = 4;
+    params.bedrock_start = 8;        // Bedrock mixing at y=8
+    params.bedrock_solid = 4;        // Solid bedrock at y=4
 
-    // Ore generation - Coal (common, upper stone layer)
+    // Ore generation - Coal (upper stone layer)
     params.coal_frequency = 0.10f;
-    params.coal_min_y = 80;
-    params.coal_max_y = 130;
+    params.coal_min_y = 100;
+    params.coal_max_y = 180;
 
     // Ore generation - Iron (mid-depths)
     params.iron_frequency = 0.07f;
     params.iron_min_y = 40;
-    params.iron_max_y = 100;
+    params.iron_max_y = 120;
 
     // Ore generation - Gold (deep)
     params.gold_frequency = 0.035f;
@@ -62,27 +62,40 @@ TerrainParams terrain_default_params(void) {
     params.gold_max_y = 50;
 
     // Ore generation - Diamond (very rare, near bedrock)
-    params.diamond_frequency = 0.012f;
+    params.diamond_frequency = 0.015f;
     params.diamond_min_y = 4;
     params.diamond_max_y = 20;
 
     // Gravel pockets (throughout stone)
     params.gravel_frequency = 0.10f;
-    params.gravel_min_y = 30;
-    params.gravel_max_y = 100;
+    params.gravel_min_y = 40;
+    params.gravel_max_y = 150;
 
-    // Clay deposits (in subsoil layer)
+    // Clay deposits (in subsoil layer near surface)
     params.clay_frequency = 0.08f;
-    params.clay_min_y = 100;
-    params.clay_max_y = 140;
+    params.clay_min_y = 160;
+    params.clay_max_y = 190;
 
     // Dungeons (spread through underground)
     params.generate_dungeons = true;
     params.dungeon_frequency = 0.05f;  // 5% chance per chunk
     params.dungeon_min_y = 20;
-    params.dungeon_max_y = 80;
+    params.dungeon_max_y = 150;
     params.dungeon_min_size = 5;
     params.dungeon_max_size = 9;
+
+    // Cave tunnels (worm caves) - main cave system
+    params.generate_cave_tunnels = true;
+    params.tunnel_radius_min = 2.0f;
+    params.tunnel_radius_max = 4.0f;
+    params.tunnel_segments = 40;
+    params.tunnels_per_chunk = 2;
+
+    // Cave rooms - large open underground areas
+    params.generate_cave_rooms = true;
+    params.rooms_per_chunk = 1;
+    params.room_radius_min = 4.0f;
+    params.room_radius_max = 7.0f;
 
     return params;
 }
@@ -122,8 +135,8 @@ static bool is_cave(int world_x, int world_y, int world_z, int terrain_height, T
     int depth_below_surface = terrain_height - world_y;
     if (depth_below_surface < params.cave_min_depth) return false;
 
-    // Also limit caves to reasonable heights (not near surface)
-    if (world_y > 120) return false;
+    // Limit noise caves to upper 150 blocks below surface
+    if (depth_below_surface > 150) return false;
 
     float cave_noise = noise_fbm_3d(
         (float)world_x, (float)world_y, (float)world_z,
@@ -135,9 +148,9 @@ static bool is_cave(int world_x, int world_y, int world_z, int terrain_height, T
     );
 
     // Caves get more likely deeper down (gradual increase)
-    float depth_factor = (float)depth_below_surface / 50.0f;
+    float depth_factor = (float)depth_below_surface / 100.0f;
     if (depth_factor > 1.0f) depth_factor = 1.0f;
-    float adjusted_threshold = params.cave_threshold + (1.0f - depth_factor) * 0.2f;
+    float adjusted_threshold = params.cave_threshold + (1.0f - depth_factor) * 0.15f;
 
     return cave_noise > adjusted_threshold;
 }
@@ -428,11 +441,226 @@ static void generate_dungeon(Chunk* chunk, TerrainParams params) {
     }
 }
 
+// ============================================================================
+// CAVE TUNNEL (WORM) GENERATION
+// ============================================================================
+
+/**
+ * Simple deterministic random from seed
+ */
+static float random_from_seed(unsigned int* seed) {
+    *seed = (*seed * 1103515245 + 12345) & 0x7FFFFFFF;
+    return (float)*seed / (float)0x7FFFFFFF;
+}
+
+/**
+ * Carve a sphere of air at the given position
+ */
+static void carve_sphere(Chunk* chunk, float cx, float cy, float cz, float radius, int terrain_height, TerrainParams params) {
+    int min_x = (int)(cx - radius) - 1;
+    int max_x = (int)(cx + radius) + 1;
+    int min_y = (int)(cy - radius) - 1;
+    int max_y = (int)(cy + radius) + 1;
+    int min_z = (int)(cz - radius) - 1;
+    int max_z = (int)(cz + radius) + 1;
+
+    for (int x = min_x; x <= max_x; x++) {
+        if (x < 0 || x >= CHUNK_SIZE) continue;
+        for (int z = min_z; z <= max_z; z++) {
+            if (z < 0 || z >= CHUNK_SIZE) continue;
+            for (int y = min_y; y <= max_y; y++) {
+                if (y < params.bedrock_start || y >= CHUNK_HEIGHT) continue;
+                // Don't carve near surface
+                if (y > terrain_height - params.cave_min_depth) continue;
+
+                float dx = (float)x - cx;
+                float dy = (float)y - cy;
+                float dz = (float)z - cz;
+                float dist = sqrtf(dx*dx + dy*dy + dz*dz);
+
+                if (dist <= radius) {
+                    Block block = {BLOCK_AIR, 0, 0};
+                    chunk_set_block(chunk, x, y, z, block);
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Generate worm-style cave tunnels
+ * Creates connected, explorable cave networks
+ */
+static void generate_cave_tunnels(Chunk* chunk, TerrainParams params, int terrain_height) {
+    if (!params.generate_cave_tunnels) return;
+
+    unsigned int seed = chunk_hash(chunk->x * 7, chunk->z * 13);
+
+    // Number of tunnels varies per chunk
+    int num_tunnels = params.tunnels_per_chunk + (seed % 3) - 1;
+    if (num_tunnels < 1) num_tunnels = 1;
+
+    for (int t = 0; t < num_tunnels; t++) {
+        // Random starting position within chunk
+        float x = random_from_seed(&seed) * CHUNK_SIZE;
+        float z = random_from_seed(&seed) * CHUNK_SIZE;
+
+        // Y range: caves in upper 150 blocks below surface
+        int min_cave_y = terrain_height - 150;
+        if (min_cave_y < 20) min_cave_y = 20;
+        int max_cave_y = terrain_height - params.cave_min_depth - 10;
+        if (max_cave_y < min_cave_y + 20) max_cave_y = min_cave_y + 20;
+        float y = min_cave_y + random_from_seed(&seed) * (max_cave_y - min_cave_y);
+
+        // Random direction (mostly horizontal)
+        float dir_x = random_from_seed(&seed) * 2.0f - 1.0f;
+        float dir_y = random_from_seed(&seed) * 0.4f - 0.2f;  // Slight vertical
+        float dir_z = random_from_seed(&seed) * 2.0f - 1.0f;
+
+        // Normalize direction
+        float len = sqrtf(dir_x*dir_x + dir_y*dir_y + dir_z*dir_z);
+        if (len > 0.01f) {
+            dir_x /= len;
+            dir_y /= len;
+            dir_z /= len;
+        }
+
+        // Starting radius
+        float radius = params.tunnel_radius_min +
+                       random_from_seed(&seed) * (params.tunnel_radius_max - params.tunnel_radius_min);
+
+        // Carve the tunnel segment by segment
+        for (int seg = 0; seg < params.tunnel_segments; seg++) {
+            // Only carve if within chunk bounds
+            if (x >= -radius && x < CHUNK_SIZE + radius &&
+                z >= -radius && z < CHUNK_SIZE + radius) {
+                carve_sphere(chunk, x, y, z, radius, terrain_height, params);
+            }
+
+            // Move along direction with noise wobble
+            float wobble_x = noise_3d((float)seg * 0.1f, 0, 0) * 0.5f;
+            float wobble_y = noise_3d((float)seg * 0.1f + 100.0f, 0, 0) * 0.3f;
+            float wobble_z = noise_3d((float)seg * 0.1f + 200.0f, 0, 0) * 0.5f;
+
+            x += dir_x + wobble_x;
+            y += dir_y + wobble_y;
+            z += dir_z + wobble_z;
+
+            // Occasionally change direction
+            if (seg % 12 == 0) {
+                dir_x += random_from_seed(&seed) * 0.5f - 0.25f;
+                dir_y += random_from_seed(&seed) * 0.2f - 0.1f;
+                dir_z += random_from_seed(&seed) * 0.5f - 0.25f;
+
+                // Renormalize
+                len = sqrtf(dir_x*dir_x + dir_y*dir_y + dir_z*dir_z);
+                if (len > 0.01f) {
+                    dir_x /= len;
+                    dir_y /= len;
+                    dir_z /= len;
+                }
+            }
+
+            // Vary radius slightly
+            radius += random_from_seed(&seed) * 0.4f - 0.2f;
+            if (radius < params.tunnel_radius_min) radius = params.tunnel_radius_min;
+            if (radius > params.tunnel_radius_max) radius = params.tunnel_radius_max;
+
+            // Keep Y within valid range
+            if (y < params.bedrock_start + 20) {
+                dir_y = fabsf(dir_y);  // Go up
+            }
+            if (y > terrain_height - params.cave_min_depth - 30) {
+                dir_y = -fabsf(dir_y);  // Go down
+            }
+        }
+    }
+}
+
+// ============================================================================
+// CAVE ROOM GENERATION
+// ============================================================================
+
+/**
+ * Carve an ellipsoid-shaped room
+ */
+static void carve_ellipsoid(Chunk* chunk, float cx, float cy, float cz,
+                            float rx, float ry, float rz,
+                            int terrain_height, TerrainParams params) {
+    int min_x = (int)(cx - rx) - 1;
+    int max_x = (int)(cx + rx) + 1;
+    int min_y = (int)(cy - ry) - 1;
+    int max_y = (int)(cy + ry) + 1;
+    int min_z = (int)(cz - rz) - 1;
+    int max_z = (int)(cz + rz) + 1;
+
+    for (int x = min_x; x <= max_x; x++) {
+        if (x < 0 || x >= CHUNK_SIZE) continue;
+        for (int z = min_z; z <= max_z; z++) {
+            if (z < 0 || z >= CHUNK_SIZE) continue;
+            for (int y = min_y; y <= max_y; y++) {
+                if (y < params.bedrock_start || y >= CHUNK_HEIGHT) continue;
+                if (y > terrain_height - params.cave_min_depth) continue;
+
+                float dx = ((float)x - cx) / rx;
+                float dy = ((float)y - cy) / ry;
+                float dz = ((float)z - cz) / rz;
+                float dist = dx*dx + dy*dy + dz*dz;
+
+                if (dist <= 1.0f) {
+                    Block block = {BLOCK_AIR, 0, 0};
+                    chunk_set_block(chunk, x, y, z, block);
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Generate large cave rooms underground
+ */
+static void generate_cave_rooms(Chunk* chunk, TerrainParams params, int terrain_height) {
+    if (!params.generate_cave_rooms) return;
+
+    unsigned int seed = chunk_hash(chunk->x * 31, chunk->z * 17);
+
+    // Number of rooms varies
+    int num_rooms = 1 + (seed % (params.rooms_per_chunk + 1));
+
+    for (int r = 0; r < num_rooms; r++) {
+        // Random position within chunk
+        float x = random_from_seed(&seed) * CHUNK_SIZE;
+        float z = random_from_seed(&seed) * CHUNK_SIZE;
+
+        // Y range: rooms in upper 120 blocks below surface
+        int min_room_y = terrain_height - 120;
+        if (min_room_y < 30) min_room_y = 30;
+        int max_room_y = terrain_height - params.cave_min_depth - 20;
+        if (max_room_y < min_room_y + 20) max_room_y = min_room_y + 20;
+        float y = min_room_y + random_from_seed(&seed) * (max_room_y - min_room_y);
+
+        // Random ellipsoid dimensions
+        float rx = params.room_radius_min +
+                   random_from_seed(&seed) * (params.room_radius_max - params.room_radius_min);
+        float ry = (params.room_radius_min * 0.6f) +
+                   random_from_seed(&seed) * ((params.room_radius_max * 0.6f) - (params.room_radius_min * 0.6f));
+        float rz = params.room_radius_min +
+                   random_from_seed(&seed) * (params.room_radius_max - params.room_radius_min);
+
+        carve_ellipsoid(chunk, x, y, z, rx, ry, rz, terrain_height, params);
+    }
+}
+
 /**
  * Generate terrain for chunk
  */
 void terrain_generate_chunk(Chunk* chunk, TerrainParams params) {
     if (!chunk) return;
+
+    // Calculate average terrain height for this chunk (for cave bounds)
+    int center_x = chunk->x * CHUNK_SIZE + CHUNK_SIZE / 2;
+    int center_z = chunk->z * CHUNK_SIZE + CHUNK_SIZE / 2;
+    int avg_terrain_height = terrain_get_height_at(center_x, center_z, params);
 
     // For each column in the chunk
     for (int x = 0; x < CHUNK_SIZE; x++) {
@@ -457,6 +685,12 @@ void terrain_generate_chunk(Chunk* chunk, TerrainParams params) {
             }
         }
     }
+
+    // Generate cave tunnels (worm caves) - main cave system
+    generate_cave_tunnels(chunk, params, avg_terrain_height);
+
+    // Generate large cave rooms
+    generate_cave_rooms(chunk, params, avg_terrain_height);
 
     // Generate dungeons underground
     generate_dungeon(chunk, params);

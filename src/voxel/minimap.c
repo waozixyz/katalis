@@ -137,12 +137,12 @@ void minimap_update(Minimap* minimap, World* world, Player* player) {
             int world_x = player_x + dx_block;
             int world_z = player_z + dz_block;
 
-            // Find surface block (scan from a reasonable height down)
-            // Start from 128 to save time (most terrain is below this)
+            // Find surface block (scan from top down)
+            // Start from 200 to cover terrain surface at y=160
             int surface_y = 0;
             BlockType surface_type = BLOCK_AIR;
 
-            for (int y = 128; y >= 0; y--) {
+            for (int y = 200; y >= 0; y--) {
                 Block block = world_get_block(world, world_x, y, world_z);
                 if (block.type != BLOCK_AIR) {
                     surface_y = y;

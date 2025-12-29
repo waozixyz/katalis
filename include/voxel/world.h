@@ -12,6 +12,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+// Forward declaration
+typedef struct ChunkWorker ChunkWorker;
+
 // ============================================================================
 // WORLD CONSTANTS
 // ============================================================================
@@ -41,6 +44,7 @@ typedef struct {
 
 typedef struct World {
     ChunkHashMap* chunks;
+    ChunkWorker* worker;     // Multi-threaded chunk generation
     int center_chunk_x;      // Center of loaded chunks (camera position)
     int center_chunk_z;
     int view_distance;       // How many chunks to load around center

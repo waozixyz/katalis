@@ -3,6 +3,7 @@
  */
 
 #include "voxel/world.h"
+#include "voxel/chunk_worker.h"
 #include "voxel/texture_atlas.h"
 #include "voxel/terrain.h"
 #include "voxel/light.h"
@@ -229,6 +230,7 @@ void world_to_local_coords(int world_x, int world_y, int world_z,
 World* world_create(TerrainParams terrain_params) {
     World* world = (World*)malloc(sizeof(World));
     world->chunks = chunk_hashmap_create();
+    world->worker = chunk_worker_create();
     world->center_chunk_x = 0;
     world->center_chunk_z = 0;
     world->view_distance = WORLD_VIEW_DISTANCE;
@@ -240,6 +242,11 @@ World* world_create(TerrainParams terrain_params) {
 
 void world_destroy(World* world) {
     if (!world) return;
+
+    // Stop worker threads first
+    if (world->worker) {
+        chunk_worker_destroy(world->worker);
+    }
 
     chunk_hashmap_destroy(world->chunks);
     free(world);
@@ -306,8 +313,26 @@ void world_update(World* world, int center_chunk_x, int center_chunk_z) {
         last_center_z = center_chunk_z;
     }
 
+    // Poll for completed chunks from worker threads (up to MAX_UPLOADS_PER_FRAME per frame)
+    int uploaded = 0;
+    for (int i = 0; i < MAX_UPLOADS_PER_FRAME; i++) {
+        CompletedChunk* completed = chunk_worker_poll_completed(world->worker);
+        if (!completed) break;
+
+        // Upload mesh to GPU (must be on main thread)
+        chunk_worker_upload_mesh(completed->chunk, &completed->mesh);
+        free(completed);
+        uploaded++;
+    }
+
+    static int frame_count = 0;
+    frame_count++;
+    if (frame_count % 60 == 0) {
+        int pending = chunk_worker_pending_count(world->worker);
+        printf("[WORLD] Pending: %d, Uploaded this frame: %d\n", pending, uploaded);
+    }
+
     // Load chunks in view distance if not already loaded
-    int new_chunks = 0;
     for (int x = -world->view_distance; x <= world->view_distance; x++) {
         for (int z = -world->view_distance; z <= world->view_distance; z++) {
             int cx = center_chunk_x + x;
@@ -315,19 +340,13 @@ void world_update(World* world, int center_chunk_x, int center_chunk_z) {
 
             Chunk* chunk = world_get_chunk(world, cx, cz);
             if (!chunk) {
-                // Chunk not loaded, create it with terrain generation
+                // Chunk not loaded, create it
                 chunk = world_get_or_create_chunk(world, cx, cz);
+            }
 
-                // Generate terrain for this new chunk
-                terrain_generate_chunk(chunk, world->terrain_params);
-
-                // Update empty status after terrain generation
-                chunk_update_empty_status(chunk);
-
-                // Generate mesh for rendering
-                chunk_generate_mesh(chunk);
-
-                new_chunks++;
+            // Enqueue for async generation if still empty (handles queue-full retry)
+            if (chunk->state == CHUNK_STATE_EMPTY) {
+                chunk_worker_enqueue(world->worker, chunk, world->terrain_params);
             }
         }
     }
@@ -336,13 +355,14 @@ void world_update(World* world, int center_chunk_x, int center_chunk_z) {
         first_update = false;
     }
 
-    // Process pending mesh regenerations (moved from render phase)
-    // This prevents GPU stalls during rendering
+    // Process pending mesh regenerations (for chunks that need remesh after block changes)
+    // These are processed synchronously for now to ensure immediate feedback
     for (int i = 0; i < WORLD_MAX_CHUNKS; i++) {
         ChunkNode* node = world->chunks->buckets[i];
         while (node) {
             Chunk* chunk = node->chunk;
-            if (chunk->needs_remesh) {
+            // Only remesh if chunk is complete and needs it
+            if (chunk->state == CHUNK_STATE_COMPLETE && chunk->needs_remesh) {
                 chunk_generate_mesh(chunk);
             }
             node = node->next;

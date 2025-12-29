@@ -19,8 +19,8 @@
 // ============================================================================
 
 #define WORKER_THREAD_COUNT 4
-#define TASK_QUEUE_SIZE 128
-#define MAX_UPLOADS_PER_FRAME 3
+#define TASK_QUEUE_SIZE 512
+#define MAX_UPLOADS_PER_FRAME 32
 
 // ============================================================================
 // DATA STRUCTURES
@@ -72,7 +72,7 @@ typedef struct CompletedChunk {
 /**
  * Worker system
  */
-typedef struct {
+typedef struct ChunkWorker {
     pthread_t threads[WORKER_THREAD_COUNT];
     TaskQueue pending;
     CompletedChunk* completed_head;

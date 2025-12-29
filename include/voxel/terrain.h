@@ -77,6 +77,19 @@ typedef struct {
     int dungeon_max_y;           // Max Y for dungeons (default: 40)
     int dungeon_min_size;        // Minimum dungeon room size (default: 5)
     int dungeon_max_size;        // Maximum dungeon room size (default: 9)
+
+    // Cave tunnel (worm) settings - creates connected cave networks
+    bool generate_cave_tunnels;  // Enable worm-style cave tunnels
+    float tunnel_radius_min;     // Minimum tunnel radius (default: 2.0)
+    float tunnel_radius_max;     // Maximum tunnel radius (default: 5.0)
+    int tunnel_segments;         // Segments per tunnel (default: 80)
+    int tunnels_per_chunk;       // Base tunnels per chunk (default: 4)
+
+    // Cave room settings - large open areas underground
+    bool generate_cave_rooms;    // Enable large cave rooms
+    int rooms_per_chunk;         // Maximum rooms per chunk (default: 2)
+    float room_radius_min;       // Minimum room radius (default: 4.0)
+    float room_radius_max;       // Maximum room radius (default: 10.0)
 } TerrainParams;
 
 // ============================================================================

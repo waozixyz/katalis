@@ -16,8 +16,19 @@
 // CHUNK CONSTANTS
 // ============================================================================
 
-#define CHUNK_SIZE 16      // Width and depth
-#define CHUNK_HEIGHT 256   // Maximum height
+#define CHUNK_SIZE 16       // Width and depth
+#define CHUNK_HEIGHT 256    // Maximum height
+
+// ============================================================================
+// CHUNK STATE (for multi-threaded generation)
+// ============================================================================
+
+typedef enum {
+    CHUNK_STATE_EMPTY,       // Not yet generated
+    CHUNK_STATE_GENERATING,  // Being processed by worker thread
+    CHUNK_STATE_READY,       // Ready for GPU upload
+    CHUNK_STATE_COMPLETE     // Mesh uploaded to GPU
+} ChunkState;
 
 // ============================================================================
 // CHUNK DATA
@@ -31,6 +42,7 @@ typedef struct {
     bool is_empty;                                             // Optimization: all air
     bool mesh_generated;                                       // Has mesh been created?
     int solid_block_count;                                     // Count of non-air blocks (O(1) empty check)
+    ChunkState state;                                          // Generation state for threading
 } Chunk;
 
 // ============================================================================

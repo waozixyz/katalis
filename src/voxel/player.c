@@ -104,6 +104,19 @@ static bool is_solid_at(World * world, float x, float y, float z) {
 }
 
 /**
+ * Check if the chunk containing a position is loaded
+ */
+static bool is_chunk_loaded_at(World* world, float x, float z) {
+    if (!world) return false;
+
+    int chunk_x = (int)floorf(x / CHUNK_SIZE);
+    int chunk_z = (int)floorf(z / CHUNK_SIZE);
+
+    Chunk* chunk = world_get_chunk(world, chunk_x, chunk_z);
+    return chunk != NULL;
+}
+
+/**
  * Check if player's bounding box collides with world at given position
  */
 static bool check_collision(World * world, Vector3 position) {
@@ -234,7 +247,8 @@ static void update_movement(Player* player, World * world, float dt) {
 
     // Try to move on X axis
     new_position.x = player->position.x + player->velocity.x * dt;
-    if (check_collision(world, new_position)) {
+    if (!is_chunk_loaded_at(world, new_position.x, new_position.z) ||
+        check_collision(world, new_position)) {
         new_position.x = player->position.x;  // Cancel X movement
         player->velocity.x = 0.0f;
     }
@@ -262,7 +276,8 @@ static void update_movement(Player* player, World * world, float dt) {
 
     // Try to move on Z axis
     new_position.z = player->position.z + player->velocity.z * dt;
-    if (check_collision(world, new_position)) {
+    if (!is_chunk_loaded_at(world, new_position.x, new_position.z) ||
+        check_collision(world, new_position)) {
         new_position.z = player->position.z;  // Cancel Z movement
         player->velocity.z = 0.0f;
     }

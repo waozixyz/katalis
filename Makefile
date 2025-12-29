@@ -7,7 +7,7 @@ INCLUDES = -I$(KRYON_PATH)/bindings/c -I$(KRYON_PATH)/ir -I$(KRYON_PATH)/backend
 SDL3_FLAGS = $(shell pkg-config --cflags --libs sdl3 2>/dev/null || echo "-lSDL3")
 RAYLIB_FLAGS = $(shell pkg-config --cflags --libs raylib 2>/dev/null || echo "-lraylib")
 LDFLAGS = -L$(KRYON_PATH)/build
-LIBS = -lkryon_desktop -lkryon_ir $(SDL3_FLAGS) $(RAYLIB_FLAGS) -lm
+LIBS = -lkryon_desktop -lkryon_ir $(SDL3_FLAGS) $(RAYLIB_FLAGS) -lm -pthread
 
 # Kryon C source files (compile directly since library doesn't build)
 KRYON_C_DIR = $(KRYON_PATH)/bindings/c
@@ -19,6 +19,7 @@ TARGET = main
 # Voxel engine sources
 VOXEL_SOURCES = src/voxel/block.c \
                 src/voxel/chunk.c \
+                src/voxel/chunk_worker.c \
                 src/voxel/world.c \
                 src/voxel/noise.c \
                 src/voxel/terrain.c \
