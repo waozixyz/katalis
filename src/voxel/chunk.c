@@ -77,9 +77,22 @@ void chunk_set_block(Chunk* chunk, int x, int y, int z, Block block) {
     chunk->blocks[x][y][z] = block;
     chunk->needs_remesh = true;
 
-    // Update empty flag
+    // Update empty flag - check if chunk still has blocks
     if (block.type != BLOCK_AIR) {
         chunk->is_empty = false;
+    } else {
+        // Quick check: scan for any non-air blocks
+        bool has_blocks = false;
+        for (int bx = 0; bx < CHUNK_SIZE && !has_blocks; bx++) {
+            for (int by = 0; by < CHUNK_HEIGHT && !has_blocks; by++) {
+                for (int bz = 0; bz < CHUNK_SIZE && !has_blocks; bz++) {
+                    if (chunk->blocks[bx][by][bz].type != BLOCK_AIR) {
+                        has_blocks = true;
+                    }
+                }
+            }
+        }
+        chunk->is_empty = !has_blocks;
     }
 }
 
@@ -152,21 +165,19 @@ static BlockFace get_face_from_normal(Vector3 normal) {
  * Calculate lighting brightness based on face normal
  */
 static float calculate_face_brightness(Vector3 normal) {
-    // Simple directional lighting - adjusted for better visibility
-    // Top faces: brightest (1.0)
-    // Side faces: medium brightness
-    // Bottom faces: darker but still visible (0.6)
+    // Simple directional lighting - brighter values for better visibility
+    // All faces should be clearly visible, not black
 
     if (normal.y > 0.5f) return 1.0f;      // Top - full brightness
-    if (normal.y < -0.5f) return 0.6f;     // Bottom - darker but not black
+    if (normal.y < -0.5f) return 0.8f;     // Bottom - much brighter now
 
-    // Side faces - vary slightly based on direction
-    if (normal.x > 0.5f) return 0.85f;     // Right (+X)
-    if (normal.x < -0.5f) return 0.85f;    // Left (-X)
-    if (normal.z > 0.5f) return 0.75f;     // Back (+Z)
-    if (normal.z < -0.5f) return 0.75f;    // Front (-Z)
+    // Side faces - all very bright
+    if (normal.x > 0.5f) return 0.95f;     // Right (+X)
+    if (normal.x < -0.5f) return 0.95f;    // Left (-X)
+    if (normal.z > 0.5f) return 0.9f;      // Back (+Z)
+    if (normal.z < -0.5f) return 0.9f;     // Front (-Z)
 
-    return 0.8f;  // Fallback
+    return 0.9f;  // Fallback
 }
 
 /**
@@ -370,10 +381,13 @@ static void chunk_generate_mesh_greedy(Chunk* chunk, float** vertices, float** t
 void chunk_generate_mesh(Chunk* chunk) {
     if (!chunk) return;
 
+
     // Unload old mesh if it exists
     if (chunk->mesh_generated && chunk->mesh.vboId != NULL) {
         UnloadMesh(chunk->mesh);
         chunk->mesh_generated = false;
+        // Clear the mesh struct to avoid GPU ID conflicts
+        memset(&chunk->mesh, 0, sizeof(Mesh));
     }
 
     // Skip empty chunks
@@ -399,7 +413,6 @@ void chunk_generate_mesh(Chunk* chunk) {
         free(texcoords);
         free(normals);
         free(colors);
-        chunk->is_empty = true;
         return;
     }
 

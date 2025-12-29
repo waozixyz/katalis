@@ -232,16 +232,22 @@ static void update_movement(Player* player, World * world, float dt) {
     // Try to move on Y axis
     new_position.y = player->position.y + player->velocity.y * dt;
     if (check_collision(world, new_position)) {
-        new_position.y = player->position.y;  // Cancel Y movement
-        player->velocity.y = 0.0f;
-
-        // If we hit something below us, we're grounded
+        // Check if we're hitting ground (moving downward)
         if (player->velocity.y < 0.0f) {
             player->is_grounded = true;
         }
+
+        new_position.y = player->position.y;  // Cancel Y movement
+        player->velocity.y = 0.0f;
     } else {
-        // Not touching ground
         player->is_grounded = false;
+    }
+
+    // Additional ground check - look slightly below player
+    Vector3 ground_check = new_position;
+    ground_check.y -= 0.1f;  // Check 0.1 blocks below
+    if (check_collision(world, ground_check)) {
+        player->is_grounded = true;
     }
 
     // Try to move on Z axis

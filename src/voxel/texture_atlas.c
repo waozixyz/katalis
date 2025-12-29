@@ -73,8 +73,9 @@ static void generate_tile(Image* atlas, int tile_x, int tile_y, Color color, boo
  */
 static Image generate_atlas_image(void) {
     printf("[ATLAS] Generating atlas image...\n");
-    // Use black background instead of pink to avoid texture bleeding
-    Image atlas = GenImageColor(ATLAS_SIZE, ATLAS_SIZE, BLACK);
+    // Use neutral brown background that won't be noticeable if it bleeds
+    Color neutral_brown = {120, 100, 80, 255};  // Matches dirt/stone tones
+    Image atlas = GenImageColor(ATLAS_SIZE, ATLAS_SIZE, neutral_brown);
     printf("[ATLAS] Created base image\n");
 
     // Generate textures for each block type
