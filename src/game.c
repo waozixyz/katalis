@@ -5,24 +5,25 @@
  */
 
 #include "game.h"
-#include "voxel/block.h"
-#include "voxel/world.h"
-#include "voxel/noise.h"
-#include "voxel/terrain.h"
-#include "voxel/player.h"
-#include "voxel/texture_atlas.h"
-#include "voxel/item.h"
-#include "voxel/inventory_ui.h"
-#include "voxel/inventory_input.h"
-#include "voxel/crafting.h"
-#include "voxel/pause_menu.h"
-#include "voxel/entity.h"
-#include "voxel/block_human.h"
-#include "voxel/sheep.h"
-#include "voxel/sky.h"
-#include "voxel/tree.h"
-#include "voxel/network.h"
-#include "voxel/minimap.h"
+#include "voxel/core/block.h"
+#include "voxel/world/world.h"
+#include "voxel/world/noise.h"
+#include "voxel/world/terrain.h"
+#include "voxel/player/player.h"
+#include "voxel/core/texture_atlas.h"
+#include "voxel/core/item.h"
+#include "voxel/inventory/inventory_ui.h"
+#include "voxel/inventory/inventory_input.h"
+#include "voxel/inventory/crafting.h"
+#include "voxel/ui/pause_menu.h"
+#include "voxel/entity/entity.h"
+#include "voxel/entity/block_human.h"
+#include "voxel/entity/sheep.h"
+#include "voxel/entity/pig.h"
+#include "voxel/render/sky.h"
+#include "voxel/entity/tree.h"
+#include "voxel/network/network.h"
+#include "voxel/ui/minimap.h"
 #include <kryon.h>  // For shutdown API
 #include <raylib.h>
 #include <raymath.h>
@@ -393,6 +394,23 @@ static void game_init(void) {
     printf("[GAME] Total sheep spawned: %d, Entity count: %d\n",
            sheep_spawned, entity_manager_get_count(g_state.entity_manager));
 
+    // Spawn initial pigs near player spawn
+    printf("[GAME] Spawning 15 pigs around player at (%d, %d)...\n", spawn_x, spawn_z);
+    int pigs_spawned = 0;
+    for (int i = 0; i < 15; i++) {
+        float offset_x = (float)((rand() % 60) - 30);
+        float offset_z = (float)((rand() % 60) - 30);
+        int pig_x = spawn_x + (int)offset_x;
+        int pig_z = spawn_z + (int)offset_z;
+        int pig_y = terrain_get_height_at(pig_x, pig_z, terrain_params) + 1;
+
+        Vector3 pig_pos = {(float)pig_x + 0.5f, (float)pig_y, (float)pig_z + 0.5f};
+        Entity* pig = pig_spawn(g_state.entity_manager, pig_pos);
+        if (pig) pigs_spawned++;
+    }
+    printf("[GAME] Total pigs spawned: %d, Entity count: %d\n",
+           pigs_spawned, entity_manager_get_count(g_state.entity_manager));
+
     // Initialize minimap
     g_state.minimap = minimap_create();
     printf("[GAME] Minimap initialized\n");
@@ -558,6 +576,22 @@ static void game_update(float dt) {
                 int meat_count = 1 + (rand() % 2);
                 inventory_add_item(g_state.player->inventory, ITEM_MEAT, meat_count);
                 printf("[GAME] Sheep killed! Dropped %d meat\n", meat_count);
+
+                // Remove entity from manager and destroy
+                entity_manager_remove(g_state.entity_manager, g_state.target_entity);
+                entity_destroy(g_state.target_entity);
+                g_state.target_entity = NULL;
+            }
+        }
+        else if (g_state.target_entity && g_state.target_entity->type == ENTITY_TYPE_PIG) {
+            // Damage the pig
+            bool died = pig_damage(g_state.target_entity, 1);
+
+            if (died) {
+                // Drop 1-3 meat (pigs drop more)
+                int meat_count = 1 + (rand() % 3);
+                inventory_add_item(g_state.player->inventory, ITEM_MEAT, meat_count);
+                printf("[GAME] Pig killed! Dropped %d meat\n", meat_count);
 
                 // Remove entity from manager and destroy
                 entity_manager_remove(g_state.entity_manager, g_state.target_entity);

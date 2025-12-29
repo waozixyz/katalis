@@ -16,30 +16,51 @@ KRYON_SOURCES = $(KRYON_C_DIR)/kryon.c $(KRYON_C_DIR)/kryon_dsl.c
 # Source files
 TARGET = main
 
-# Voxel engine sources
-VOXEL_SOURCES = src/voxel/block.c \
-                src/voxel/biome.c \
-                src/voxel/chunk.c \
-                src/voxel/chunk_worker.c \
-                src/voxel/world.c \
-                src/voxel/noise.c \
-                src/voxel/terrain.c \
-                src/voxel/player.c \
-                src/voxel/texture_atlas.c \
-                src/voxel/item.c \
-                src/voxel/inventory.c \
-                src/voxel/inventory_ui.c \
-                src/voxel/inventory_input.c \
-                src/voxel/crafting.c \
-                src/voxel/pause_menu.c \
-                src/voxel/entity.c \
-                src/voxel/block_human.c \
-                src/voxel/sheep.c \
-                src/voxel/sky.c \
-                src/voxel/tree.c \
-                src/voxel/network.c \
-                src/voxel/minimap.c \
-                src/voxel/light.c
+# Voxel engine sources (organized by module)
+
+# Core module
+VOXEL_CORE = src/voxel/core/block.c \
+             src/voxel/core/item.c \
+             src/voxel/core/texture_atlas.c
+
+# World module
+VOXEL_WORLD = src/voxel/world/world.c \
+              src/voxel/world/chunk.c \
+              src/voxel/world/chunk_worker.c \
+              src/voxel/world/terrain.c \
+              src/voxel/world/noise.c \
+              src/voxel/world/biome.c
+
+# Entity module
+VOXEL_ENTITY = src/voxel/entity/entity.c \
+               src/voxel/entity/pig.c \
+               src/voxel/entity/sheep.c \
+               src/voxel/entity/tree.c \
+               src/voxel/entity/block_human.c
+
+# Player module
+VOXEL_PLAYER = src/voxel/player/player.c
+
+# Inventory module
+VOXEL_INVENTORY = src/voxel/inventory/inventory.c \
+                  src/voxel/inventory/inventory_input.c \
+                  src/voxel/inventory/inventory_ui.c \
+                  src/voxel/inventory/crafting.c
+
+# UI module
+VOXEL_UI = src/voxel/ui/pause_menu.c \
+           src/voxel/ui/minimap.c
+
+# Render module
+VOXEL_RENDER = src/voxel/render/sky.c \
+               src/voxel/render/light.c
+
+# Network module
+VOXEL_NETWORK = src/voxel/network/network.c
+
+# Combined
+VOXEL_SOURCES = $(VOXEL_CORE) $(VOXEL_WORLD) $(VOXEL_ENTITY) $(VOXEL_PLAYER) \
+                $(VOXEL_INVENTORY) $(VOXEL_UI) $(VOXEL_RENDER) $(VOXEL_NETWORK)
 
 APP_SOURCES = src/main.c src/game.c $(VOXEL_SOURCES)
 
