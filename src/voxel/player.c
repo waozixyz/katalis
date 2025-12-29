@@ -5,6 +5,7 @@
 #include "voxel/player.h"
 #include "voxel/world.h"
 #include "voxel/block.h"
+#include "voxel/inventory.h"
 #include <raylib.h>
 #include <raymath.h>
 #include <stdlib.h>
@@ -60,6 +61,9 @@ Player* player_create(Vector3 start_position) {
     player->fly_speed = 20.0f;
     player->sprint_multiplier = 2.0f;
 
+    // Create inventory
+    player->inventory = inventory_create();
+
     printf("[PLAYER] Created at (%.1f, %.1f, %.1f)\n",
            start_position.x, start_position.y, start_position.z);
 
@@ -71,6 +75,7 @@ Player* player_create(Vector3 start_position) {
  */
 void player_destroy(Player* player) {
     if (player) {
+        inventory_destroy(player->inventory);
         free(player);
     }
 }
@@ -334,4 +339,33 @@ void player_toggle_flying(Player* player) {
  */
 Camera3D player_get_camera(Player* player) {
     return player ? player->camera : (Camera3D){0};
+}
+
+/**
+ * Check if a block position would collide with the player
+ */
+bool player_collides_with_position(Player* player, Vector3 block_pos) {
+    if (!player) return false;
+
+    // Block bounding box
+    Vector3 block_min = block_pos;
+    Vector3 block_max = {block_pos.x + 1.0f, block_pos.y + 1.0f, block_pos.z + 1.0f};
+
+    // Player bounding box
+    float half_width = PLAYER_WIDTH / 2.0f;
+    Vector3 player_min = {
+        player->position.x - half_width,
+        player->position.y,
+        player->position.z - half_width
+    };
+    Vector3 player_max = {
+        player->position.x + half_width,
+        player->position.y + PLAYER_HEIGHT,
+        player->position.z + half_width
+    };
+
+    // AABB collision check
+    return (block_min.x < player_max.x && block_max.x > player_min.x) &&
+           (block_min.y < player_max.y && block_max.y > player_min.y) &&
+           (block_min.z < player_max.z && block_max.z > player_min.z);
 }

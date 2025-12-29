@@ -23,7 +23,10 @@ VOXEL_SOURCES = src/voxel/block.c \
                 src/voxel/noise.c \
                 src/voxel/terrain.c \
                 src/voxel/player.c \
-                src/voxel/texture_atlas.c
+                src/voxel/texture_atlas.c \
+                src/voxel/item.c \
+                src/voxel/inventory.c \
+                src/voxel/inventory_ui.c
 
 APP_SOURCES = src/main.c src/game.c $(VOXEL_SOURCES)
 

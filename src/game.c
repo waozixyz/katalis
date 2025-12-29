@@ -11,6 +11,8 @@
 #include "voxel/terrain.h"
 #include "voxel/player.h"
 #include "voxel/texture_atlas.h"
+#include "voxel/item.h"
+#include "voxel/inventory_ui.h"
 #include <raylib.h>
 #include <raymath.h>
 #include <stdbool.h>
@@ -30,6 +32,7 @@ typedef struct {
     Player* player;
     bool has_target_block;
     Vector3 target_block_pos;
+    BlockFace target_face;
 } GameState;
 
 static GameState g_state;
@@ -42,8 +45,10 @@ static GameState g_state;
  * Raycast to find the block the player is looking at
  * Returns true if a block is found within max_distance
  * Uses proper DDA algorithm for voxel traversal
+ * Also determines which face was hit
  */
-static bool raycast_block(World* world, Vector3 origin, Vector3 direction, float max_distance, Vector3* hit_block) {
+static bool raycast_block(World* world, Vector3 origin, Vector3 direction, float max_distance,
+                         Vector3* hit_block, BlockFace* hit_face) {
     // Normalize direction
     direction = Vector3Normalize(direction);
 
@@ -91,6 +96,8 @@ static bool raycast_block(World* world, Vector3 origin, Vector3 direction, float
 
     // DDA traversal
     float t = 0.0f;
+    BlockFace face = FACE_TOP;  // Default
+
     while (t < max_distance) {
         // Check current block
         Block block = world_get_block(world, x, y, z);
@@ -98,22 +105,26 @@ static bool raycast_block(World* world, Vector3 origin, Vector3 direction, float
             hit_block->x = (float)x;
             hit_block->y = (float)y;
             hit_block->z = (float)z;
+            if (hit_face) *hit_face = face;
             return true;
         }
 
-        // Step to next voxel
+        // Step to next voxel and track which face we crossed
         if (t_max_x < t_max_y && t_max_x < t_max_z) {
             x += step_x;
             t = t_max_x;
             t_max_x += t_delta_x;
+            face = (step_x > 0) ? FACE_LEFT : FACE_RIGHT;  // LEFT=-X, RIGHT=+X
         } else if (t_max_y < t_max_z) {
             y += step_y;
             t = t_max_y;
             t_max_y += t_delta_y;
+            face = (step_y > 0) ? FACE_BOTTOM : FACE_TOP;
         } else {
             z += step_z;
             t = t_max_z;
             t_max_z += t_delta_z;
+            face = (step_z > 0) ? FACE_BACK : FACE_FRONT;  // BACK=-Z, FRONT=+Z
         }
     }
 
@@ -135,6 +146,9 @@ static void game_init(void) {
 
     // Initialize texture atlas
     texture_atlas_init();
+
+    // Initialize item system
+    item_system_init();
 
     // Initialize noise with random seed
     uint32_t seed = (uint32_t)time(NULL);
@@ -184,8 +198,35 @@ static void game_init(void) {
  * Update game logic - called every frame with delta time
  */
 static void game_update(float dt) {
+    // Toggle inventory with E key
+    if (IsKeyPressed(KEY_E)) {
+        g_state.player->inventory->is_open = !g_state.player->inventory->is_open;
+    }
+
+    // Hotbar selection (number keys 1-9) - always active
+    for (int i = 0; i < 9; i++) {
+        if (IsKeyPressed(KEY_ONE + i)) {
+            inventory_set_selected_slot(g_state.player->inventory, i);
+        }
+    }
+
+    // Hotbar selection (mouse scroll wheel) - only when inventory closed
+    if (!g_state.player->inventory->is_open) {
+        float wheel = GetMouseWheelMove();
+        if (wheel != 0) {
+            int current = g_state.player->inventory->selected_hotbar_slot;
+            current -= (int)wheel;  // Scroll down = next slot
+            if (current < 0) current = 8;
+            if (current > 8) current = 0;
+            inventory_set_selected_slot(g_state.player->inventory, current);
+        }
+    }
+
     // Update player (handles input, movement, collision, and camera)
-    player_update(g_state.player, g_state.world, dt);
+    // Only update when inventory is closed
+    if (!g_state.player->inventory->is_open) {
+        player_update(g_state.player, g_state.world, dt);
+    }
 
     // Update world (chunk loading/unloading based on player position)
     int player_chunk_x, player_chunk_z;
@@ -203,24 +244,93 @@ static void game_update(float dt) {
         camera.position,
         camera_direction,
         5.0f,  // Max reach distance
-        &g_state.target_block_pos
+        &g_state.target_block_pos,
+        &g_state.target_face
     );
 
-    // Mine/delete block on left click
-    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+    // Mine/delete block on left click (only when inventory closed)
+    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && !g_state.player->inventory->is_open) {
         if (g_state.has_target_block) {
             int x = (int)g_state.target_block_pos.x;
             int y = (int)g_state.target_block_pos.y;
             int z = (int)g_state.target_block_pos.z;
 
-            // Delete the block (set to air)
-            Block air_block = {BLOCK_AIR, 0, 0};
-            world_set_block(g_state.world, x, y, z, air_block);
+            // Get the block being mined
+            Block block = world_get_block(g_state.world, x, y, z);
 
-            printf("[MINED] Block at (%d, %d, %d)\n", x, y, z);
+            // Calculate drops
+            ItemStack drop = item_get_block_drop(block.type);
+
+            if (drop.type != ITEM_NONE) {
+                // Try to add to inventory
+                if (inventory_add_item(g_state.player->inventory, drop.type, drop.count)) {
+                    // Success - remove block
+                    Block air_block = {BLOCK_AIR, 0, 0};
+                    world_set_block(g_state.world, x, y, z, air_block);
+
+                    const char* item_name = item_get_name(drop.type);
+                    printf("[MINED] Block at (%d, %d, %d) - Got %d x %s\n",
+                           x, y, z, drop.count, item_name);
+                } else {
+                    printf("[INVENTORY FULL] Cannot mine block - inventory is full\n");
+                }
+            } else {
+                // Block has no drop (leaves, water, etc.) - still remove it
+                Block air_block = {BLOCK_AIR, 0, 0};
+                world_set_block(g_state.world, x, y, z, air_block);
+                printf("[MINED] Block at (%d, %d, %d) - No drop\n", x, y, z);
+            }
         } else {
-            printf("[MISS] No block in crosshair (camera pos: %.1f, %.1f, %.1f)\n",
-                   camera.position.x, camera.position.y, camera.position.z);
+            printf("[MISS] No block in crosshair\n");
+        }
+    }
+
+    // Place block on right click (only when inventory closed)
+    if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON) && !g_state.player->inventory->is_open) {
+        if (g_state.has_target_block) {
+            ItemStack* selected = inventory_get_selected_hotbar_item(g_state.player->inventory);
+
+            if (selected && selected->type != ITEM_NONE) {
+                const ItemProperties* props = item_get_properties(selected->type);
+
+                if (props->is_placeable) {
+                    // Calculate placement position (adjacent to hit face)
+                    Vector3 place_pos = g_state.target_block_pos;
+
+                    switch (g_state.target_face) {
+                        case FACE_TOP:    place_pos.y += 1.0f; break;
+                        case FACE_BOTTOM: place_pos.y -= 1.0f; break;
+                        case FACE_FRONT:  place_pos.z += 1.0f; break;
+                        case FACE_BACK:   place_pos.z -= 1.0f; break;
+                        case FACE_RIGHT:  place_pos.x += 1.0f; break;
+                        case FACE_LEFT:   place_pos.x -= 1.0f; break;
+                        default: break;
+                    }
+
+                    // Check if placement position collides with player
+                    if (!player_collides_with_position(g_state.player, place_pos)) {
+                        // Place block
+                        Block new_block = {props->places_as, 0, 0};
+                        world_set_block(g_state.world,
+                            (int)place_pos.x,
+                            (int)place_pos.y,
+                            (int)place_pos.z,
+                            new_block);
+
+                        // Consume item from inventory
+                        int slot_index = g_state.player->inventory->selected_hotbar_slot;
+                        inventory_remove_item(g_state.player->inventory, slot_index, 1);
+
+                        printf("[PLACED] %s at (%d, %d, %d)\n",
+                            props->name,
+                            (int)place_pos.x,
+                            (int)place_pos.y,
+                            (int)place_pos.z);
+                    } else {
+                        printf("[BLOCKED] Cannot place block inside player\n");
+                    }
+                }
+            }
         }
     }
 
@@ -260,30 +370,6 @@ static void game_draw(void) {
 
     EndMode3D();
 
-    // 2D UI overlay
-    DrawText("Katalis - Voxel Game", 10, 10, 20, WHITE);
-    DrawText(TextFormat("FPS: %d", GetFPS()), 10, 40, 20, LIME);
-    DrawText(TextFormat("Chunks: %d", g_state.world ? g_state.world->chunks->chunk_count : 0), 10, 70, 20, WHITE);
-    DrawText(TextFormat("Position: (%.1f, %.1f, %.1f)",
-             g_state.player->position.x,
-             g_state.player->position.y,
-             g_state.player->position.z), 10, 100, 20, WHITE);
-    DrawText(TextFormat("Mode: %s", g_state.player->is_flying ? "Flying" : "Walking"), 10, 130, 20, YELLOW);
-
-    // Target block indicator
-    if (g_state.has_target_block) {
-        DrawText(TextFormat("Target: [%d, %d, %d]",
-                 (int)g_state.target_block_pos.x,
-                 (int)g_state.target_block_pos.y,
-                 (int)g_state.target_block_pos.z), 10, 160, 20, GREEN);
-    } else {
-        DrawText("Target: NONE", 10, 160, 20, RED);
-    }
-
-    // Controls
-    DrawText("WASD: Move | Mouse: Look | Space: Jump | Shift: Sprint", 10, 540, 16, GRAY);
-    DrawText("F: Toggle Flying | Left Click: Mine Block | ESC: Toggle Cursor", 10, 560, 16, GRAY);
-
     // Draw crosshair in center of screen
     int screen_width = 800;   // From window size
     int screen_height = 600;
@@ -301,6 +387,10 @@ static void game_draw(void) {
 
     // Draw small dot in center
     DrawCircle(center_x, center_y, 2, WHITE);
+
+    // Draw hotbar (always visible)
+    Texture2D atlas = texture_atlas_get_texture();
+    inventory_ui_draw_hotbar(g_state.player->inventory, atlas);
 }
 
 // ============================================================================

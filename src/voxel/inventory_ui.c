@@ -1,0 +1,273 @@
+/**
+ * Inventory UI Rendering Implementation
+ */
+
+#include "voxel/inventory_ui.h"
+#include "voxel/item.h"
+#include <raylib.h>
+#include <stdio.h>
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+// Hotbar layout (bottom of screen)
+#define HOTBAR_SLOT_SIZE 48
+#define HOTBAR_GAP 4
+#define HOTBAR_PADDING_BOTTOM 60
+
+// Item icon size (centered in slot)
+#define ITEM_ICON_SIZE 32
+
+// Texture atlas layout
+#define ATLAS_SIZE 256
+#define TILE_SIZE 16
+#define TILES_PER_ROW 16
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Draw a single inventory slot
+ */
+static void draw_slot(int x, int y, int size, bool selected) {
+    // Background
+    DrawRectangle(x, y, size, size, (Color){50, 50, 50, 200});
+
+    // Border
+    if (selected) {
+        DrawRectangleLines(x, y, size, size, WHITE);
+        DrawRectangleLines(x + 1, y + 1, size - 2, size - 2, WHITE);
+        DrawRectangleLines(x + 2, y + 2, size - 4, size - 4, WHITE);
+    } else {
+        DrawRectangleLines(x, y, size, size, (Color){100, 100, 100, 255});
+        DrawRectangleLines(x + 1, y + 1, size - 2, size - 2, (Color){80, 80, 80, 255});
+    }
+}
+
+// ============================================================================
+// PUBLIC API
+// ============================================================================
+
+void inventory_ui_draw_item_icon(ItemType type, int x, int y, int size, Texture2D atlas) {
+    if (type == ITEM_NONE) return;
+
+    const ItemProperties* props = item_get_properties(type);
+
+    // Calculate source rectangle from texture atlas
+    float tile_uv_size = 1.0f / (float)TILES_PER_ROW;
+    float padding = 0.001f;  // Prevent bleeding
+
+    Rectangle source = {
+        (float)(props->atlas_tile_x * TILE_SIZE),
+        (float)(props->atlas_tile_y * TILE_SIZE),
+        (float)TILE_SIZE,
+        (float)TILE_SIZE
+    };
+
+    Rectangle dest = {
+        (float)x,
+        (float)y,
+        (float)size,
+        (float)size
+    };
+
+    DrawTexturePro(atlas, source, dest, (Vector2){0, 0}, 0.0f, WHITE);
+}
+
+void inventory_ui_draw_hotbar(Inventory* inv, Texture2D atlas) {
+    if (!inv) return;
+
+    // Calculate hotbar position (centered at bottom of screen)
+    int screen_width = 800;
+    int total_width = (HOTBAR_SLOT_SIZE * HOTBAR_SIZE) + (HOTBAR_GAP * (HOTBAR_SIZE - 1));
+    int start_x = (screen_width - total_width) / 2;
+    int start_y = 600 - HOTBAR_PADDING_BOTTOM;
+
+    // Draw all 9 hotbar slots
+    for (int i = 0; i < HOTBAR_SIZE; i++) {
+        int x = start_x + i * (HOTBAR_SLOT_SIZE + HOTBAR_GAP);
+        int y = start_y;
+
+        // Draw slot background and border
+        bool selected = (i == inv->selected_hotbar_slot);
+        draw_slot(x, y, HOTBAR_SLOT_SIZE, selected);
+
+        // Draw item icon if slot has an item
+        ItemStack* slot = &inv->hotbar[i];
+        if (slot->type != ITEM_NONE) {
+            // Center icon in slot
+            int icon_x = x + (HOTBAR_SLOT_SIZE - ITEM_ICON_SIZE) / 2;
+            int icon_y = y + (HOTBAR_SLOT_SIZE - ITEM_ICON_SIZE) / 2;
+
+            inventory_ui_draw_item_icon(slot->type, icon_x, icon_y, ITEM_ICON_SIZE, atlas);
+
+            // Draw item count if > 1
+            if (slot->count > 1) {
+                const char* count_text = TextFormat("%d", slot->count);
+                int text_width = MeasureText(count_text, 16);
+                DrawText(count_text, x + HOTBAR_SLOT_SIZE - text_width - 4, y + HOTBAR_SLOT_SIZE - 20, 16, WHITE);
+            }
+
+            // Draw durability bar for tools
+            const ItemProperties* props = item_get_properties(slot->type);
+            if (props->is_tool && slot->max_durability > 0) {
+                int bar_width = HOTBAR_SLOT_SIZE - 8;
+                int bar_height = 3;
+                int bar_x = x + 4;
+                int bar_y = y + HOTBAR_SLOT_SIZE - bar_height - 4;
+
+                // Calculate durability percentage
+                float durability_percent = (float)slot->durability / (float)slot->max_durability;
+
+                // Choose color based on durability
+                Color bar_color = GREEN;
+                if (durability_percent < 0.25f) {
+                    bar_color = RED;
+                } else if (durability_percent < 0.5f) {
+                    bar_color = ORANGE;
+                } else if (durability_percent < 0.75f) {
+                    bar_color = YELLOW;
+                }
+
+                // Draw background
+                DrawRectangle(bar_x, bar_y, bar_width, bar_height, (Color){40, 40, 40, 200});
+
+                // Draw durability bar
+                int filled_width = (int)(bar_width * durability_percent);
+                DrawRectangle(bar_x, bar_y, filled_width, bar_height, bar_color);
+            }
+        }
+    }
+}
+
+void inventory_ui_draw_full_screen(Inventory* inv, Texture2D atlas) {
+    if (!inv) return;
+
+    const int SLOT_SIZE = 40;
+    const int SLOT_GAP = 2;
+
+    // Draw semi-transparent background overlay
+    DrawRectangle(0, 0, 800, 600, (Color){0, 0, 0, 150});
+
+    // Draw inventory panel
+    int panel_x = 150;
+    int panel_y = 100;
+    int panel_w = 500;
+    int panel_h = 400;
+
+    DrawRectangle(panel_x, panel_y, panel_w, panel_h, (Color){40, 40, 40, 240});
+    DrawRectangleLines(panel_x, panel_y, panel_w, panel_h, (Color){150, 150, 150, 255});
+
+    // Title
+    DrawText("Inventory", panel_x + 20, panel_y + 10, 24, WHITE);
+
+    // Section 1: Crafting Grid (3x3 + output)
+    int craft_x = panel_x + 20;
+    int craft_y = panel_y + 50;
+
+    DrawText("Crafting", craft_x, craft_y - 20, 16, LIGHTGRAY);
+
+    // Draw 3x3 crafting grid
+    for (int row = 0; row < 3; row++) {
+        for (int col = 0; col < 3; col++) {
+            int x = craft_x + col * (SLOT_SIZE + SLOT_GAP);
+            int y = craft_y + row * (SLOT_SIZE + SLOT_GAP);
+            int slot_index = row * 3 + col;
+
+            draw_slot(x, y, SLOT_SIZE, false);
+
+            // Draw item if present
+            ItemStack* slot = &inv->crafting_grid[slot_index];
+            if (slot->type != ITEM_NONE) {
+                int icon_x = x + (SLOT_SIZE - 28) / 2;
+                int icon_y = y + (SLOT_SIZE - 28) / 2;
+                inventory_ui_draw_item_icon(slot->type, icon_x, icon_y, 28, atlas);
+
+                if (slot->count > 1) {
+                    const char* count_text = TextFormat("%d", slot->count);
+                    DrawText(count_text, x + SLOT_SIZE - 16, y + SLOT_SIZE - 16, 12, WHITE);
+                }
+            }
+        }
+    }
+
+    // Draw output slot (arrow + output)
+    int arrow_x = craft_x + 3 * (SLOT_SIZE + SLOT_GAP) + 10;
+    int arrow_y = craft_y + SLOT_SIZE;
+    DrawText("=>", arrow_x, arrow_y, 20, WHITE);
+
+    int output_x = arrow_x + 30;
+    int output_y = craft_y + SLOT_SIZE - SLOT_SIZE/2;
+    draw_slot(output_x, output_y, SLOT_SIZE, false);
+
+    ItemStack* output_slot = &inv->crafting_output[0];
+    if (output_slot->type != ITEM_NONE) {
+        int icon_x = output_x + (SLOT_SIZE - 28) / 2;
+        int icon_y = output_y + (SLOT_SIZE - 28) / 2;
+        inventory_ui_draw_item_icon(output_slot->type, icon_x, icon_y, 28, atlas);
+
+        if (output_slot->count > 1) {
+            const char* count_text = TextFormat("%d", output_slot->count);
+            DrawText(count_text, output_x + SLOT_SIZE - 16, output_y + SLOT_SIZE - 16, 12, WHITE);
+        }
+    }
+
+    // Section 2: Main Inventory (3 rows x 9 columns)
+    int inv_x = panel_x + 20;
+    int inv_y = panel_y + 200;
+
+    DrawText("Storage", inv_x, inv_y - 20, 16, LIGHTGRAY);
+
+    for (int row = 0; row < 3; row++) {
+        for (int col = 0; col < 9; col++) {
+            int x = inv_x + col * (SLOT_SIZE + SLOT_GAP);
+            int y = inv_y + row * (SLOT_SIZE + SLOT_GAP);
+            int slot_index = row * 9 + col;
+
+            draw_slot(x, y, SLOT_SIZE, false);
+
+            // Draw item if present
+            ItemStack* slot = &inv->main_inventory[slot_index];
+            if (slot->type != ITEM_NONE) {
+                int icon_x = x + (SLOT_SIZE - 28) / 2;
+                int icon_y = y + (SLOT_SIZE - 28) / 2;
+                inventory_ui_draw_item_icon(slot->type, icon_x, icon_y, 28, atlas);
+
+                if (slot->count > 1) {
+                    const char* count_text = TextFormat("%d", slot->count);
+                    DrawText(count_text, x + SLOT_SIZE - 16, y + SLOT_SIZE - 16, 12, WHITE);
+                }
+            }
+        }
+    }
+
+    // Section 3: Hotbar Mirror (1 row x 9 columns)
+    int hotbar_x = inv_x;
+    int hotbar_y = inv_y + 3 * (SLOT_SIZE + SLOT_GAP) + 10;
+
+    for (int i = 0; i < 9; i++) {
+        int x = hotbar_x + i * (SLOT_SIZE + SLOT_GAP);
+        int y = hotbar_y;
+
+        bool selected = (i == inv->selected_hotbar_slot);
+        draw_slot(x, y, SLOT_SIZE, selected);
+
+        // Draw item if present
+        ItemStack* slot = &inv->hotbar[i];
+        if (slot->type != ITEM_NONE) {
+            int icon_x = x + (SLOT_SIZE - 28) / 2;
+            int icon_y = y + (SLOT_SIZE - 28) / 2;
+            inventory_ui_draw_item_icon(slot->type, icon_x, icon_y, 28, atlas);
+
+            if (slot->count > 1) {
+                const char* count_text = TextFormat("%d", slot->count);
+                DrawText(count_text, x + SLOT_SIZE - 16, y + SLOT_SIZE - 16, 12, WHITE);
+            }
+        }
+    }
+
+    // Instructions
+    DrawText("Press E to close", panel_x + panel_w - 150, panel_y + panel_h - 25, 14, LIGHTGRAY);
+}

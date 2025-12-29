@@ -11,6 +11,9 @@
 #include <stdbool.h>
 #include "world.h"  // Need World type
 
+// Forward declarations
+typedef struct Inventory Inventory;
+
 // ============================================================================
 // PLAYER STATE
 // ============================================================================
@@ -34,6 +37,9 @@ typedef struct {
     float move_speed;           // Movement speed
     float fly_speed;            // Flying speed
     float sprint_multiplier;    // Sprint speed multiplier
+
+    // Inventory
+    Inventory* inventory;       // Player inventory (hotbar + main + crafting)
 
 } Player;
 
@@ -71,5 +77,11 @@ void player_toggle_flying(Player* player);
  * Get player's camera for rendering
  */
 Camera3D player_get_camera(Player* player);
+
+/**
+ * Check if a block position would collide with the player
+ * Used for preventing block placement inside player
+ */
+bool player_collides_with_position(Player* player, Vector3 block_pos);
 
 #endif // VOXEL_PLAYER_H

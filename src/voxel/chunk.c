@@ -194,9 +194,8 @@ static void add_quad(float* vertices, float* texcoords, float* normals, unsigned
     // Get texture coordinates from atlas
     TextureCoords tex = texture_atlas_get_coords(block_type, face);
 
-    // Scale texture coordinates by quad size (for tiling on greedy quads)
-    float u_scale = width;
-    float v_scale = height;
+    // Don't scale UVs - just stretch the texture across the greedy quad
+    // This prevents bleeding into other atlas tiles
 
     // Calculate lighting brightness for this face
     float brightness = calculate_face_brightness(normal);
@@ -210,13 +209,13 @@ static void add_quad(float* vertices, float* texcoords, float* normals, unsigned
     idx++;
 
     vertices[idx * 3 + 0] = v2.x; vertices[idx * 3 + 1] = v2.y; vertices[idx * 3 + 2] = v2.z;
-    texcoords[idx * 2 + 0] = tex.u_min + (tex.u_max - tex.u_min) * u_scale; texcoords[idx * 2 + 1] = tex.v_min;
+    texcoords[idx * 2 + 0] = tex.u_max; texcoords[idx * 2 + 1] = tex.v_min;
     normals[idx * 3 + 0] = normal.x; normals[idx * 3 + 1] = normal.y; normals[idx * 3 + 2] = normal.z;
     colors[idx * 4 + 0] = light; colors[idx * 4 + 1] = light; colors[idx * 4 + 2] = light; colors[idx * 4 + 3] = 255;
     idx++;
 
     vertices[idx * 3 + 0] = v3.x; vertices[idx * 3 + 1] = v3.y; vertices[idx * 3 + 2] = v3.z;
-    texcoords[idx * 2 + 0] = tex.u_min + (tex.u_max - tex.u_min) * u_scale; texcoords[idx * 2 + 1] = tex.v_min + (tex.v_max - tex.v_min) * v_scale;
+    texcoords[idx * 2 + 0] = tex.u_max; texcoords[idx * 2 + 1] = tex.v_max;
     normals[idx * 3 + 0] = normal.x; normals[idx * 3 + 1] = normal.y; normals[idx * 3 + 2] = normal.z;
     colors[idx * 4 + 0] = light; colors[idx * 4 + 1] = light; colors[idx * 4 + 2] = light; colors[idx * 4 + 3] = 255;
     idx++;
@@ -229,13 +228,13 @@ static void add_quad(float* vertices, float* texcoords, float* normals, unsigned
     idx++;
 
     vertices[idx * 3 + 0] = v3.x; vertices[idx * 3 + 1] = v3.y; vertices[idx * 3 + 2] = v3.z;
-    texcoords[idx * 2 + 0] = tex.u_min + (tex.u_max - tex.u_min) * u_scale; texcoords[idx * 2 + 1] = tex.v_min + (tex.v_max - tex.v_min) * v_scale;
+    texcoords[idx * 2 + 0] = tex.u_max; texcoords[idx * 2 + 1] = tex.v_max;
     normals[idx * 3 + 0] = normal.x; normals[idx * 3 + 1] = normal.y; normals[idx * 3 + 2] = normal.z;
     colors[idx * 4 + 0] = light; colors[idx * 4 + 1] = light; colors[idx * 4 + 2] = light; colors[idx * 4 + 3] = 255;
     idx++;
 
     vertices[idx * 3 + 0] = v4.x; vertices[idx * 3 + 1] = v4.y; vertices[idx * 3 + 2] = v4.z;
-    texcoords[idx * 2 + 0] = tex.u_min; texcoords[idx * 2 + 1] = tex.v_min + (tex.v_max - tex.v_min) * v_scale;
+    texcoords[idx * 2 + 0] = tex.u_min; texcoords[idx * 2 + 1] = tex.v_max;
     normals[idx * 3 + 0] = normal.x; normals[idx * 3 + 1] = normal.y; normals[idx * 3 + 2] = normal.z;
     colors[idx * 4 + 0] = light; colors[idx * 4 + 1] = light; colors[idx * 4 + 2] = light; colors[idx * 4 + 3] = 255;
     idx++;

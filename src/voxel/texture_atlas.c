@@ -81,35 +81,35 @@ static Image generate_atlas_image(void) {
     // Generate textures for each block type
     // Layout: Each row can hold different faces, or we use simple single-texture blocks
 
-    // GRASS - Row 0
-    generate_tile(&atlas, 0, 0, (Color){34, 139, 34, 255}, true);    // Top: Green grass
-    generate_tile(&atlas, 1, 0, (Color){139, 69, 19, 255}, true);    // Bottom: Dirt
-    generate_tile(&atlas, 2, 0, (Color){107, 142, 35, 255}, true);   // Sides: Grass side
+    // GRASS - Row 0 (Vibrant green top, rich dirt bottom)
+    generate_tile(&atlas, 0, 0, (Color){50, 180, 50, 255}, true);     // Top: Bright grass green
+    generate_tile(&atlas, 1, 0, (Color){150, 85, 40, 255}, true);     // Bottom: Rich dirt
+    generate_tile(&atlas, 2, 0, (Color){120, 160, 60, 255}, true);    // Sides: Grass-dirt blend
 
-    // DIRT - Row 1
-    generate_tile(&atlas, 0, 1, (Color){139, 69, 19, 255}, true);    // All faces: Brown dirt
+    // DIRT - Row 1 (Rich brown earth)
+    generate_tile(&atlas, 0, 1, (Color){150, 85, 40, 255}, true);     // All faces: Rich brown
 
-    // STONE - Row 2
-    generate_tile(&atlas, 0, 2, (Color){128, 128, 128, 255}, true);  // All faces: Gray stone
+    // STONE - Row 2 (Warm light gray, not cold gray)
+    generate_tile(&atlas, 0, 2, (Color){160, 160, 165, 255}, true);   // All faces: Light warm stone
 
-    // WOOD - Row 3
-    generate_tile(&atlas, 0, 3, (Color){139, 90, 43, 255}, true);    // Sides: Brown bark
-    generate_tile(&atlas, 1, 3, (Color){205, 133, 63, 255}, true);   // Top/Bottom: Rings
+    // WOOD - Row 3 (Warm oak wood)
+    generate_tile(&atlas, 0, 3, (Color){120, 80, 50, 255}, true);     // Sides: Dark bark
+    generate_tile(&atlas, 1, 3, (Color){200, 150, 100, 255}, true);   // Top/Bottom: Light wood rings
 
-    // LEAVES - Row 4
-    generate_tile(&atlas, 0, 4, (Color){46, 125, 50, 255}, true);    // All faces: Dark green
+    // LEAVES - Row 4 (Bright foliage green)
+    generate_tile(&atlas, 0, 4, (Color){60, 180, 75, 255}, true);     // All faces: Bright green leaves
 
-    // SAND - Row 5
-    generate_tile(&atlas, 0, 5, (Color){238, 214, 175, 255}, true);  // All faces: Beige sand
+    // SAND - Row 5 (Warm golden sand)
+    generate_tile(&atlas, 0, 5, (Color){240, 220, 130, 255}, true);   // All faces: Golden sand
 
-    // WATER - Row 6 (semi-transparent blue)
-    generate_tile(&atlas, 0, 6, (Color){64, 164, 223, 180}, false);  // All faces: Blue water
+    // WATER - Row 6 (Bright cyan-blue)
+    generate_tile(&atlas, 0, 6, (Color){50, 150, 255, 180}, false);   // All faces: Bright water
 
-    // COBBLESTONE - Row 7
-    generate_tile(&atlas, 0, 7, (Color){112, 112, 112, 255}, true);  // All faces: Dark gray
+    // COBBLESTONE - Row 7 (Brown-gray mix, not pure gray)
+    generate_tile(&atlas, 0, 7, (Color){130, 120, 110, 255}, true);   // All faces: Brown-gray cobble
 
-    // BEDROCK - Row 8
-    generate_tile(&atlas, 0, 8, (Color){64, 64, 64, 255}, true);     // All faces: Very dark gray
+    // BEDROCK - Row 8 (Dark with purple tint)
+    generate_tile(&atlas, 0, 8, (Color){50, 45, 55, 255}, true);      // All faces: Dark purple-gray
 
     return atlas;
 }
@@ -132,7 +132,7 @@ void texture_atlas_init(void) {
     // Upload to GPU
     g_atlas_texture = LoadTextureFromImage(atlas_image);
     SetTextureFilter(g_atlas_texture, TEXTURE_FILTER_POINT);  // Pixelated look
-    SetTextureWrap(g_atlas_texture, TEXTURE_WRAP_CLAMP);      // Prevent bleeding
+    SetTextureWrap(g_atlas_texture, TEXTURE_WRAP_REPEAT);     // Allow tiling for greedy quads
 
     // Unload CPU image
     UnloadImage(atlas_image);
