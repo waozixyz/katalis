@@ -8,6 +8,7 @@
 #include "voxel/inventory.h"
 #include <raylib.h>
 #include <raymath.h>
+#include <rlgl.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -49,6 +50,10 @@ Player* player_create(Vector3 start_position) {
     // Rotation
     player->yaw = 0.0f;
     player->pitch = 0.0f;
+
+    // View mode
+    player->view_mode = VIEW_MODE_FIRST_PERSON;  // Start in first-person
+    player->third_person_distance = 5.0f;  // Default distance for third-person view
 
     // Movement
     player->velocity = (Vector3){0.0f, 0.0f, 0.0f};
@@ -270,11 +275,7 @@ static void update_movement(Player* player, World * world, float dt) {
  * Update camera position and target
  */
 static void update_camera(Player* player) {
-    // Camera position is player position + eye height
-    player->camera.position = player->position;
-    player->camera.position.y += PLAYER_EYE_HEIGHT;
-
-    // Calculate camera target from yaw and pitch
+    // Calculate camera direction from yaw and pitch
     float yaw_rad = player->yaw * DEG2RAD;
     float pitch_rad = player->pitch * DEG2RAD;
 
@@ -283,7 +284,23 @@ static void update_camera(Player* player) {
     direction.y = sinf(pitch_rad);
     direction.z = -cosf(pitch_rad) * cosf(yaw_rad);
 
-    player->camera.target = Vector3Add(player->camera.position, direction);
+    if (player->view_mode == VIEW_MODE_FIRST_PERSON) {
+        // First-person: Camera is at player eye position
+        player->camera.position = player->position;
+        player->camera.position.y += PLAYER_EYE_HEIGHT;
+        player->camera.target = Vector3Add(player->camera.position, direction);
+    } else {
+        // Third-person: Camera is behind the player
+        Vector3 player_eye_pos = player->position;
+        player_eye_pos.y += PLAYER_EYE_HEIGHT;
+
+        // Position camera behind the player
+        Vector3 camera_offset = Vector3Scale(direction, -player->third_person_distance);
+        player->camera.position = Vector3Add(player_eye_pos, camera_offset);
+
+        // Camera looks at the player
+        player->camera.target = player_eye_pos;
+    }
 }
 
 // ============================================================================
@@ -301,6 +318,11 @@ void player_update(Player* player, World * world, float dt) {
         player_toggle_flying(player);
     }
 
+    // Handle view mode toggle with V key
+    if (IsKeyPressed(KEY_V)) {
+        player_toggle_view_mode(player);
+    }
+
     // Update camera rotation from mouse
     update_camera_rotation(player, dt);
 
@@ -308,6 +330,53 @@ void player_update(Player* player, World * world, float dt) {
     update_movement(player, world, dt);
 
     // Update camera
+    update_camera(player);
+}
+
+/**
+ * Update player physics only - no input handling
+ * Called when game menu is open but world should continue
+ */
+void player_update_physics(Player* player, World* world, float dt) {
+    if (!player) return;
+
+    // Only apply physics if not flying (flying suspends gravity)
+    if (!player->is_flying) {
+        // Apply gravity
+        player->velocity.y -= GRAVITY * dt;
+
+        // Zero out horizontal velocity (no input)
+        player->velocity.x = 0.0f;
+        player->velocity.z = 0.0f;
+
+        // Apply movement with collision detection
+        Vector3 new_position = player->position;
+
+        // Try to move on Y axis (gravity)
+        new_position.y = player->position.y + player->velocity.y * dt;
+        if (check_collision(world, new_position)) {
+            // Hit ground (moving downward)
+            if (player->velocity.y < 0.0f) {
+                player->is_grounded = true;
+            }
+            new_position.y = player->position.y;  // Cancel Y movement
+            player->velocity.y = 0.0f;
+        } else {
+            player->is_grounded = false;
+        }
+
+        // Additional ground check
+        Vector3 ground_check = new_position;
+        ground_check.y -= 0.1f;
+        if (check_collision(world, ground_check)) {
+            player->is_grounded = true;
+        }
+
+        // Update position
+        player->position = new_position;
+    }
+
+    // Update camera to follow player
     update_camera(player);
 }
 
@@ -331,6 +400,21 @@ void player_toggle_flying(Player* player) {
         player->velocity.y = 0.0f;  // Cancel gravity
     } else {
         printf("[PLAYER] Walking mode enabled\n");
+    }
+}
+
+/**
+ * Toggle view mode between first-person and third-person
+ */
+void player_toggle_view_mode(Player* player) {
+    if (!player) return;
+
+    if (player->view_mode == VIEW_MODE_FIRST_PERSON) {
+        player->view_mode = VIEW_MODE_THIRD_PERSON;
+        printf("[PLAYER] Switched to third-person view\n");
+    } else {
+        player->view_mode = VIEW_MODE_FIRST_PERSON;
+        printf("[PLAYER] Switched to first-person view\n");
     }
 }
 
@@ -368,4 +452,98 @@ bool player_collides_with_position(Player* player, Vector3 block_pos) {
     return (block_min.x < player_max.x && block_max.x > player_min.x) &&
            (block_min.y < player_max.y && block_max.y > player_min.y) &&
            (block_min.z < player_max.z && block_max.z > player_min.z);
+}
+
+/**
+ * Render the player model (for third-person view)
+ * Draws a simple block-based humanoid character
+ */
+void player_render_model(Player* player) {
+    if (!player || player->view_mode != VIEW_MODE_THIRD_PERSON) return;
+
+    Vector3 pos = player->position;
+    float yaw_rad = player->yaw * DEG2RAD;
+
+    // Player colors
+    Color head_color = (Color){255, 200, 150, 255};   // Skin tone
+    Color torso_color = (Color){100, 100, 200, 255};  // Blue shirt
+    Color leg_color = (Color){50, 50, 80, 255};       // Dark pants
+    Color arm_color = torso_color;
+
+    // Body proportions (similar to block_human)
+    float leg_length = 0.6f;
+    float leg_width = 0.15f;
+    float torso_height = 0.75f;
+    float torso_width = 0.5f;
+    float torso_depth = 0.25f;
+    float arm_length = 0.6f;
+    float arm_width = 0.15f;
+    float head_size = 0.4f;
+
+    // Calculate sin/cos for rotation
+    float cos_yaw = cosf(yaw_rad);
+    float sin_yaw = sinf(yaw_rad);
+
+    // Build character from bottom to top
+    float y = pos.y;
+
+    // ========================================================================
+    // LEGS (2 blocks, spaced apart, rotated with player)
+    // ========================================================================
+    float leg_spacing = 0.125f;
+
+    // Left leg offset (perpendicular to facing direction)
+    float left_leg_x = pos.x + leg_spacing * cos_yaw;
+    float left_leg_z = pos.z - leg_spacing * sin_yaw;
+
+    // Right leg offset
+    float right_leg_x = pos.x - leg_spacing * cos_yaw;
+    float right_leg_z = pos.z + leg_spacing * sin_yaw;
+
+    Vector3 left_leg_center = {left_leg_x, y + leg_length / 2.0f, left_leg_z};
+    Vector3 right_leg_center = {right_leg_x, y + leg_length / 2.0f, right_leg_z};
+
+    DrawCube(left_leg_center, leg_width, leg_length, leg_width, leg_color);
+    DrawCube(right_leg_center, leg_width, leg_length, leg_width, leg_color);
+
+    y += leg_length;
+
+    // ========================================================================
+    // TORSO
+    // ========================================================================
+    Vector3 torso_center = {pos.x, y + torso_height / 2.0f, pos.z};
+
+    // Draw rotated torso using rlgl transforms
+    rlPushMatrix();
+    rlTranslatef(torso_center.x, torso_center.y, torso_center.z);
+    rlRotatef(player->yaw, 0, 1, 0);
+    DrawCube((Vector3){0, 0, 0}, torso_width, torso_height, torso_depth, torso_color);
+    rlPopMatrix();
+
+    // ========================================================================
+    // ARMS (attached to torso sides)
+    // ========================================================================
+    float arm_attach_height = y + torso_height * 0.75f;
+    float arm_offset = (torso_width / 2.0f) + (arm_width / 2.0f);
+
+    // Left arm (offset perpendicular to facing)
+    float left_arm_x = pos.x + arm_offset * cos_yaw;
+    float left_arm_z = pos.z - arm_offset * sin_yaw;
+    Vector3 left_arm_center = {left_arm_x, arm_attach_height - arm_length / 2.0f, left_arm_z};
+
+    // Right arm
+    float right_arm_x = pos.x - arm_offset * cos_yaw;
+    float right_arm_z = pos.z + arm_offset * sin_yaw;
+    Vector3 right_arm_center = {right_arm_x, arm_attach_height - arm_length / 2.0f, right_arm_z};
+
+    DrawCube(left_arm_center, arm_width, arm_length, arm_width, arm_color);
+    DrawCube(right_arm_center, arm_width, arm_length, arm_width, arm_color);
+
+    y += torso_height;
+
+    // ========================================================================
+    // HEAD (sphere)
+    // ========================================================================
+    Vector3 head_center = {pos.x, y + head_size, pos.z};
+    DrawSphere(head_center, head_size, head_color);
 }

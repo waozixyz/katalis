@@ -17,6 +17,9 @@ pkgs.mkShell {
     sdl3-ttf
     sdl3-image
 
+    # Raylib
+    raylib
+
     # Text rendering
     harfbuzz
     freetype

@@ -81,4 +81,10 @@ void chunk_fill(Chunk* chunk, BlockType type);
  */
 bool chunk_is_empty(Chunk* chunk);
 
+/**
+ * Update the is_empty flag by scanning the chunk
+ * Call this after bulk terrain generation
+ */
+void chunk_update_empty_status(Chunk* chunk);
+
 #endif // VOXEL_CHUNK_H

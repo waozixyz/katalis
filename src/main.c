@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200112L
 /**
  * Katalis
  *
@@ -6,6 +7,7 @@
 
 #include <kryon_dsl.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <raylib.h>
 #include "game.h"
 
@@ -40,13 +42,14 @@ int main(void) {
             FULL_SIZE,
             BG_COLOR(0x0a0e27),
 
-            // Title Screen (initially visible)
+            // Title Screen (initially hidden)
             title_screen = COLUMN(
                 FULL_SIZE,
                 JUSTIFY_CENTER,
                 ALIGN_CENTER,
                 GAP(40),
                 PADDING(60),
+                VISIBLE(false),
 
                 // Title "KATALIS"
                 TEXT("KATALIS",
@@ -71,11 +74,11 @@ int main(void) {
                 )
             ),
 
-            // Game Screen (initially hidden)
+            // Game Screen (initially visible)
             game_screen = NATIVE_CANVAS(game_run,
                 FULL_SIZE,
                 BG_COLOR(0x1a1a2e),
-                VISIBLE(false)
+                VISIBLE(true)
             )
         
         )

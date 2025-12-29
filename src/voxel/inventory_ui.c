@@ -4,6 +4,7 @@
 
 #include "voxel/inventory_ui.h"
 #include "voxel/item.h"
+#include "voxel/inventory_input.h"
 #include <raylib.h>
 #include <stdio.h>
 
@@ -270,4 +271,75 @@ void inventory_ui_draw_full_screen(Inventory* inv, Texture2D atlas) {
 
     // Instructions
     DrawText("Press E to close", panel_x + panel_w - 150, panel_y + panel_h - 25, 14, LIGHTGRAY);
+}
+
+void inventory_ui_draw_tooltip(Inventory* inv, int mouse_x, int mouse_y) {
+    if (!inv) return;
+
+    // Get the slot being hovered
+    InventorySection section;
+    int slot_index = inventory_input_get_clicked_slot(mouse_x, mouse_y, &section);
+
+    if (slot_index == -1 || section == SECTION_NONE) {
+        return;  // No slot hovered
+    }
+
+    // Get the item in the hovered slot
+    ItemStack* slot = NULL;
+
+    switch (section) {
+        case SECTION_CRAFTING_GRID:
+            if (slot_index >= 0 && slot_index < 9) {
+                slot = &inv->crafting_grid[slot_index];
+            }
+            break;
+        case SECTION_CRAFTING_OUTPUT:
+            slot = &inv->crafting_output[0];
+            break;
+        case SECTION_MAIN_INVENTORY:
+            if (slot_index >= 0 && slot_index < 27) {
+                slot = &inv->main_inventory[slot_index];
+            }
+            break;
+        case SECTION_HOTBAR:
+            if (slot_index >= 0 && slot_index < 9) {
+                slot = &inv->hotbar[slot_index];
+            }
+            break;
+        default:
+            return;
+    }
+
+    if (!slot || slot->type == ITEM_NONE) {
+        return;  // Empty slot
+    }
+
+    // Get item name
+    const char* item_name = item_get_name(slot->type);
+
+    // Measure text size for background
+    int font_size = 16;
+    int text_width = MeasureText(item_name, font_size);
+    int padding = 6;
+
+    // Position tooltip near cursor (offset to avoid covering item)
+    int tooltip_x = mouse_x + 12;
+    int tooltip_y = mouse_y + 12;
+
+    // Keep tooltip on screen
+    if (tooltip_x + text_width + padding * 2 > 800) {
+        tooltip_x = mouse_x - text_width - padding * 2 - 12;
+    }
+    if (tooltip_y + font_size + padding * 2 > 600) {
+        tooltip_y = mouse_y - font_size - padding * 2 - 12;
+    }
+
+    // Draw tooltip background
+    DrawRectangle(tooltip_x, tooltip_y, text_width + padding * 2, font_size + padding * 2,
+                   (Color){40, 40, 40, 240});
+    DrawRectangleLines(tooltip_x, tooltip_y, text_width + padding * 2, font_size + padding * 2,
+                       (Color){150, 150, 150, 255});
+
+    // Draw item name
+    DrawText(item_name, tooltip_x + padding, tooltip_y + padding, font_size, WHITE);
 }

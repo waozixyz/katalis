@@ -15,6 +15,15 @@
 typedef struct Inventory Inventory;
 
 // ============================================================================
+// VIEW MODES
+// ============================================================================
+
+typedef enum {
+    VIEW_MODE_FIRST_PERSON,
+    VIEW_MODE_THIRD_PERSON
+} ViewMode;
+
+// ============================================================================
 // PLAYER STATE
 // ============================================================================
 
@@ -26,6 +35,10 @@ typedef struct {
     // Rotation (in radians)
     float yaw;                  // Horizontal rotation
     float pitch;                // Vertical rotation (up/down look)
+
+    // View mode
+    ViewMode view_mode;         // Current camera view mode
+    float third_person_distance; // Distance of camera in third-person mode
 
     // Movement
     Vector3 velocity;           // Current velocity
@@ -64,6 +77,12 @@ void player_destroy(Player* player);
 void player_update(Player* player, World* world, float dt);
 
 /**
+ * Update player physics only (gravity, collisions) - no input handling
+ * Use when game is paused but world should continue (like Minecraft menu)
+ */
+void player_update_physics(Player* player, World* world, float dt);
+
+/**
  * Set player position
  */
 void player_set_position(Player* player, Vector3 position);
@@ -72,6 +91,11 @@ void player_set_position(Player* player, Vector3 position);
  * Toggle flying mode
  */
 void player_toggle_flying(Player* player);
+
+/**
+ * Toggle view mode between first-person and third-person
+ */
+void player_toggle_view_mode(Player* player);
 
 /**
  * Get player's camera for rendering
@@ -83,5 +107,10 @@ Camera3D player_get_camera(Player* player);
  * Used for preventing block placement inside player
  */
 bool player_collides_with_position(Player* player, Vector3 block_pos);
+
+/**
+ * Render the player model (for third-person view)
+ */
+void player_render_model(Player* player);
 
 #endif // VOXEL_PLAYER_H

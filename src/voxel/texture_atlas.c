@@ -111,6 +111,28 @@ static Image generate_atlas_image(void) {
     // BEDROCK - Row 8 (Dark with purple tint)
     generate_tile(&atlas, 0, 8, (Color){50, 45, 55, 255}, true);      // All faces: Dark purple-gray
 
+    // DEEP_STONE - Row 9 (Darker stone for deep layers)
+    generate_tile(&atlas, 0, 9, (Color){100, 100, 105, 255}, true);   // All faces: Dark gray stone
+
+    // GRAVEL - Row 10 (Light gray with pebble texture)
+    generate_tile(&atlas, 0, 10, (Color){140, 140, 145, 255}, true);  // All faces: Light gray gravel
+
+    // COAL_ORE - Row 11 (Stone with black spots)
+    generate_tile(&atlas, 0, 11, (Color){160, 160, 165, 255}, true);  // Base: Stone color
+    generate_tile(&atlas, 1, 11, (Color){40, 40, 45, 255}, false);    // Coal spots: Very dark gray
+
+    // IRON_ORE - Row 12 (Stone with brown/orange spots)
+    generate_tile(&atlas, 0, 12, (Color){160, 160, 165, 255}, true);  // Base: Stone color
+    generate_tile(&atlas, 1, 12, (Color){180, 120, 80, 255}, false);  // Iron spots: Brown-orange
+
+    // GOLD_ORE - Row 13 (Stone with yellow spots)
+    generate_tile(&atlas, 0, 13, (Color){160, 160, 165, 255}, true);  // Base: Stone color
+    generate_tile(&atlas, 1, 13, (Color){255, 215, 0, 255}, false);   // Gold spots: Bright yellow
+
+    // DIAMOND_ORE - Row 14 (Stone with cyan spots)
+    generate_tile(&atlas, 0, 14, (Color){160, 160, 165, 255}, true);  // Base: Stone color
+    generate_tile(&atlas, 1, 14, (Color){0, 200, 255, 255}, false);   // Diamond spots: Bright cyan
+
     return atlas;
 }
 
@@ -138,7 +160,16 @@ void texture_atlas_init(void) {
     UnloadImage(atlas_image);
 
     // Create material with atlas texture
+    // Load custom block shader for ambient lighting
+    Shader block_shader = LoadShader("shaders/block.vs", "shaders/block.fs");
+
     g_atlas_material = LoadMaterialDefault();
+    if (block_shader.id > 0) {
+        g_atlas_material.shader = block_shader;
+        printf("[ATLAS] Block shader loaded successfully (ID: %d)\n", block_shader.id);
+    } else {
+        printf("[ATLAS] WARNING: Failed to load block shader, using default\n");
+    }
     g_atlas_material.maps[MATERIAL_MAP_DIFFUSE].texture = g_atlas_texture;
 
     g_initialized = true;
@@ -222,6 +253,30 @@ TextureCoords texture_atlas_get_coords(BlockType block_type, BlockFace face) {
 
         case BLOCK_BEDROCK:
             tile_x = 0; tile_y = 8;
+            break;
+
+        case BLOCK_DEEP_STONE:
+            tile_x = 0; tile_y = 9;
+            break;
+
+        case BLOCK_GRAVEL:
+            tile_x = 0; tile_y = 10;
+            break;
+
+        case BLOCK_COAL_ORE:
+            tile_x = 0; tile_y = 11;  // For now, use base stone texture
+            break;
+
+        case BLOCK_IRON_ORE:
+            tile_x = 0; tile_y = 12;
+            break;
+
+        case BLOCK_GOLD_ORE:
+            tile_x = 0; tile_y = 13;
+            break;
+
+        case BLOCK_DIAMOND_ORE:
+            tile_x = 0; tile_y = 14;
             break;
 
         default:

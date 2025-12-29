@@ -8,6 +8,7 @@
 #define VOXEL_WORLD_H
 
 #include "voxel/chunk.h"
+#include "voxel/terrain.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -38,11 +39,12 @@ typedef struct {
 // WORLD DATA
 // ============================================================================
 
-typedef struct {
+typedef struct World {
     ChunkHashMap* chunks;
     int center_chunk_x;      // Center of loaded chunks (camera position)
     int center_chunk_z;
     int view_distance;       // How many chunks to load around center
+    TerrainParams terrain_params;  // Terrain generation parameters
 } World;
 
 // ============================================================================
@@ -50,9 +52,9 @@ typedef struct {
 // ============================================================================
 
 /**
- * Create a new world
+ * Create a new world with terrain generation parameters
  */
-World* world_create(void);
+World* world_create(TerrainParams terrain_params);
 
 /**
  * Destroy world and free all chunks
@@ -91,6 +93,11 @@ void world_update(World* world, int center_chunk_x, int center_chunk_z);
  * Render all visible chunks
  */
 void world_render(World* world);
+
+/**
+ * Render all visible chunks with time-based ambient lighting
+ */
+void world_render_with_time(World* world, float time_of_day);
 
 /**
  * Convert world coordinates to chunk coordinates

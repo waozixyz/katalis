@@ -133,6 +133,27 @@ bool chunk_is_empty(Chunk* chunk) {
     return chunk->is_empty;
 }
 
+/**
+ * Update the is_empty flag by scanning the chunk
+ * Call this after bulk terrain generation
+ */
+void chunk_update_empty_status(Chunk* chunk) {
+    if (!chunk) return;
+
+    bool has_blocks = false;
+    for (int x = 0; x < CHUNK_SIZE && !has_blocks; x++) {
+        for (int y = 0; y < CHUNK_HEIGHT && !has_blocks; y++) {
+            for (int z = 0; z < CHUNK_SIZE && !has_blocks; z++) {
+                if (chunk->blocks[x][y][z].type != BLOCK_AIR) {
+                    has_blocks = true;
+                }
+            }
+        }
+    }
+
+    chunk->is_empty = !has_blocks;
+}
+
 // ============================================================================
 // MESH GENERATION (Basic Face Culling)
 // ============================================================================
@@ -240,6 +261,104 @@ static void add_quad(float* vertices, float* texcoords, float* normals, unsigned
     idx++;
 
     *vertex_count = idx;
+}
+
+/**
+ * Simple meshing algorithm - each block face is independent (Luanti-style)
+ * Does not merge adjacent faces, rendering each block separately
+ */
+static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** texcoords,
+                                       float** normals, unsigned char** colors, int* vertex_count) {
+    *vertex_count = 0;
+
+    // Iterate through all blocks in the chunk
+    for (int y = 0; y < CHUNK_HEIGHT; y++) {
+        for (int z = 0; z < CHUNK_SIZE; z++) {
+            for (int x = 0; x < CHUNK_SIZE; x++) {
+                Block block = chunk_get_block(chunk, x, y, z);
+
+                // Skip air blocks
+                if (!block_is_solid(block)) {
+                    continue;
+                }
+
+                // Local position of this block within the chunk
+                // (chunk offset will be applied via transform matrix during rendering)
+                float wx = (float)x;
+                float wy = (float)y;
+                float wz = (float)z;
+
+                // Render all 6 faces - NO culling (true Luanti-style)
+                // Each block is completely independent
+
+                // Face: Top (+Y)
+                {
+                    Vector3 v1 = {wx, wy + 1, wz};
+                    Vector3 v2 = {wx + 1, wy + 1, wz};
+                    Vector3 v3 = {wx + 1, wy + 1, wz + 1};
+                    Vector3 v4 = {wx, wy + 1, wz + 1};
+                    Vector3 normal = {0, 1, 0};
+                    add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
+                            v1, v2, v3, v4, normal, block.type, 1, 1);
+                }
+
+                // Face: Bottom (-Y)
+                {
+                    Vector3 v1 = {wx, wy, wz + 1};
+                    Vector3 v2 = {wx + 1, wy, wz + 1};
+                    Vector3 v3 = {wx + 1, wy, wz};
+                    Vector3 v4 = {wx, wy, wz};
+                    Vector3 normal = {0, -1, 0};
+                    add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
+                            v1, v2, v3, v4, normal, block.type, 1, 1);
+                }
+
+                // Face: Front (-Z)
+                {
+                    Vector3 v1 = {wx, wy, wz};
+                    Vector3 v2 = {wx + 1, wy, wz};
+                    Vector3 v3 = {wx + 1, wy + 1, wz};
+                    Vector3 v4 = {wx, wy + 1, wz};
+                    Vector3 normal = {0, 0, -1};
+                    add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
+                            v1, v2, v3, v4, normal, block.type, 1, 1);
+                }
+
+                // Face: Back (+Z)
+                {
+                    Vector3 v1 = {wx + 1, wy, wz + 1};
+                    Vector3 v2 = {wx, wy, wz + 1};
+                    Vector3 v3 = {wx, wy + 1, wz + 1};
+                    Vector3 v4 = {wx + 1, wy + 1, wz + 1};
+                    Vector3 normal = {0, 0, 1};
+                    add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
+                            v1, v2, v3, v4, normal, block.type, 1, 1);
+                }
+
+                // Face: Left (-X)
+                {
+                    Vector3 v1 = {wx, wy, wz + 1};
+                    Vector3 v2 = {wx, wy, wz};
+                    Vector3 v3 = {wx, wy + 1, wz};
+                    Vector3 v4 = {wx, wy + 1, wz + 1};
+                    Vector3 normal = {-1, 0, 0};
+                    add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
+                            v1, v2, v3, v4, normal, block.type, 1, 1);
+                }
+
+                // Face: Right (+X)
+                {
+                    Vector3 v1 = {wx + 1, wy, wz};
+                    Vector3 v2 = {wx + 1, wy, wz + 1};
+                    Vector3 v3 = {wx + 1, wy + 1, wz + 1};
+                    Vector3 v4 = {wx + 1, wy + 1, wz};
+                    Vector3 normal = {1, 0, 0};
+                    add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
+                            v1, v2, v3, v4, normal, block.type, 1, 1);
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -404,8 +523,8 @@ void chunk_generate_mesh(Chunk* chunk) {
 
     int vertex_count = 0;
 
-    // Use greedy meshing algorithm
-    chunk_generate_mesh_greedy(chunk, &vertices, &texcoords, &normals, &colors, &vertex_count);
+    // Use simple meshing algorithm (each block face is independent, like Luanti)
+    chunk_generate_mesh_simple(chunk, &vertices, &texcoords, &normals, &colors, &vertex_count);
 
     if (vertex_count == 0) {
         free(vertices);
@@ -427,9 +546,6 @@ void chunk_generate_mesh(Chunk* chunk) {
     UploadMesh(&chunk->mesh, false);
     chunk->mesh_generated = true;
     chunk->needs_remesh = false;
-
-    printf("[CHUNK] Generated greedy mesh for chunk (%d, %d): %d vertices, %d triangles (optimized)\n",
-           chunk->x, chunk->z, vertex_count, chunk->mesh.triangleCount);
 }
 
 /**

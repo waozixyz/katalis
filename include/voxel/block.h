@@ -25,6 +25,12 @@ typedef enum {
     BLOCK_WATER,
     BLOCK_COBBLESTONE,
     BLOCK_BEDROCK,
+    BLOCK_DEEP_STONE,     // Darker stone for deep layers
+    BLOCK_GRAVEL,         // Loose sediment
+    BLOCK_COAL_ORE,       // Common ore
+    BLOCK_IRON_ORE,       // Uncommon ore
+    BLOCK_GOLD_ORE,       // Rare ore
+    BLOCK_DIAMOND_ORE,    // Very rare ore
     BLOCK_COUNT  // Total number of block types
 } BlockType;
 

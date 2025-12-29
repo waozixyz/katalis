@@ -26,7 +26,15 @@ VOXEL_SOURCES = src/voxel/block.c \
                 src/voxel/texture_atlas.c \
                 src/voxel/item.c \
                 src/voxel/inventory.c \
-                src/voxel/inventory_ui.c
+                src/voxel/inventory_ui.c \
+                src/voxel/inventory_input.c \
+                src/voxel/crafting.c \
+                src/voxel/pause_menu.c \
+                src/voxel/entity.c \
+                src/voxel/block_human.c \
+                src/voxel/sky.c \
+                src/voxel/tree.c \
+                src/voxel/network.c
 
 APP_SOURCES = src/main.c src/game.c $(VOXEL_SOURCES)
 

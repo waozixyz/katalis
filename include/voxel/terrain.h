@@ -36,6 +36,33 @@ typedef struct {
     // Block placement
     int dirt_depth;              // Dirt layers below grass (default: 4)
     int stone_depth;             // Stone layers below dirt (default: 64)
+
+    // Deep layer configuration
+    int deep_stone_start;        // Y-level where deep stone begins (default: 32)
+    int bedrock_start;           // Y-level where bedrock mixing starts (default: 8)
+    int bedrock_solid;           // Y-level of solid bedrock (default: 4)
+
+    // Ore generation parameters
+    float coal_frequency;        // Coal vein frequency (default: 0.15)
+    int coal_min_y;              // Min Y for coal (default: 64)
+    int coal_max_y;              // Max Y for coal (default: 80)
+
+    float iron_frequency;        // Iron vein frequency (default: 0.10)
+    int iron_min_y;              // Min Y for iron (default: 24)
+    int iron_max_y;              // Max Y for iron (default: 48)
+
+    float gold_frequency;        // Gold vein frequency (default: 0.05)
+    int gold_min_y;              // Min Y for gold (default: 16)
+    int gold_max_y;              // Max Y for gold (default: 32)
+
+    float diamond_frequency;     // Diamond vein frequency (default: 0.02)
+    int diamond_min_y;           // Min Y for diamond (default: 8)
+    int diamond_max_y;           // Max Y for diamond (default: 16)
+
+    // Gravel layer
+    float gravel_frequency;      // Gravel pocket frequency (default: 0.20)
+    int gravel_min_y;            // Min Y for gravel (default: 32)
+    int gravel_max_y;            // Max Y for gravel (default: 48)
 } TerrainParams;
 
 // ============================================================================

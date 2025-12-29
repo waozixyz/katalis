@@ -4,6 +4,7 @@
 
 #include "voxel/world.h"
 #include "voxel/texture_atlas.h"
+#include "voxel/terrain.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -140,12 +141,13 @@ void world_to_local_coords(int world_x, int world_y, int world_z,
 // WORLD MANAGEMENT
 // ============================================================================
 
-World* world_create(void) {
+World* world_create(TerrainParams terrain_params) {
     World* world = (World*)malloc(sizeof(World));
     world->chunks = chunk_hashmap_create();
     world->center_chunk_x = 0;
     world->center_chunk_z = 0;
     world->view_distance = WORLD_VIEW_DISTANCE;
+    world->terrain_params = terrain_params;
 
     printf("[WORLD] Created world with view distance %d\n", world->view_distance);
     return world;
@@ -203,13 +205,21 @@ void world_set_block(World* world, int x, int y, int z, Block block) {
 void world_update(World* world, int center_chunk_x, int center_chunk_z) {
     if (!world) return;
 
+    static bool first_update = true;
+    static int last_center_x = 0;
+    static int last_center_z = 0;
+
     world->center_chunk_x = center_chunk_x;
     world->center_chunk_z = center_chunk_z;
 
-    // TODO: Implement chunk loading/unloading based on view distance
-    // For now, we'll keep all chunks loaded
+    if (first_update || last_center_x != center_chunk_x || last_center_z != center_chunk_z) {
+        // Center chunk changed
+        last_center_x = center_chunk_x;
+        last_center_z = center_chunk_z;
+    }
 
     // Load chunks in view distance if not already loaded
+    int new_chunks = 0;
     for (int x = -world->view_distance; x <= world->view_distance; x++) {
         for (int z = -world->view_distance; z <= world->view_distance; z++) {
             int cx = center_chunk_x + x;
@@ -217,18 +227,82 @@ void world_update(World* world, int center_chunk_x, int center_chunk_z) {
 
             Chunk* chunk = world_get_chunk(world, cx, cz);
             if (!chunk) {
-                // Chunk not loaded, create it
+                // Chunk not loaded, create it with terrain generation
                 chunk = world_get_or_create_chunk(world, cx, cz);
+
+                // Generate terrain for this new chunk
+                terrain_generate_chunk(chunk, world->terrain_params);
+
+                // Update empty status after terrain generation
+                chunk_update_empty_status(chunk);
+
+                // Generate mesh for rendering
+                chunk_generate_mesh(chunk);
+
+                new_chunks++;
             }
         }
     }
+
+    if (first_update) {
+        first_update = false;
+    }
 }
 
-void world_render(World* world) {
+// ============================================================================
+// LIGHTING HELPERS
+// ============================================================================
+
+/**
+ * Calculate ambient brightness from time of day
+ */
+static float calculate_ambient_brightness(float time) {
+    if (time < 6.0f) return 0.25f;     // Night (0-6am): Dark but visible
+    if (time < 7.0f) {                 // Dawn (6-7am): Transition
+        return 0.25f + (time - 6.0f) * 0.75f;
+    }
+    if (time < 18.0f) return 1.0f;     // Day (7am-6pm): Full bright
+    if (time < 19.0f) {                // Dusk (6-7pm): Transition
+        return 1.0f - (time - 18.0f) * 0.75f;
+    }
+    return 0.25f;                       // Night (7pm-12am): Dark but visible
+}
+
+/**
+ * Get ambient light color with temperature shift
+ */
+static Vector3 get_ambient_color(float time) {
+    float brightness = calculate_ambient_brightness(time);
+
+    // Color temperature shifts
+    if (time >= 6.0f && time < 8.0f) {
+        // Dawn: Warm orange tint
+        return (Vector3){brightness * 1.0f, brightness * 0.8f, brightness * 0.6f};
+    } else if (time >= 17.0f && time < 19.0f) {
+        // Dusk: Warm red/orange tint
+        return (Vector3){brightness * 1.0f, brightness * 0.7f, brightness * 0.5f};
+    } else if (time < 6.0f || time >= 19.0f) {
+        // Night: Cool blue tint
+        return (Vector3){brightness * 0.5f, brightness * 0.6f, brightness * 0.8f};
+    } else {
+        // Day: Neutral white
+        return (Vector3){brightness, brightness, brightness};
+    }
+}
+
+// ============================================================================
+// RENDERING
+// ============================================================================
+
+void world_render_with_time(World* world, float time_of_day) {
     if (!world) return;
 
-    Matrix identity = MatrixIdentity();
     Material material = texture_atlas_get_material();
+
+    // Calculate and set ambient light
+    Vector3 ambient_light = get_ambient_color(time_of_day);
+    int ambient_loc = GetShaderLocation(material.shader, "u_ambient_light");
+    SetShaderValue(material.shader, ambient_loc, &ambient_light, SHADER_UNIFORM_VEC3);
 
     // Render all loaded chunks
     for (int i = 0; i < WORLD_MAX_CHUNKS; i++) {
@@ -243,7 +317,6 @@ void world_render(World* world) {
 
             // Render chunk if it has a mesh
             if (chunk->mesh_generated && chunk->mesh.vboId != NULL) {
-                // Calculate world position offset for this chunk
                 Matrix transform = MatrixTranslate(
                     (float)(chunk->x * CHUNK_SIZE),
                     0.0f,
@@ -256,4 +329,9 @@ void world_render(World* world) {
             node = node->next;
         }
     }
+}
+
+void world_render(World* world) {
+    // Fallback to noon lighting if time not specified
+    world_render_with_time(world, 12.0f);
 }

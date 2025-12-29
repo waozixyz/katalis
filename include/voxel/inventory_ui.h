@@ -32,4 +32,10 @@ void inventory_ui_draw_full_screen(Inventory* inv, Texture2D atlas);
  */
 void inventory_ui_draw_item_icon(ItemType type, int x, int y, int size, Texture2D atlas);
 
+/**
+ * Draw tooltip for hovered item in inventory
+ * Shows item name near the cursor
+ */
+void inventory_ui_draw_tooltip(Inventory* inv, int mouse_x, int mouse_y);
+
 #endif // VOXEL_INVENTORY_UI_H
