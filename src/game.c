@@ -55,6 +55,8 @@ typedef struct {
     NetworkContext* network;     // LAN multiplayer context
     // Minimap
     Minimap* minimap;            // Top-right minimap overlay
+    // Exit flag
+    bool should_exit;            // Set to true to cleanly exit game
 } GameState;
 
 static GameState g_state;
@@ -162,6 +164,9 @@ static bool raycast_block(World* world, Vector3 origin, Vector3 direction, float
  */
 static void game_init(void) {
     printf("[GAME] Initializing voxel world...\n");
+
+    // Initialize exit flag
+    g_state.should_exit = false;
 
     // Initialize block system
     block_system_init();
@@ -559,7 +564,7 @@ static void game_update(float dt) {
 
             case 2:  // Exit Game
                 network_disconnect(g_state.network);
-                CloseWindow();
+                g_state.should_exit = true;
                 break;
 
             case 3:  // Host Game button - go to setup
@@ -844,6 +849,12 @@ static void game_draw(void) {
 void game_run(uint32_t component_id) {
     (void)component_id; // Unused, suppress warning
 
+    // Check if we should exit (prevents GLFW errors after window close)
+    if (g_state.should_exit) {
+        CloseWindow();
+        return;
+    }
+
     // One-time initialization
     if (!g_initialized) {
         game_init();
@@ -854,6 +865,4 @@ void game_run(uint32_t component_id) {
     float dt = GetFrameTime(); // Delta time in seconds
     game_update(dt);
     game_draw();
-
- 
 }

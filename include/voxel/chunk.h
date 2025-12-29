@@ -30,6 +30,7 @@ typedef struct {
     bool needs_remesh;                                         // Dirty flag
     bool is_empty;                                             // Optimization: all air
     bool mesh_generated;                                       // Has mesh been created?
+    int solid_block_count;                                     // Count of non-air blocks (O(1) empty check)
 } Chunk;
 
 // ============================================================================
@@ -62,7 +63,7 @@ Block chunk_get_block(Chunk* chunk, int x, int y, int z);
 bool chunk_in_bounds(int x, int y, int z);
 
 /**
- * Generate mesh for chunk (greedy meshing)
+ * Generate mesh for chunk (simple per-face meshing)
  */
 void chunk_generate_mesh(Chunk* chunk);
 

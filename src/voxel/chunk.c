@@ -43,6 +43,7 @@ Chunk* chunk_create(int x, int z) {
     chunk->needs_remesh = true;
     chunk->is_empty = true;
     chunk->mesh_generated = false;
+    chunk->solid_block_count = 0;
 
     // Initialize all blocks to air
     memset(chunk->blocks, 0, sizeof(chunk->blocks));
@@ -75,26 +76,21 @@ void chunk_set_block(Chunk* chunk, int x, int y, int z, Block block) {
         return;
     }
 
+    // Get old block type for counter update
+    BlockType old_type = chunk->blocks[x][y][z].type;
+    BlockType new_type = block.type;
+
     chunk->blocks[x][y][z] = block;
     chunk->needs_remesh = true;
 
-    // Update empty flag - check if chunk still has blocks
-    if (block.type != BLOCK_AIR) {
-        chunk->is_empty = false;
-    } else {
-        // Quick check: scan for any non-air blocks
-        bool has_blocks = false;
-        for (int bx = 0; bx < CHUNK_SIZE && !has_blocks; bx++) {
-            for (int by = 0; by < CHUNK_HEIGHT && !has_blocks; by++) {
-                for (int bz = 0; bz < CHUNK_SIZE && !has_blocks; bz++) {
-                    if (chunk->blocks[bx][by][bz].type != BLOCK_AIR) {
-                        has_blocks = true;
-                    }
-                }
-            }
-        }
-        chunk->is_empty = !has_blocks;
+    // Update solid block counter (O(1) instead of O(n) scan)
+    if (old_type == BLOCK_AIR && new_type != BLOCK_AIR) {
+        chunk->solid_block_count++;
+    } else if (old_type != BLOCK_AIR && new_type == BLOCK_AIR) {
+        chunk->solid_block_count--;
     }
+
+    chunk->is_empty = (chunk->solid_block_count == 0);
 }
 
 /**
@@ -122,6 +118,8 @@ void chunk_fill(Chunk* chunk, BlockType type) {
         }
     }
 
+    // Update counter based on fill type
+    chunk->solid_block_count = (type == BLOCK_AIR) ? 0 : (CHUNK_SIZE * CHUNK_HEIGHT * CHUNK_SIZE);
     chunk->is_empty = (type == BLOCK_AIR);
     chunk->needs_remesh = true;
 }
@@ -135,24 +133,25 @@ bool chunk_is_empty(Chunk* chunk) {
 }
 
 /**
- * Update the is_empty flag by scanning the chunk
+ * Update the is_empty flag and solid_block_count by scanning the chunk
  * Call this after bulk terrain generation
  */
 void chunk_update_empty_status(Chunk* chunk) {
     if (!chunk) return;
 
-    bool has_blocks = false;
-    for (int x = 0; x < CHUNK_SIZE && !has_blocks; x++) {
-        for (int y = 0; y < CHUNK_HEIGHT && !has_blocks; y++) {
-            for (int z = 0; z < CHUNK_SIZE && !has_blocks; z++) {
+    int count = 0;
+    for (int x = 0; x < CHUNK_SIZE; x++) {
+        for (int y = 0; y < CHUNK_HEIGHT; y++) {
+            for (int z = 0; z < CHUNK_SIZE; z++) {
                 if (chunk->blocks[x][y][z].type != BLOCK_AIR) {
-                    has_blocks = true;
+                    count++;
                 }
             }
         }
     }
 
-    chunk->is_empty = !has_blocks;
+    chunk->solid_block_count = count;
+    chunk->is_empty = (count == 0);
 }
 
 // ============================================================================
@@ -275,18 +274,51 @@ static void add_quad(float* vertices, float* texcoords, float* normals, unsigned
 }
 
 /**
+ * Get maximum light from all adjacent air/transparent blocks.
+ * Used when a face is adjacent to a solid block to find nearby light.
+ */
+static uint8_t get_max_adjacent_light(Chunk* chunk, int x, int y, int z) {
+    static const int offsets[6][3] = {
+        {-1, 0, 0}, {1, 0, 0},
+        {0, -1, 0}, {0, 1, 0},
+        {0, 0, -1}, {0, 0, 1}
+    };
+
+    uint8_t max_light = 0;
+
+    for (int i = 0; i < 6; i++) {
+        int nx = x + offsets[i][0];
+        int ny = y + offsets[i][1];
+        int nz = z + offsets[i][2];
+
+        // Skip out of bounds
+        if (nx < 0 || nx >= CHUNK_SIZE || nz < 0 || nz >= CHUNK_SIZE) continue;
+        if (ny < 0 || ny >= CHUNK_HEIGHT) continue;
+
+        Block neighbor = chunk->blocks[nx][ny][nz];
+        if (neighbor.type == BLOCK_AIR || block_is_transparent(neighbor)) {
+            if (neighbor.light_level > max_light) {
+                max_light = neighbor.light_level;
+            }
+        }
+    }
+
+    return max_light;
+}
+
+/**
  * Get light level for a block face by checking the adjacent block.
  * If adjacent block is air/transparent, use its light level.
- * Otherwise fall back to the block's own light level.
+ * Otherwise use max light from any adjacent air block for uniform lighting.
  */
 static uint8_t get_face_light(Chunk* chunk, int x, int y, int z, int dx, int dy, int dz) {
     int nx = x + dx;
     int ny = y + dy;
     int nz = z + dz;
 
-    // Check bounds - if outside chunk, use current block's light to avoid bright edges
+    // Check bounds - if outside chunk, use max adjacent light
     if (nx < 0 || nx >= CHUNK_SIZE || nz < 0 || nz >= CHUNK_SIZE) {
-        return chunk->blocks[x][y][z].light_level;
+        return get_max_adjacent_light(chunk, x, y, z);
     }
     if (ny < 0) return LIGHT_MIN;
     if (ny >= CHUNK_HEIGHT) return LIGHT_MAX;
@@ -298,8 +330,9 @@ static uint8_t get_face_light(Chunk* chunk, int x, int y, int z, int dx, int dy,
         return neighbor.light_level;
     }
 
-    // Otherwise use the current block's light (shouldn't happen for visible faces)
-    return chunk->blocks[x][y][z].light_level;
+    // Adjacent to solid block - use max light from any adjacent air
+    // This prevents dark faces on tree trunks and similar structures
+    return get_max_adjacent_light(chunk, x, y, z);
 }
 
 /**
@@ -407,139 +440,7 @@ static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** t
 }
 
 /**
- * Greedy meshing algorithm - merges adjacent identical faces
- * This reduces vertex count significantly for better performance
- */
-static void chunk_generate_mesh_greedy(Chunk* chunk, float** vertices, float** texcoords,
-                                       float** normals, unsigned char** colors, int* vertex_count) {
-    // Temporary mask for greedy meshing (max size: CHUNK_SIZE * CHUNK_HEIGHT)
-    bool mask[CHUNK_SIZE * CHUNK_HEIGHT];
-
-    // For each axis (X, Y, Z)
-    for (int axis = 0; axis < 3; axis++) {
-        int u_axis = (axis + 1) % 3;  // U axis for 2D slice
-        int v_axis = (axis + 2) % 3;  // V axis for 2D slice
-
-        int axis_size[3] = {CHUNK_SIZE, CHUNK_HEIGHT, CHUNK_SIZE};
-        int u_size = axis_size[u_axis];
-        int v_size = axis_size[v_axis];
-
-        // For each direction along axis (+1 and -1)
-        for (int dir = -1; dir <= 1; dir += 2) {
-            // Sweep along the axis
-            for (int d = 0; d < axis_size[axis]; d++) {
-                // Build mask for this slice
-                memset(mask, 0, sizeof(mask));
-
-                for (int u = 0; u < u_size; u++) {
-                    for (int v = 0; v < v_size; v++) {
-                        // Get block coordinates
-                        int pos[3];
-                        pos[axis] = d;
-                        pos[u_axis] = u;
-                        pos[v_axis] = v;
-
-                        int x = pos[0], y = pos[1], z = pos[2];
-
-                        // Check if block is solid
-                        if (!chunk_in_bounds(x, y, z)) continue;
-                        Block block = chunk->blocks[x][y][z];
-                        if (block.type == BLOCK_AIR) continue;
-
-                        // Check neighbor in the direction we're facing
-                        int nx = x + (axis == 0 ? dir : 0);
-                        int ny = y + (axis == 1 ? dir : 0);
-                        int nz = z + (axis == 2 ? dir : 0);
-
-                        // If neighbor is air/transparent, this face is visible
-                        if (!has_solid_block_at(chunk, nx, ny, nz)) {
-                            mask[u + v * u_size] = true;
-                        }
-                    }
-                }
-
-                // Generate mesh from mask using greedy algorithm
-                for (int v = 0; v < v_size; v++) {
-                    for (int u = 0; u < u_size; ) {
-                        if (!mask[u + v * u_size]) {
-                            u++;
-                            continue;
-                        }
-
-                        // Find width of this quad
-                        int width = 1;
-                        while (u + width < u_size && mask[u + width + v * u_size]) {
-                            width++;
-                        }
-
-                        // Find height of this quad
-                        int height = 1;
-                        bool done = false;
-                        while (v + height < v_size && !done) {
-                            for (int k = 0; k < width; k++) {
-                                if (!mask[u + k + (v + height) * u_size]) {
-                                    done = true;
-                                    break;
-                                }
-                            }
-                            if (!done) height++;
-                        }
-
-                        // Clear the mask for this quad
-                        for (int h = 0; h < height; h++) {
-                            for (int w = 0; w < width; w++) {
-                                mask[u + w + (v + h) * u_size] = false;
-                            }
-                        }
-
-                        // Create quad vertices
-                        int pos[3];
-                        pos[axis] = d + (dir > 0 ? 1 : 0);
-                        pos[u_axis] = u;
-                        pos[v_axis] = v;
-
-                        int du[3] = {0}, dv[3] = {0};
-                        du[u_axis] = width;
-                        dv[v_axis] = height;
-
-                        Vector3 normal = {0};
-                        ((float*)&normal)[axis] = (float)dir;
-
-                        // Get block type from the original quad position (u, v, d)
-                        // pos[axis] is the face position, we need the block position
-                        int block_pos[3];
-                        block_pos[axis] = d;
-                        block_pos[u_axis] = u;
-                        block_pos[v_axis] = v;
-
-                        Block block = chunk->blocks[block_pos[0]][block_pos[1]][block_pos[2]];
-                        BlockType block_type = block.type;
-
-                        // Calculate quad corners
-                        Vector3 v1 = {(float)pos[0], (float)pos[1], (float)pos[2]};
-                        Vector3 v2 = {(float)(pos[0] + du[0]), (float)(pos[1] + du[1]), (float)(pos[2] + du[2])};
-                        Vector3 v3 = {(float)(pos[0] + du[0] + dv[0]), (float)(pos[1] + du[1] + dv[1]), (float)(pos[2] + du[2] + dv[2])};
-                        Vector3 v4 = {(float)(pos[0] + dv[0]), (float)(pos[1] + dv[1]), (float)(pos[2] + dv[2])};
-
-                        // Add quad to mesh (respecting winding order based on direction)
-                        if (dir > 0) {
-                            add_quad(*vertices, *texcoords, *normals, *colors, vertex_count, v1, v2, v3, v4, normal,
-                                   block_type, (float)width, (float)height, block.light_level);
-                        } else {
-                            add_quad(*vertices, *texcoords, *normals, *colors, vertex_count, v1, v4, v3, v2, normal,
-                                   block_type, (float)width, (float)height, block.light_level);
-                        }
-
-                        u += width;
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * Generate mesh for chunk using greedy meshing algorithm
+ * Generate mesh for chunk using simple per-face algorithm
  */
 void chunk_generate_mesh(Chunk* chunk) {
     if (!chunk) return;
@@ -568,7 +469,7 @@ void chunk_generate_mesh(Chunk* chunk) {
 
     int vertex_count = 0;
 
-    // Use simple meshing algorithm (each block face is independent, like Luanti)
+    // Use simple meshing algorithm (each block face is independent)
     chunk_generate_mesh_simple(chunk, &vertices, &texcoords, &normals, &colors, &vertex_count);
 
     if (vertex_count == 0) {

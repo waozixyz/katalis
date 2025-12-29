@@ -11,6 +11,90 @@
 #include <string.h>
 #include <raylib.h>
 #include <raymath.h>
+#include <rlgl.h>
+
+// ============================================================================
+// FRUSTUM CULLING
+// ============================================================================
+
+typedef struct {
+    Vector4 planes[6];  // left, right, bottom, top, near, far
+} Frustum;
+
+/**
+ * Extract frustum planes from view-projection matrix
+ */
+static Frustum frustum_extract(Matrix vp) {
+    Frustum f;
+
+    // Left plane
+    f.planes[0] = (Vector4){
+        vp.m3 + vp.m0, vp.m7 + vp.m4, vp.m11 + vp.m8, vp.m15 + vp.m12
+    };
+
+    // Right plane
+    f.planes[1] = (Vector4){
+        vp.m3 - vp.m0, vp.m7 - vp.m4, vp.m11 - vp.m8, vp.m15 - vp.m12
+    };
+
+    // Bottom plane
+    f.planes[2] = (Vector4){
+        vp.m3 + vp.m1, vp.m7 + vp.m5, vp.m11 + vp.m9, vp.m15 + vp.m13
+    };
+
+    // Top plane
+    f.planes[3] = (Vector4){
+        vp.m3 - vp.m1, vp.m7 - vp.m5, vp.m11 - vp.m9, vp.m15 - vp.m13
+    };
+
+    // Near plane
+    f.planes[4] = (Vector4){
+        vp.m3 + vp.m2, vp.m7 + vp.m6, vp.m11 + vp.m10, vp.m15 + vp.m14
+    };
+
+    // Far plane
+    f.planes[5] = (Vector4){
+        vp.m3 - vp.m2, vp.m7 - vp.m6, vp.m11 - vp.m10, vp.m15 - vp.m14
+    };
+
+    // Normalize all planes
+    for (int i = 0; i < 6; i++) {
+        float len = sqrtf(f.planes[i].x * f.planes[i].x +
+                         f.planes[i].y * f.planes[i].y +
+                         f.planes[i].z * f.planes[i].z);
+        if (len > 0.0001f) {
+            f.planes[i].x /= len;
+            f.planes[i].y /= len;
+            f.planes[i].z /= len;
+            f.planes[i].w /= len;
+        }
+    }
+
+    return f;
+}
+
+/**
+ * Check if AABB is inside or intersects frustum
+ */
+static bool frustum_contains_aabb(const Frustum* f, Vector3 min, Vector3 max) {
+    for (int i = 0; i < 6; i++) {
+        Vector4 p = f->planes[i];
+
+        // Find the positive vertex (furthest along plane normal)
+        Vector3 positive = {
+            (p.x >= 0) ? max.x : min.x,
+            (p.y >= 0) ? max.y : min.y,
+            (p.z >= 0) ? max.z : min.z
+        };
+
+        // If positive vertex is outside, entire AABB is outside
+        if (p.x * positive.x + p.y * positive.y + p.z * positive.z + p.w < 0) {
+            return false;
+        }
+    }
+
+    return true;
+}
 
 // ============================================================================
 // HASH MAP HELPERS
@@ -251,6 +335,19 @@ void world_update(World* world, int center_chunk_x, int center_chunk_z) {
     if (first_update) {
         first_update = false;
     }
+
+    // Process pending mesh regenerations (moved from render phase)
+    // This prevents GPU stalls during rendering
+    for (int i = 0; i < WORLD_MAX_CHUNKS; i++) {
+        ChunkNode* node = world->chunks->buckets[i];
+        while (node) {
+            Chunk* chunk = node->chunk;
+            if (chunk->needs_remesh) {
+                chunk_generate_mesh(chunk);
+            }
+            node = node->next;
+        }
+    }
 }
 
 // ============================================================================
@@ -308,23 +405,51 @@ void world_render_with_time(World* world, float time_of_day) {
     int ambient_loc = GetShaderLocation(material.shader, "u_ambient_light");
     SetShaderValue(material.shader, ambient_loc, &ambient_light, SHADER_UNIFORM_VEC3);
 
-    // Render all loaded chunks
+    // Calculate max render distance (in chunks) for culling
+    int max_dist = world->view_distance + 1;
+
+    // Extract frustum from current view-projection matrix
+    Matrix view = rlGetMatrixModelview();
+    Matrix proj = rlGetMatrixProjection();
+    Matrix vp = MatrixMultiply(view, proj);
+    Frustum frustum = frustum_extract(vp);
+
+    // Render all loaded chunks (mesh generation moved to world_update)
     for (int i = 0; i < WORLD_MAX_CHUNKS; i++) {
         ChunkNode* node = world->chunks->buckets[i];
         while (node) {
             Chunk* chunk = node->chunk;
 
-            // Generate mesh if needed
-            if (chunk->needs_remesh) {
-                chunk_generate_mesh(chunk);
+            // Distance-based culling: skip chunks beyond view distance
+            int dx = chunk->x - world->center_chunk_x;
+            int dz = chunk->z - world->center_chunk_z;
+            if (dx * dx + dz * dz > max_dist * max_dist) {
+                node = node->next;
+                continue;
+            }
+
+            // Frustum culling: skip chunks not visible to camera
+            Vector3 chunk_min = {
+                (float)(chunk->x * CHUNK_SIZE),
+                0.0f,
+                (float)(chunk->z * CHUNK_SIZE)
+            };
+            Vector3 chunk_max = {
+                chunk_min.x + CHUNK_SIZE,
+                CHUNK_HEIGHT,
+                chunk_min.z + CHUNK_SIZE
+            };
+            if (!frustum_contains_aabb(&frustum, chunk_min, chunk_max)) {
+                node = node->next;
+                continue;
             }
 
             // Render chunk if it has a mesh
             if (chunk->mesh_generated && chunk->mesh.vboId != NULL) {
                 Matrix transform = MatrixTranslate(
-                    (float)(chunk->x * CHUNK_SIZE),
+                    chunk_min.x,
                     0.0f,
-                    (float)(chunk->z * CHUNK_SIZE)
+                    chunk_min.z
                 );
 
                 DrawMesh(chunk->mesh, material, transform);
