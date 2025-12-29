@@ -27,7 +27,10 @@ void block_system_init(void) {
         .name = "Air",
         .is_solid = false,
         .is_transparent = true,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = 0.0f,
+        .preferred_tool = TOOL_NONE,
+        .requires_tool = false
     };
 
     // GRASS
@@ -35,7 +38,10 @@ void block_system_init(void) {
         .name = "Grass",
         .is_solid = true,
         .is_transparent = false,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = 0.5f,
+        .preferred_tool = TOOL_SHOVEL,
+        .requires_tool = false
     };
 
     // DIRT
@@ -43,7 +49,10 @@ void block_system_init(void) {
         .name = "Dirt",
         .is_solid = true,
         .is_transparent = false,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = 0.5f,
+        .preferred_tool = TOOL_SHOVEL,
+        .requires_tool = false
     };
 
     // STONE
@@ -51,7 +60,10 @@ void block_system_init(void) {
         .name = "Stone",
         .is_solid = true,
         .is_transparent = false,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = 1.5f,
+        .preferred_tool = TOOL_PICKAXE,
+        .requires_tool = true
     };
 
     // WOOD
@@ -59,15 +71,21 @@ void block_system_init(void) {
         .name = "Wood",
         .is_solid = true,
         .is_transparent = false,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = 2.0f,
+        .preferred_tool = TOOL_AXE,
+        .requires_tool = false
     };
 
     // LEAVES
     g_block_properties[BLOCK_LEAVES] = (BlockProperties){
         .name = "Leaves",
         .is_solid = true,
-        .is_transparent = true,  // Can see through
-        .is_fluid = false
+        .is_transparent = true,
+        .is_fluid = false,
+        .hardness = 0.2f,
+        .preferred_tool = TOOL_NONE,
+        .requires_tool = false
     };
 
     // SAND
@@ -75,7 +93,10 @@ void block_system_init(void) {
         .name = "Sand",
         .is_solid = true,
         .is_transparent = false,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = 0.5f,
+        .preferred_tool = TOOL_SHOVEL,
+        .requires_tool = false
     };
 
     // WATER
@@ -83,7 +104,10 @@ void block_system_init(void) {
         .name = "Water",
         .is_solid = false,
         .is_transparent = true,
-        .is_fluid = true
+        .is_fluid = true,
+        .hardness = 0.0f,
+        .preferred_tool = TOOL_NONE,
+        .requires_tool = false
     };
 
     // COBBLESTONE
@@ -91,7 +115,10 @@ void block_system_init(void) {
         .name = "Cobblestone",
         .is_solid = true,
         .is_transparent = false,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = 2.0f,
+        .preferred_tool = TOOL_PICKAXE,
+        .requires_tool = true
     };
 
     // BEDROCK
@@ -99,7 +126,10 @@ void block_system_init(void) {
         .name = "Bedrock",
         .is_solid = true,
         .is_transparent = false,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = -1.0f,
+        .preferred_tool = TOOL_NONE,
+        .requires_tool = false
     };
 
     // DEEP_STONE
@@ -107,7 +137,10 @@ void block_system_init(void) {
         .name = "Deep Stone",
         .is_solid = true,
         .is_transparent = false,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = 2.5f,
+        .preferred_tool = TOOL_PICKAXE,
+        .requires_tool = true
     };
 
     // GRAVEL
@@ -115,7 +148,10 @@ void block_system_init(void) {
         .name = "Gravel",
         .is_solid = true,
         .is_transparent = false,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = 0.6f,
+        .preferred_tool = TOOL_SHOVEL,
+        .requires_tool = false
     };
 
     // COAL_ORE
@@ -123,7 +159,10 @@ void block_system_init(void) {
         .name = "Coal Ore",
         .is_solid = true,
         .is_transparent = false,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = 3.0f,
+        .preferred_tool = TOOL_PICKAXE,
+        .requires_tool = true
     };
 
     // IRON_ORE
@@ -131,7 +170,10 @@ void block_system_init(void) {
         .name = "Iron Ore",
         .is_solid = true,
         .is_transparent = false,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = 3.0f,
+        .preferred_tool = TOOL_PICKAXE,
+        .requires_tool = true
     };
 
     // GOLD_ORE
@@ -139,7 +181,10 @@ void block_system_init(void) {
         .name = "Gold Ore",
         .is_solid = true,
         .is_transparent = false,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = 3.0f,
+        .preferred_tool = TOOL_PICKAXE,
+        .requires_tool = true
     };
 
     // DIAMOND_ORE
@@ -147,7 +192,10 @@ void block_system_init(void) {
         .name = "Diamond Ore",
         .is_solid = true,
         .is_transparent = false,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = 5.0f,
+        .preferred_tool = TOOL_PICKAXE,
+        .requires_tool = true
     };
 
     // MOSSY_COBBLE (Dungeon)
@@ -155,7 +203,10 @@ void block_system_init(void) {
         .name = "Mossy Cobblestone",
         .is_solid = true,
         .is_transparent = false,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = 2.0f,
+        .preferred_tool = TOOL_PICKAXE,
+        .requires_tool = true
     };
 
     // STONE_BRICK (Dungeon)
@@ -163,7 +214,10 @@ void block_system_init(void) {
         .name = "Stone Brick",
         .is_solid = true,
         .is_transparent = false,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = 2.0f,
+        .preferred_tool = TOOL_PICKAXE,
+        .requires_tool = true
     };
 
     // CRACKED_BRICK (Dungeon)
@@ -171,7 +225,10 @@ void block_system_init(void) {
         .name = "Cracked Stone Brick",
         .is_solid = true,
         .is_transparent = false,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = 1.5f,
+        .preferred_tool = TOOL_PICKAXE,
+        .requires_tool = true
     };
 
     // CLAY
@@ -179,7 +236,10 @@ void block_system_init(void) {
         .name = "Clay",
         .is_solid = true,
         .is_transparent = false,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = 0.6f,
+        .preferred_tool = TOOL_SHOVEL,
+        .requires_tool = false
     };
 
     // SNOW (Tundra biome surface)
@@ -187,7 +247,10 @@ void block_system_init(void) {
         .name = "Snow",
         .is_solid = true,
         .is_transparent = false,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = 0.2f,
+        .preferred_tool = TOOL_SHOVEL,
+        .requires_tool = false
     };
 
     // CACTUS (Desert vegetation)
@@ -195,7 +258,10 @@ void block_system_init(void) {
         .name = "Cactus",
         .is_solid = true,
         .is_transparent = false,
-        .is_fluid = false
+        .is_fluid = false,
+        .hardness = 0.4f,
+        .preferred_tool = TOOL_NONE,
+        .requires_tool = false
     };
 
     g_initialized = true;

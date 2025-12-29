@@ -15,9 +15,9 @@
 // TEXTURE ATLAS CONFIGURATION
 // ============================================================================
 
-#define ATLAS_SIZE 256          // Atlas texture size (256x256)
+#define ATLAS_SIZE 512          // Atlas texture size (512x512)
 #define TILE_SIZE 16            // Each tile is 16x16 pixels
-#define TILES_PER_ROW 16        // 16 tiles per row (256/16)
+#define TILES_PER_ROW 32        // 32 tiles per row (512/16)
 
 // ============================================================================
 // TEXTURE COORDINATES
@@ -69,5 +69,10 @@ Texture2D texture_atlas_get_texture(void);
  * Get material with texture atlas
  */
 Material texture_atlas_get_material(void);
+
+/**
+ * Get texture coordinates for a crack overlay stage (0-9)
+ */
+TextureCoords texture_atlas_get_crack_coords(int stage);
 
 #endif // VOXEL_TEXTURE_ATLAS_H

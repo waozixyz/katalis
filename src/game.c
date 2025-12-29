@@ -73,6 +73,17 @@ typedef struct {
 
 static GameState g_state;
 
+// Mining state for progressive block breaking
+typedef struct {
+    bool is_mining;              // Currently holding left mouse on block
+    int target_x, target_y, target_z;  // Block being mined
+    float progress;              // 0.0 to 1.0
+    float required_time;         // Total time needed to break
+    int crack_stage;             // 0-9 for crack overlay texture
+} MiningState;
+
+static MiningState g_mining = {0};
+
 // ============================================================================
 // RAYCASTING FOR BLOCK SELECTION
 // ============================================================================
@@ -350,7 +361,7 @@ static void game_init(void) {
 
     // Initialize day/night system
     g_state.time_of_day = 6.0f;      // Start at dawn
-    g_state.day_speed = 0.5f;        // 48 second full day
+    g_state.day_speed = 0.05f;       // 8 minute full day (slower, more realistic)
     g_state.time_paused = false;
     printf("[GAME] Day/night system initialized (starting at %.1f hours)\n", g_state.time_of_day);
 
@@ -482,7 +493,7 @@ static void game_update(float dt) {
     }
     if (!menu_blocking_input && IsKeyPressed(KEY_MINUS)) {
         g_state.day_speed /= 2.0f;
-        if (g_state.day_speed < 0.1f) g_state.day_speed = 0.1f;
+        if (g_state.day_speed < 0.01f) g_state.day_speed = 0.01f;
         printf("[TIME] Speed decreased to %.1fx\n", g_state.day_speed);
     }
 
@@ -536,9 +547,8 @@ static void game_update(float dt) {
         4.0f  // Entity reach distance
     );
 
-    // Attack entity or mine block on left click (only when inventory closed and not paused)
+    // Attack entity on left click (instant, priority over mining)
     if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && !g_state.player->inventory->is_open && !pause_menu_is_open(g_state.pause_menu)) {
-        // Check entity first (priority over blocks)
         if (g_state.target_entity && g_state.target_entity->type == ENTITY_TYPE_SHEEP) {
             // Damage the sheep
             bool died = sheep_damage(g_state.target_entity, 1);
@@ -555,40 +565,117 @@ static void game_update(float dt) {
                 g_state.target_entity = NULL;
             }
         }
-        else if (g_state.has_target_block) {
-            int x = (int)g_state.target_block_pos.x;
-            int y = (int)g_state.target_block_pos.y;
-            int z = (int)g_state.target_block_pos.z;
+    }
 
-            // Get the block being mined
+    // Progressive mining - hold left mouse to mine blocks
+    bool mining_input = IsMouseButtonDown(MOUSE_LEFT_BUTTON) &&
+                        !g_state.player->inventory->is_open &&
+                        !pause_menu_is_open(g_state.pause_menu) &&
+                        !g_state.target_entity;  // Don't mine while attacking entity
+
+    if (mining_input && g_state.has_target_block) {
+        int x = (int)g_state.target_block_pos.x;
+        int y = (int)g_state.target_block_pos.y;
+        int z = (int)g_state.target_block_pos.z;
+
+        // Check if target changed (player looked at different block)
+        if (!g_mining.is_mining ||
+            x != g_mining.target_x || y != g_mining.target_y || z != g_mining.target_z) {
+            // Start mining new block
             Block block = world_get_block(g_state.world, x, y, z);
+            ItemStack* held = inventory_get_selected_hotbar_item(g_state.player->inventory);
+            ItemType tool = (held && held->type != ITEM_NONE) ? held->type : ITEM_NONE;
 
-            // Calculate drops
-            ItemStack drop = item_get_block_drop(block.type);
+            g_mining.is_mining = true;
+            g_mining.target_x = x;
+            g_mining.target_y = y;
+            g_mining.target_z = z;
+            g_mining.progress = 0.0f;
+            g_mining.required_time = item_calculate_dig_time(block.type, tool);
+            g_mining.crack_stage = 0;
+        }
 
-            if (drop.type != ITEM_NONE) {
-                // Try to add to inventory
-                if (inventory_add_item(g_state.player->inventory, drop.type, drop.count)) {
-                    // Success - remove block
+        // Check if block is unbreakable (bedrock)
+        if (g_mining.required_time < 0) {
+            // Don't progress - can't break this block
+        } else if (g_mining.required_time == 0) {
+            // Instant break (air, water)
+            Block air_block = {BLOCK_AIR, 0, 0};
+            world_set_block(g_state.world, x, y, z, air_block);
+            network_broadcast_block_change(g_state.network, x, y, z, BLOCK_AIR, 0);
+            g_mining.is_mining = false;
+        } else {
+            // Progress mining
+            g_mining.progress += dt / g_mining.required_time;
+
+            // Update crack stage (0-9)
+            int new_stage = (int)(g_mining.progress * 10.0f);
+            if (new_stage > 9) new_stage = 9;
+            g_mining.crack_stage = new_stage;
+
+            // Check if mining complete
+            if (g_mining.progress >= 1.0f) {
+                Block block = world_get_block(g_state.world, x, y, z);
+
+                // Check if we can harvest with current tool
+                ItemStack* held = inventory_get_selected_hotbar_item(g_state.player->inventory);
+                ItemType tool = (held && held->type != ITEM_NONE) ? held->type : ITEM_NONE;
+                bool can_harvest = item_can_harvest_block(block.type, tool);
+
+                if (can_harvest) {
+                    // Calculate drops
+                    ItemStack drop = item_get_block_drop(block.type);
+
+                    if (drop.type != ITEM_NONE) {
+                        // Try to add to inventory
+                        if (inventory_add_item(g_state.player->inventory, drop.type, drop.count)) {
+                            // Success - remove block
+                            Block air_block = {BLOCK_AIR, 0, 0};
+                            world_set_block(g_state.world, x, y, z, air_block);
+                            network_broadcast_block_change(g_state.network, x, y, z, BLOCK_AIR, 0);
+
+                            // If wood was removed, trigger leaf decay
+                            if (block.type == BLOCK_WOOD) {
+                                leaf_decay_on_wood_removed(g_state.world, x, y, z);
+                            }
+
+                            // Consume tool durability
+                            if (held && held->type != ITEM_NONE) {
+                                const ItemProperties* props = item_get_properties(held->type);
+                                if (props->is_tool && held->durability > 0) {
+                                    held->durability--;
+                                    if (held->durability == 0) {
+                                        // Tool broke
+                                        held->type = ITEM_NONE;
+                                        held->count = 0;
+                                        printf("[GAME] Tool broke!\n");
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Block has no drop - still remove it
+                        Block air_block = {BLOCK_AIR, 0, 0};
+                        world_set_block(g_state.world, x, y, z, air_block);
+                        network_broadcast_block_change(g_state.network, x, y, z, BLOCK_AIR, 0);
+                    }
+                } else {
+                    // Can't harvest (wrong tool) - block still breaks but no drops
                     Block air_block = {BLOCK_AIR, 0, 0};
                     world_set_block(g_state.world, x, y, z, air_block);
-
-                    // Broadcast block change to network
                     network_broadcast_block_change(g_state.network, x, y, z, BLOCK_AIR, 0);
-
-                    // If wood was removed, trigger leaf decay
-                    if (block.type == BLOCK_WOOD) {
-                        leaf_decay_on_wood_removed(g_state.world, x, y, z);
-                    }
                 }
-            } else {
-                // Block has no drop (leaves, water, etc.) - still remove it
-                Block air_block = {BLOCK_AIR, 0, 0};
-                world_set_block(g_state.world, x, y, z, air_block);
 
-                // Broadcast block change to network
-                network_broadcast_block_change(g_state.network, x, y, z, BLOCK_AIR, 0);
+                g_mining.is_mining = false;
+                g_mining.crack_stage = 0;
             }
+        }
+    } else {
+        // Released mouse or no target - reset mining
+        if (g_mining.is_mining) {
+            g_mining.is_mining = false;
+            g_mining.progress = 0.0f;
+            g_mining.crack_stage = 0;
         }
     }
 
@@ -803,6 +890,61 @@ static void game_draw(void) {
 
         DrawCubeWires(cube_center, cube_size.x, cube_size.y, cube_size.z, BLACK);
         DrawCubeWires(cube_center, cube_size.x * 0.99f, cube_size.y * 0.99f, cube_size.z * 0.99f, WHITE);
+    }
+
+    // Draw crack overlay on block being mined
+    if (g_mining.is_mining && g_mining.crack_stage > 0) {
+        Texture2D atlas = texture_atlas_get_texture();
+        TextureCoords crack_coords = texture_atlas_get_crack_coords(g_mining.crack_stage);
+
+        // Calculate crack overlay position (slightly offset from block face)
+        float offset = 0.002f;  // Small offset to prevent z-fighting
+        Vector3 pos = {(float)g_mining.target_x, (float)g_mining.target_y, (float)g_mining.target_z};
+
+        // Draw crack overlay on all visible faces - enable alpha blending for transparency
+        rlSetBlendMode(BLEND_ALPHA);
+        rlSetTexture(atlas.id);
+        rlBegin(RL_QUADS);
+
+        // TOP face - use white color, let texture alpha control transparency
+        rlColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+        rlTexCoord2f(crack_coords.u_min, crack_coords.v_min); rlVertex3f(pos.x, pos.y + 1.0f + offset, pos.z);
+        rlTexCoord2f(crack_coords.u_max, crack_coords.v_min); rlVertex3f(pos.x + 1.0f, pos.y + 1.0f + offset, pos.z);
+        rlTexCoord2f(crack_coords.u_max, crack_coords.v_max); rlVertex3f(pos.x + 1.0f, pos.y + 1.0f + offset, pos.z + 1.0f);
+        rlTexCoord2f(crack_coords.u_min, crack_coords.v_max); rlVertex3f(pos.x, pos.y + 1.0f + offset, pos.z + 1.0f);
+
+        // BOTTOM face
+        rlTexCoord2f(crack_coords.u_min, crack_coords.v_min); rlVertex3f(pos.x, pos.y - offset, pos.z + 1.0f);
+        rlTexCoord2f(crack_coords.u_max, crack_coords.v_min); rlVertex3f(pos.x + 1.0f, pos.y - offset, pos.z + 1.0f);
+        rlTexCoord2f(crack_coords.u_max, crack_coords.v_max); rlVertex3f(pos.x + 1.0f, pos.y - offset, pos.z);
+        rlTexCoord2f(crack_coords.u_min, crack_coords.v_max); rlVertex3f(pos.x, pos.y - offset, pos.z);
+
+        // FRONT face (+Z)
+        rlTexCoord2f(crack_coords.u_min, crack_coords.v_min); rlVertex3f(pos.x, pos.y + 1.0f, pos.z + 1.0f + offset);
+        rlTexCoord2f(crack_coords.u_max, crack_coords.v_min); rlVertex3f(pos.x + 1.0f, pos.y + 1.0f, pos.z + 1.0f + offset);
+        rlTexCoord2f(crack_coords.u_max, crack_coords.v_max); rlVertex3f(pos.x + 1.0f, pos.y, pos.z + 1.0f + offset);
+        rlTexCoord2f(crack_coords.u_min, crack_coords.v_max); rlVertex3f(pos.x, pos.y, pos.z + 1.0f + offset);
+
+        // BACK face (-Z)
+        rlTexCoord2f(crack_coords.u_min, crack_coords.v_min); rlVertex3f(pos.x + 1.0f, pos.y + 1.0f, pos.z - offset);
+        rlTexCoord2f(crack_coords.u_max, crack_coords.v_min); rlVertex3f(pos.x, pos.y + 1.0f, pos.z - offset);
+        rlTexCoord2f(crack_coords.u_max, crack_coords.v_max); rlVertex3f(pos.x, pos.y, pos.z - offset);
+        rlTexCoord2f(crack_coords.u_min, crack_coords.v_max); rlVertex3f(pos.x + 1.0f, pos.y, pos.z - offset);
+
+        // RIGHT face (+X)
+        rlTexCoord2f(crack_coords.u_min, crack_coords.v_min); rlVertex3f(pos.x + 1.0f + offset, pos.y + 1.0f, pos.z + 1.0f);
+        rlTexCoord2f(crack_coords.u_max, crack_coords.v_min); rlVertex3f(pos.x + 1.0f + offset, pos.y + 1.0f, pos.z);
+        rlTexCoord2f(crack_coords.u_max, crack_coords.v_max); rlVertex3f(pos.x + 1.0f + offset, pos.y, pos.z);
+        rlTexCoord2f(crack_coords.u_min, crack_coords.v_max); rlVertex3f(pos.x + 1.0f + offset, pos.y, pos.z + 1.0f);
+
+        // LEFT face (-X)
+        rlTexCoord2f(crack_coords.u_min, crack_coords.v_min); rlVertex3f(pos.x - offset, pos.y + 1.0f, pos.z);
+        rlTexCoord2f(crack_coords.u_max, crack_coords.v_min); rlVertex3f(pos.x - offset, pos.y + 1.0f, pos.z + 1.0f);
+        rlTexCoord2f(crack_coords.u_max, crack_coords.v_max); rlVertex3f(pos.x - offset, pos.y, pos.z + 1.0f);
+        rlTexCoord2f(crack_coords.u_min, crack_coords.v_max); rlVertex3f(pos.x - offset, pos.y, pos.z);
+
+        rlEnd();
+        rlSetTexture(0);
     }
 
     EndMode3D();

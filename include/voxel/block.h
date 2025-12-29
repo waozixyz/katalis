@@ -11,6 +11,17 @@
 #include <stdbool.h>
 
 // ============================================================================
+// TOOL TYPES (for mining)
+// ============================================================================
+
+typedef enum {
+    TOOL_NONE = 0,    // Hand/any item
+    TOOL_PICKAXE,     // Stone, ores, cobblestone
+    TOOL_AXE,         // Wood, planks
+    TOOL_SHOVEL,      // Dirt, sand, gravel
+} ToolType;
+
+// ============================================================================
 // BLOCK TYPES
 // ============================================================================
 
@@ -60,6 +71,10 @@ typedef struct {
     bool is_transparent;    // Light passes through?
     bool is_fluid;          // Water-like behavior?
     float texture_coords[6][4];  // UV coords for each face (top, bottom, north, south, east, west)
+    // Mining properties
+    float hardness;           // Base dig time in seconds (0 = instant, -1 = unbreakable)
+    ToolType preferred_tool;  // Which tool speeds this up
+    bool requires_tool;       // Must use correct tool to drop item
 } BlockProperties;
 
 // ============================================================================

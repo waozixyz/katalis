@@ -72,6 +72,9 @@ typedef struct {
     uint16_t durability;     // Initial durability for tools
     int atlas_tile_x;        // Texture atlas coordinates
     int atlas_tile_y;
+    // Tool mining properties
+    ToolType tool_type;      // TOOL_PICKAXE, TOOL_AXE, etc.
+    float dig_speed;         // Multiplier (1.0 = hand, 2.0 = wooden, 4.0 = stone)
 } ItemProperties;
 
 // ============================================================================
@@ -103,5 +106,17 @@ bool item_can_stack(const ItemStack* a, const ItemStack* b);
  * Get the name of an item type
  */
 const char* item_get_name(ItemType type);
+
+/**
+ * Calculate dig time for a block with a given tool
+ * Returns time in seconds, 0 for instant, -1 for unbreakable
+ */
+float item_calculate_dig_time(BlockType block, ItemType tool);
+
+/**
+ * Check if a tool can harvest a block (get drops)
+ * Some blocks require specific tools to drop items
+ */
+bool item_can_harvest_block(BlockType block, ItemType tool);
 
 #endif // VOXEL_ITEM_H

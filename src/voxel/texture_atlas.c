@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -54,6 +55,138 @@ static void generate_leaf_tile(Image* atlas, int tile_x, int tile_y, Color base_
             };
             ImageDrawPixel(atlas, start_x + x, start_y + y, pixel_color);
         }
+    }
+}
+
+/**
+ * Draw a THICK black crack line with thin edge
+ */
+static void draw_thick_crack(Image* atlas, int start_x, int start_y,
+                             int x1, int y1, int x2, int y2, int thickness) {
+    int dx = abs(x2 - x1);
+    int dy = abs(y2 - y1);
+    int sx = (x1 < x2) ? 1 : -1;
+    int sy = (y1 < y2) ? 1 : -1;
+    int err = dx - dy;
+    int cx = x1, cy = y1;
+
+    // First pass: thin light edge (1 pixel around the crack)
+    while (1) {
+        int edge = thickness / 2 + 1;
+        for (int ty = -edge; ty <= edge; ty++) {
+            for (int tx = -edge; tx <= edge; tx++) {
+                int px = cx + tx;
+                int py = cy + ty;
+                if (px >= 0 && px < TILE_SIZE && py >= 0 && py < TILE_SIZE) {
+                    ImageDrawPixel(atlas, start_x + px, start_y + py,
+                                  (Color){150, 150, 150, 80});
+                }
+            }
+        }
+        if (cx == x2 && cy == y2) break;
+        int e2 = 2 * err;
+        if (e2 > -dy) { err -= dy; cx += sx; }
+        if (e2 < dx) { err += dx; cy += sy; }
+    }
+
+    // Reset for second pass
+    cx = x1; cy = y1;
+    err = dx - dy;
+
+    // Second pass: dark black core
+    while (1) {
+        for (int ty = -thickness / 2; ty <= thickness / 2; ty++) {
+            for (int tx = -thickness / 2; tx <= thickness / 2; tx++) {
+                int px = cx + tx;
+                int py = cy + ty;
+                if (px >= 0 && px < TILE_SIZE && py >= 0 && py < TILE_SIZE) {
+                    ImageDrawPixel(atlas, start_x + px, start_y + py,
+                                  (Color){25, 25, 25, 160});
+                }
+            }
+        }
+        if (cx == x2 && cy == y2) break;
+        int e2 = 2 * err;
+        if (e2 > -dy) { err -= dy; cx += sx; }
+        if (e2 < dx) { err += dx; cy += sy; }
+    }
+}
+
+/**
+ * Generate a crack overlay tile for mining animation
+ * Stage 0-9 represents increasing damage with THICK visible fracture lines
+ */
+static void generate_crack_tile(Image* atlas, int stage, int tile_x, int tile_y) {
+    int start_x = tile_x * TILE_SIZE;
+    int start_y = tile_y * TILE_SIZE;
+    int center = TILE_SIZE / 2;
+
+    // Clear tile to transparent first
+    for (int y = 0; y < TILE_SIZE; y++) {
+        for (int x = 0; x < TILE_SIZE; x++) {
+            ImageDrawPixel(atlas, start_x + x, start_y + y, (Color){0, 0, 0, 0});
+        }
+    }
+
+    // Thickness increases with damage (1 at start, 2-3 at end)
+    int thickness = 1 + stage / 4;  // 1,1,1,1,2,2,2,2,3,3
+
+    // Crack reach from center increases with stage
+    int reach = 2 + (stage * 6) / 9;  // 2 to 8 pixels
+
+    // 8 directions: cardinal + diagonal
+    int dirs[8][2] = {
+        {1, 0}, {-1, 0}, {0, 1}, {0, -1},  // Cardinal
+        {1, 1}, {-1, -1}, {1, -1}, {-1, 1} // Diagonal
+    };
+
+    // Number of cracks based on stage (2 to 8)
+    int num_cracks = 2 + (stage * 6) / 9;
+    if (num_cracks > 8) num_cracks = 8;
+
+    // Draw main cracks from center outward
+    for (int i = 0; i < num_cracks; i++) {
+        // Pick direction based on stage and index for variety
+        int dir_idx = (i + stage) % 8;
+
+        // Add jitter for natural look
+        int jitter_x = ((i * 7 + stage * 3) % 5) - 2;  // -2 to +2
+        int jitter_y = ((i * 11 + stage * 5) % 5) - 2;
+
+        int end_x = center + dirs[dir_idx][0] * reach + jitter_x;
+        int end_y = center + dirs[dir_idx][1] * reach + jitter_y;
+
+        // Clamp to tile bounds
+        if (end_x < 1) end_x = 1;
+        if (end_x > TILE_SIZE - 2) end_x = TILE_SIZE - 2;
+        if (end_y < 1) end_y = 1;
+        if (end_y > TILE_SIZE - 2) end_y = TILE_SIZE - 2;
+
+        draw_thick_crack(atlas, start_x, start_y, center, center, end_x, end_y, thickness);
+
+        // Add branch from midpoint at higher stages
+        if (stage >= 4 && i < 4) {
+            int mid_x = center + (end_x - center) / 2;
+            int mid_y = center + (end_y - center) / 2;
+            int branch_dir = (dir_idx + 2) % 8;
+            int branch_x = mid_x + dirs[branch_dir][0] * (reach / 2);
+            int branch_y = mid_y + dirs[branch_dir][1] * (reach / 2);
+
+            if (branch_x >= 0 && branch_x < TILE_SIZE &&
+                branch_y >= 0 && branch_y < TILE_SIZE) {
+                draw_thick_crack(atlas, start_x, start_y, mid_x, mid_y, branch_x, branch_y, thickness);
+            }
+        }
+    }
+
+    // At high damage (7+), add corner-to-center cracks
+    if (stage >= 7) {
+        draw_thick_crack(atlas, start_x, start_y, 1, 1, center - 2, center - 2, thickness);
+        draw_thick_crack(atlas, start_x, start_y, TILE_SIZE - 2, 1, center + 2, center - 2, thickness);
+    }
+    if (stage >= 8) {
+        draw_thick_crack(atlas, start_x, start_y, 1, TILE_SIZE - 2, center - 2, center + 2, thickness);
+        draw_thick_crack(atlas, start_x, start_y, TILE_SIZE - 2, TILE_SIZE - 2, center + 2, center + 2, thickness);
     }
 }
 
@@ -177,6 +310,11 @@ static Image generate_atlas_image(void) {
     // ITEM TEXTURES (Row 0, columns 3+)
     // MEAT - Raw meat item (pinkish-red)
     generate_tile(&atlas, 6, 0, (Color){200, 100, 100, 255}, true);   // Raw meat
+
+    // CRACK TEXTURES - Row 20 (10 stages of block damage)
+    for (int i = 0; i < 10; i++) {
+        generate_crack_tile(&atlas, i, i, 20);  // Columns 0-9, Row 20
+    }
 
     return atlas;
 }
@@ -376,4 +514,29 @@ Texture2D texture_atlas_get_texture(void) {
  */
 Material texture_atlas_get_material(void) {
     return g_atlas_material;
+}
+
+/**
+ * Get texture coordinates for a crack overlay stage (0-9)
+ */
+TextureCoords texture_atlas_get_crack_coords(int stage) {
+    TextureCoords coords = {0};
+
+    // Clamp stage to valid range
+    if (stage < 0) stage = 0;
+    if (stage > 9) stage = 9;
+
+    float tile_uv_size = 1.0f / (float)TILES_PER_ROW;
+    float padding = 0.001f;
+
+    // Crack textures are at row 20, columns 0-9
+    int tile_x = stage;
+    int tile_y = 20;
+
+    coords.u_min = (float)tile_x * tile_uv_size + padding;
+    coords.v_min = (float)tile_y * tile_uv_size + padding;
+    coords.u_max = coords.u_min + tile_uv_size - padding * 2.0f;
+    coords.v_max = coords.v_min + tile_uv_size - padding * 2.0f;
+
+    return coords;
 }

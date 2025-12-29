@@ -43,6 +43,8 @@ static const ItemProperties g_item_properties[ITEM_COUNT] = {
         .durability = 0,
         .atlas_tile_x = 0,
         .atlas_tile_y = 0,
+        .tool_type = TOOL_NONE,
+        .dig_speed = 1.0f,
     },
 
     // Block items
@@ -55,6 +57,8 @@ static const ItemProperties g_item_properties[ITEM_COUNT] = {
         .durability = 0,
         .atlas_tile_x = 0,
         .atlas_tile_y = 1,
+        .tool_type = TOOL_NONE,
+        .dig_speed = 1.0f,
     },
     [ITEM_GRASS_BLOCK] = {
         .name = "Grass Block",
@@ -65,6 +69,8 @@ static const ItemProperties g_item_properties[ITEM_COUNT] = {
         .durability = 0,
         .atlas_tile_x = 0,
         .atlas_tile_y = 0,
+        .tool_type = TOOL_NONE,
+        .dig_speed = 1.0f,
     },
     [ITEM_STONE] = {
         .name = "Stone",
@@ -75,6 +81,8 @@ static const ItemProperties g_item_properties[ITEM_COUNT] = {
         .durability = 0,
         .atlas_tile_x = 0,
         .atlas_tile_y = 2,
+        .tool_type = TOOL_NONE,
+        .dig_speed = 1.0f,
     },
     [ITEM_COBBLESTONE] = {
         .name = "Cobblestone",
@@ -85,6 +93,8 @@ static const ItemProperties g_item_properties[ITEM_COUNT] = {
         .durability = 0,
         .atlas_tile_x = 0,
         .atlas_tile_y = 7,
+        .tool_type = TOOL_NONE,
+        .dig_speed = 1.0f,
     },
     [ITEM_SAND] = {
         .name = "Sand",
@@ -95,6 +105,8 @@ static const ItemProperties g_item_properties[ITEM_COUNT] = {
         .durability = 0,
         .atlas_tile_x = 0,
         .atlas_tile_y = 5,
+        .tool_type = TOOL_NONE,
+        .dig_speed = 1.0f,
     },
     [ITEM_WOOD_LOG] = {
         .name = "Oak Log",
@@ -105,6 +117,8 @@ static const ItemProperties g_item_properties[ITEM_COUNT] = {
         .durability = 0,
         .atlas_tile_x = 0,
         .atlas_tile_y = 3,
+        .tool_type = TOOL_NONE,
+        .dig_speed = 1.0f,
     },
     [ITEM_WOOD_PLANKS] = {
         .name = "Oak Planks",
@@ -115,6 +129,8 @@ static const ItemProperties g_item_properties[ITEM_COUNT] = {
         .durability = 0,
         .atlas_tile_x = 1,
         .atlas_tile_y = 3,
+        .tool_type = TOOL_NONE,
+        .dig_speed = 1.0f,
     },
     [ITEM_LEAVES] = {
         .name = "Leaves",
@@ -125,6 +141,8 @@ static const ItemProperties g_item_properties[ITEM_COUNT] = {
         .durability = 0,
         .atlas_tile_x = 0,
         .atlas_tile_y = 4,
+        .tool_type = TOOL_NONE,
+        .dig_speed = 1.0f,
     },
     [ITEM_BEDROCK] = {
         .name = "Bedrock",
@@ -135,6 +153,8 @@ static const ItemProperties g_item_properties[ITEM_COUNT] = {
         .durability = 0,
         .atlas_tile_x = 0,
         .atlas_tile_y = 8,
+        .tool_type = TOOL_NONE,
+        .dig_speed = 1.0f,
     },
 
     // Crafting materials
@@ -147,6 +167,8 @@ static const ItemProperties g_item_properties[ITEM_COUNT] = {
         .durability = 0,
         .atlas_tile_x = 2,
         .atlas_tile_y = 3,
+        .tool_type = TOOL_NONE,
+        .dig_speed = 1.0f,
     },
 
     // Tools
@@ -159,6 +181,8 @@ static const ItemProperties g_item_properties[ITEM_COUNT] = {
         .durability = 60,
         .atlas_tile_x = 3,
         .atlas_tile_y = 0,
+        .tool_type = TOOL_PICKAXE,
+        .dig_speed = 2.0f,
     },
     [ITEM_STONE_PICKAXE] = {
         .name = "Stone Pickaxe",
@@ -169,6 +193,8 @@ static const ItemProperties g_item_properties[ITEM_COUNT] = {
         .durability = 132,
         .atlas_tile_x = 3,
         .atlas_tile_y = 1,
+        .tool_type = TOOL_PICKAXE,
+        .dig_speed = 4.0f,
     },
     [ITEM_WOODEN_SHOVEL] = {
         .name = "Wooden Shovel",
@@ -179,6 +205,8 @@ static const ItemProperties g_item_properties[ITEM_COUNT] = {
         .durability = 60,
         .atlas_tile_x = 4,
         .atlas_tile_y = 0,
+        .tool_type = TOOL_SHOVEL,
+        .dig_speed = 2.0f,
     },
     [ITEM_STONE_SHOVEL] = {
         .name = "Stone Shovel",
@@ -189,6 +217,8 @@ static const ItemProperties g_item_properties[ITEM_COUNT] = {
         .durability = 132,
         .atlas_tile_x = 4,
         .atlas_tile_y = 1,
+        .tool_type = TOOL_SHOVEL,
+        .dig_speed = 4.0f,
     },
     [ITEM_WOODEN_AXE] = {
         .name = "Wooden Axe",
@@ -199,6 +229,8 @@ static const ItemProperties g_item_properties[ITEM_COUNT] = {
         .durability = 60,
         .atlas_tile_x = 5,
         .atlas_tile_y = 0,
+        .tool_type = TOOL_AXE,
+        .dig_speed = 2.0f,
     },
     [ITEM_STONE_AXE] = {
         .name = "Stone Axe",
@@ -209,6 +241,8 @@ static const ItemProperties g_item_properties[ITEM_COUNT] = {
         .durability = 132,
         .atlas_tile_x = 5,
         .atlas_tile_y = 1,
+        .tool_type = TOOL_AXE,
+        .dig_speed = 4.0f,
     },
     [ITEM_MEAT] = {
         .name = "Raw Meat",
@@ -219,6 +253,8 @@ static const ItemProperties g_item_properties[ITEM_COUNT] = {
         .durability = 0,
         .atlas_tile_x = 6,
         .atlas_tile_y = 0,
+        .tool_type = TOOL_NONE,
+        .dig_speed = 1.0f,
     },
 };
 
@@ -274,4 +310,37 @@ bool item_can_stack(const ItemStack* a, const ItemStack* b) {
 const char* item_get_name(ItemType type) {
     const ItemProperties* props = item_get_properties(type);
     return props->name;
+}
+
+float item_calculate_dig_time(BlockType block, ItemType tool) {
+    const BlockProperties* bp = block_get_properties(block);
+    const ItemProperties* ip = item_get_properties(tool);
+
+    // Unbreakable blocks (bedrock)
+    if (bp->hardness < 0) return -1.0f;
+
+    // Instant break (air, water)
+    if (bp->hardness == 0) return 0.0f;
+
+    float base_time = bp->hardness;
+    float speed = 1.0f;  // Hand speed
+
+    // Check if tool matches preferred type
+    if (ip && ip->is_tool && ip->tool_type == bp->preferred_tool) {
+        speed = ip->dig_speed;
+    }
+
+    return base_time / speed;
+}
+
+bool item_can_harvest_block(BlockType block, ItemType tool) {
+    const BlockProperties* bp = block_get_properties(block);
+
+    // Blocks that don't require tools always drop
+    if (!bp->requires_tool) return true;
+
+    const ItemProperties* ip = item_get_properties(tool);
+
+    // Must have a matching tool
+    return (ip && ip->is_tool && ip->tool_type == bp->preferred_tool);
 }

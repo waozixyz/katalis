@@ -371,18 +371,28 @@ void world_update(World* world, int center_chunk_x, int center_chunk_z) {
 // ============================================================================
 
 /**
+ * Smooth ease-in-out function (S-curve) for gradual transitions
+ */
+static float smooth_step(float t) {
+    return t * t * (3.0f - 2.0f * t);
+}
+
+/**
  * Calculate ambient brightness from time of day
+ * Uses smooth S-curve transitions for gradual lighting changes
  */
 static float calculate_ambient_brightness(float time) {
-    if (time < 6.0f) return 0.25f;     // Night (0-6am): Dark but visible
-    if (time < 7.0f) {                 // Dawn (6-7am): Transition
-        return 0.25f + (time - 6.0f) * 0.75f;
+    if (time < 5.0f) return 0.25f;          // Night (0-5am): Dark but visible
+    if (time < 8.0f) {                       // Dawn (5-8am): 3 hour smooth transition
+        float t = (time - 5.0f) / 3.0f;      // 0.0 to 1.0
+        return 0.25f + smooth_step(t) * 0.75f;
     }
-    if (time < 18.0f) return 1.0f;     // Day (7am-6pm): Full bright
-    if (time < 19.0f) {                // Dusk (6-7pm): Transition
-        return 1.0f - (time - 18.0f) * 0.75f;
+    if (time < 17.0f) return 1.0f;           // Day (8am-5pm): Full bright
+    if (time < 20.0f) {                      // Dusk (5-8pm): 3 hour smooth transition
+        float t = (time - 17.0f) / 3.0f;     // 0.0 to 1.0
+        return 1.0f - smooth_step(t) * 0.75f;
     }
-    return 0.25f;                       // Night (7pm-12am): Dark but visible
+    return 0.25f;                            // Night (8pm-12am): Dark but visible
 }
 
 /**
@@ -391,14 +401,14 @@ static float calculate_ambient_brightness(float time) {
 static Vector3 get_ambient_color(float time) {
     float brightness = calculate_ambient_brightness(time);
 
-    // Color temperature shifts
-    if (time >= 6.0f && time < 8.0f) {
+    // Color temperature shifts (extended ranges for smoother transitions)
+    if (time >= 5.0f && time < 9.0f) {
         // Dawn: Warm orange tint
         return (Vector3){brightness * 1.0f, brightness * 0.8f, brightness * 0.6f};
-    } else if (time >= 17.0f && time < 19.0f) {
+    } else if (time >= 16.0f && time < 20.0f) {
         // Dusk: Warm red/orange tint
         return (Vector3){brightness * 1.0f, brightness * 0.7f, brightness * 0.5f};
-    } else if (time < 6.0f || time >= 19.0f) {
+    } else if (time < 5.0f || time >= 20.0f) {
         // Night: Cool blue tint
         return (Vector3){brightness * 0.5f, brightness * 0.6f, brightness * 0.8f};
     } else {
