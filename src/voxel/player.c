@@ -3,6 +3,8 @@
  */
 
 #include "voxel/player.h"
+#include "voxel/world.h"
+#include "voxel/block.h"
 #include <raylib.h>
 #include <raymath.h>
 #include <stdlib.h>
@@ -16,6 +18,11 @@
 #define GRAVITY 32.0f
 #define JUMP_VELOCITY 10.0f
 #define MAX_PITCH 89.0f  // Prevent camera flip
+
+// Player collision box (AABB)
+#define PLAYER_WIDTH 0.8f    // Player width (X and Z)
+#define PLAYER_HEIGHT 1.8f   // Player height (Y)
+#define PLAYER_EYE_HEIGHT 1.6f  // Camera offset from feet
 
 // ============================================================================
 // PLAYER LIFECYCLE
@@ -44,7 +51,7 @@ Player* player_create(Vector3 start_position) {
 
     // Movement
     player->velocity = (Vector3){0.0f, 0.0f, 0.0f};
-    player->is_flying = true;  // Start in flying mode
+    player->is_flying = false;  // Start in walking mode with gravity
     player->is_grounded = false;
 
     // Settings
@@ -66,6 +73,55 @@ void player_destroy(Player* player) {
     if (player) {
         free(player);
     }
+}
+
+// ============================================================================
+// COLLISION DETECTION
+// ============================================================================
+
+/**
+ * Check if a point is inside a solid block
+ */
+static bool is_solid_at(World * world, float x, float y, float z) {
+    if (!world) return false;
+
+    int block_x = (int)floorf(x);
+    int block_y = (int)floorf(y);
+    int block_z = (int)floorf(z);
+
+    Block block = world_get_block(world, block_x, block_y, block_z);
+    return block_is_solid(block);
+}
+
+/**
+ * Check if player's bounding box collides with world at given position
+ */
+static bool check_collision(World * world, Vector3 position) {
+    if (!world) return false;
+
+    // Player bounding box corners
+    float half_width = PLAYER_WIDTH / 2.0f;
+
+    // Check multiple points on the player's bounding box
+    // Bottom corners
+    if (is_solid_at(world, position.x - half_width, position.y, position.z - half_width)) return true;
+    if (is_solid_at(world, position.x + half_width, position.y, position.z - half_width)) return true;
+    if (is_solid_at(world, position.x - half_width, position.y, position.z + half_width)) return true;
+    if (is_solid_at(world, position.x + half_width, position.y, position.z + half_width)) return true;
+
+    // Middle corners
+    if (is_solid_at(world, position.x - half_width, position.y + PLAYER_HEIGHT / 2.0f, position.z - half_width)) return true;
+    if (is_solid_at(world, position.x + half_width, position.y + PLAYER_HEIGHT / 2.0f, position.z - half_width)) return true;
+    if (is_solid_at(world, position.x - half_width, position.y + PLAYER_HEIGHT / 2.0f, position.z + half_width)) return true;
+    if (is_solid_at(world, position.x + half_width, position.y + PLAYER_HEIGHT / 2.0f, position.z + half_width)) return true;
+
+    // Top corners
+    if (is_solid_at(world, position.x - half_width, position.y + PLAYER_HEIGHT, position.z - half_width)) return true;
+    if (is_solid_at(world, position.x + half_width, position.y + PLAYER_HEIGHT, position.z - half_width)) return true;
+    if (is_solid_at(world, position.x - half_width, position.y + PLAYER_HEIGHT, position.z + half_width)) return true;
+    if (is_solid_at(world, position.x + half_width, position.y + PLAYER_HEIGHT, position.z + half_width)) return true;
+
+    return false;
 }
 
 // ============================================================================
@@ -111,9 +167,9 @@ static void get_movement_vectors(Player* player, Vector3* forward, Vector3* righ
 }
 
 /**
- * Handle movement input
+ * Handle movement input with collision detection
  */
-static void update_movement(Player* player, float dt) {
+static void update_movement(Player* player, World * world, float dt) {
     Vector3 forward, right;
     get_movement_vectors(player, &forward, &right);
 
@@ -161,25 +217,51 @@ static void update_movement(Player* player, float dt) {
 
         // Apply gravity
         player->velocity.y -= GRAVITY * dt;
+    }
 
-        // Simple ground check (TODO: replace with proper collision)
-        if (player->position.y <= 40.0f) {  // Assume ground at y=40 for now
-            player->position.y = 40.0f;
-            player->velocity.y = 0.0f;
+    // Apply movement with collision detection (per-axis)
+    Vector3 new_position = player->position;
+
+    // Try to move on X axis
+    new_position.x = player->position.x + player->velocity.x * dt;
+    if (check_collision(world, new_position)) {
+        new_position.x = player->position.x;  // Cancel X movement
+        player->velocity.x = 0.0f;
+    }
+
+    // Try to move on Y axis
+    new_position.y = player->position.y + player->velocity.y * dt;
+    if (check_collision(world, new_position)) {
+        new_position.y = player->position.y;  // Cancel Y movement
+        player->velocity.y = 0.0f;
+
+        // If we hit something below us, we're grounded
+        if (player->velocity.y < 0.0f) {
             player->is_grounded = true;
         }
+    } else {
+        // Not touching ground
+        player->is_grounded = false;
+    }
+
+    // Try to move on Z axis
+    new_position.z = player->position.z + player->velocity.z * dt;
+    if (check_collision(world, new_position)) {
+        new_position.z = player->position.z;  // Cancel Z movement
+        player->velocity.z = 0.0f;
     }
 
     // Update position
-    player->position = Vector3Add(player->position, Vector3Scale(player->velocity, dt));
+    player->position = new_position;
 }
 
 /**
  * Update camera position and target
  */
 static void update_camera(Player* player) {
-    // Camera position is player position (first-person)
+    // Camera position is player position + eye height
     player->camera.position = player->position;
+    player->camera.position.y += PLAYER_EYE_HEIGHT;
 
     // Calculate camera target from yaw and pitch
     float yaw_rad = player->yaw * DEG2RAD;
@@ -200,7 +282,7 @@ static void update_camera(Player* player) {
 /**
  * Update player - call every frame with delta time
  */
-void player_update(Player* player, float dt) {
+void player_update(Player* player, World * world, float dt) {
     if (!player) return;
 
     // Handle flying mode toggle
@@ -211,8 +293,8 @@ void player_update(Player* player, float dt) {
     // Update camera rotation from mouse
     update_camera_rotation(player, dt);
 
-    // Update movement from keyboard
-    update_movement(player, dt);
+    // Update movement from keyboard (with collision detection)
+    update_movement(player, world, dt);
 
     // Update camera
     update_camera(player);

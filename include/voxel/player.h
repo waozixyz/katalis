@@ -9,6 +9,7 @@
 
 #include <raylib.h>
 #include <stdbool.h>
+#include "world.h"  // Need World type
 
 // ============================================================================
 // PLAYER STATE
@@ -52,9 +53,9 @@ void player_destroy(Player* player);
 
 /**
  * Update player - call every frame with delta time
- * Handles input, movement, and camera updates
+ * Handles input, movement, collision, and camera updates
  */
-void player_update(Player* player, float dt);
+void player_update(Player* player, World* world, float dt);
 
 /**
  * Set player position

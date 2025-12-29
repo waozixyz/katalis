@@ -91,8 +91,8 @@ static void game_init(void) {
  * Update game logic - called every frame with delta time
  */
 static void game_update(float dt) {
-    // Update player (handles input, movement, and camera)
-    player_update(g_state.player, dt);
+    // Update player (handles input, movement, collision, and camera)
+    player_update(g_state.player, g_state.world, dt);
 
     // Update world (chunk loading/unloading based on player position)
     int player_chunk_x, player_chunk_z;
