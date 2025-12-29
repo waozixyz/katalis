@@ -6,7 +6,7 @@ KRYON_PATH = /mnt/storage/Projects/kryon
 INCLUDES = -I$(KRYON_PATH)/bindings/c -I$(KRYON_PATH)/ir -I$(KRYON_PATH)/backends/desktop -I$(KRYON_PATH)/ir/third_party/cJSON
 SDL3_FLAGS = $(shell pkg-config --cflags --libs sdl3 2>/dev/null || echo "-lSDL3")
 RAYLIB_FLAGS = $(shell pkg-config --cflags --libs raylib 2>/dev/null || echo "-lraylib")
-LDFLAGS = -L$(KRYON_PATH)/build
+LDFLAGS = -L$(KRYON_PATH)/build -Wl,-rpath,$(KRYON_PATH)/build
 LIBS = -lkryon_desktop -lkryon_ir $(SDL3_FLAGS) $(RAYLIB_FLAGS) -lm -pthread
 
 # Kryon C source files (compile directly since library doesn't build)
@@ -18,6 +18,7 @@ TARGET = main
 
 # Voxel engine sources
 VOXEL_SOURCES = src/voxel/block.c \
+                src/voxel/biome.c \
                 src/voxel/chunk.c \
                 src/voxel/chunk_worker.c \
                 src/voxel/world.c \
@@ -33,6 +34,7 @@ VOXEL_SOURCES = src/voxel/block.c \
                 src/voxel/pause_menu.c \
                 src/voxel/entity.c \
                 src/voxel/block_human.c \
+                src/voxel/sheep.c \
                 src/voxel/sky.c \
                 src/voxel/tree.c \
                 src/voxel/network.c \

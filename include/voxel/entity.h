@@ -25,6 +25,7 @@ typedef struct Entity Entity;
 typedef enum {
     ENTITY_TYPE_NONE = 0,
     ENTITY_TYPE_BLOCK_HUMAN,
+    ENTITY_TYPE_SHEEP,
     // Future entity types:
     // ENTITY_TYPE_ZOMBIE,
     // ENTITY_TYPE_PIG,

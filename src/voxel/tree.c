@@ -6,6 +6,7 @@
 
 #include "voxel/tree.h"
 #include "voxel/block.h"
+#include "voxel/biome.h"
 #include "voxel/noise.h"
 #include "voxel/world.h"
 #include <stdio.h>
@@ -216,19 +217,37 @@ void tree_place_at(Chunk* chunk, int local_x, int base_y, int local_z, TreeSize 
 // TREE GENERATION
 // ============================================================================
 
-// Find the surface (grass) height at a column
-static int find_surface_y(Chunk* chunk, int x, int z) {
+// Find the surface height at a column (checks for any biome surface block)
+static int find_surface_y(Chunk* chunk, int x, int z, BlockType surface_block) {
     for (int y = CHUNK_HEIGHT - 1; y >= 0; y--) {
         Block block = chunk_get_block(chunk, x, y, z);
-        if (block.type == BLOCK_GRASS) {
+        if (block.type == surface_block) {
             return y;
         }
         // Stop if we hit other solid blocks (not air)
         if (block.type != BLOCK_AIR && block.type != BLOCK_LEAVES) {
-            return -1;  // Not grass surface
+            return -1;  // Not expected surface
         }
     }
     return -1;  // No surface found
+}
+
+// Place a cactus at position (1-3 blocks tall)
+static void place_cactus(Chunk* chunk, int x, int surface_y, int z) {
+    int world_x = chunk->x * CHUNK_SIZE + x;
+    int world_z = chunk->z * CHUNK_SIZE + z;
+
+    // Use position hash for height variation
+    uint32_t hash = (uint32_t)(world_x * 73856093 ^ world_z * 19349663);
+    int height = 1 + (hash % 3);  // 1-3 blocks tall
+
+    for (int i = 0; i < height; i++) {
+        int y = surface_y + 1 + i;
+        if (y < CHUNK_HEIGHT) {
+            Block block = {BLOCK_CACTUS, 0, 0};
+            chunk_set_block(chunk, x, y, z, block);
+        }
+    }
 }
 
 void tree_generate_for_chunk(Chunk* chunk) {
@@ -236,22 +255,42 @@ void tree_generate_for_chunk(Chunk* chunk) {
 
     for (int x = 0; x < CHUNK_SIZE; x++) {
         for (int z = 0; z < CHUNK_SIZE; z++) {
-            // Find grass surface
-            int surface_y = find_surface_y(chunk, x, z);
-            if (surface_y < 0) continue;
-
-            // Calculate world coordinates for noise
+            // Calculate world coordinates
             int world_x = chunk->x * CHUNK_SIZE + x;
             int world_z = chunk->z * CHUNK_SIZE + z;
 
-            // Tree density noise (offset to be different from terrain)
-            float tree_noise = noise_2d(
+            // Get biome at this position
+            BiomeType biome = biome_get_at(world_x, world_z);
+            const BiomeProperties* bp = biome_get_properties(biome);
+
+            // Find surface using biome-specific surface block
+            int surface_y = find_surface_y(chunk, x, z, bp->surface_block);
+            if (surface_y < 0) continue;
+
+            // Vegetation noise (offset to be different from terrain)
+            float veg_noise = noise_2d(
                 (float)world_x * 0.08f + 5000.0f,
                 (float)world_z * 0.08f + 5000.0f
             );
 
-            // Only place trees where noise is high enough
-            if (tree_noise > 0.6f) {
+            // Desert biome: place cacti instead of trees
+            if (bp->has_cacti) {
+                // Cacti are sparse (use different threshold)
+                if (veg_noise > 0.75f) {
+                    place_cactus(chunk, x, surface_y, z);
+                }
+                continue;  // No trees in desert
+            }
+
+            // Skip if biome doesn't have trees
+            if (!bp->has_trees) continue;
+
+            // Calculate tree placement threshold based on biome density
+            // Higher density = lower threshold = more trees
+            float threshold = 1.0f - bp->tree_density;
+
+            // Only place trees where noise exceeds threshold
+            if (veg_noise > threshold) {
                 // Check for minimum spacing (skip if another tree trunk nearby)
                 bool too_close = false;
                 for (int dx = -3; dx <= 3 && !too_close; dx++) {
@@ -260,10 +299,10 @@ void tree_generate_for_chunk(Chunk* chunk) {
                         int nx = x + dx;
                         int nz = z + dz;
                         if (nx >= 0 && nx < CHUNK_SIZE && nz >= 0 && nz < CHUNK_SIZE) {
-                            // Check if there's wood near the surface
+                            // Check if there's wood or cactus near the surface
                             for (int dy = 0; dy <= 3; dy++) {
                                 Block neighbor = chunk_get_block(chunk, nx, surface_y + 1 + dy, nz);
-                                if (neighbor.type == BLOCK_WOOD) {
+                                if (neighbor.type == BLOCK_WOOD || neighbor.type == BLOCK_CACTUS) {
                                     too_close = true;
                                     break;
                                 }
@@ -277,14 +316,14 @@ void tree_generate_for_chunk(Chunk* chunk) {
                     uint32_t hash = (uint32_t)(world_x * 73856093 ^ world_z * 19349663);
                     TreeSize size = (TreeSize)(hash % TREE_SIZE_COUNT);
 
-                    // Place tree (trunk starts above grass)
+                    // Place tree (trunk starts above surface)
                     tree_place_at(chunk, x, surface_y + 1, z, size);
                 }
             }
         }
     }
 
-    // Update chunk status after placing trees
+    // Update chunk status after placing vegetation
     chunk->needs_remesh = true;
     chunk->is_empty = false;
 }

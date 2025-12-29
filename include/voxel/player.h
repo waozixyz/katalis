@@ -20,14 +20,15 @@ typedef struct Inventory Inventory;
 
 typedef enum {
     VIEW_MODE_FIRST_PERSON,
-    VIEW_MODE_THIRD_PERSON
+    VIEW_MODE_THIRD_PERSON,
+    VIEW_MODE_THIRD_PERSON_FRONT  // Camera in front, facing player
 } ViewMode;
 
 // ============================================================================
 // PLAYER STATE
 // ============================================================================
 
-typedef struct {
+typedef struct Player {
     // Position and camera
     Vector3 position;           // Player position in world
     Camera3D camera;            // First-person camera
@@ -53,6 +54,14 @@ typedef struct {
 
     // Inventory
     Inventory* inventory;       // Player inventory (hotbar + main + crafting)
+
+    // Animation state
+    float walk_animation_time;  // Accumulated time for walk cycle
+    float arm_swing_angle;      // Current arm rotation angle (degrees)
+    float leg_swing_angle;      // Current leg rotation angle (degrees)
+
+    // Lighting
+    Vector3 ambient_light;      // Current ambient light color (for model rendering)
 
 } Player;
 

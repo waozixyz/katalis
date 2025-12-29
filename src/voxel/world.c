@@ -235,6 +235,8 @@ World* world_create(TerrainParams terrain_params) {
     world->center_chunk_z = 0;
     world->view_distance = WORLD_VIEW_DISTANCE;
     world->terrain_params = terrain_params;
+    world->player = NULL;  // Set by game after player creation
+    world->time_of_day = 12.0f;  // Default to noon
 
     printf("[WORLD] Created world with view distance %d\n", world->view_distance);
     return world;
@@ -325,12 +327,6 @@ void world_update(World* world, int center_chunk_x, int center_chunk_z) {
         uploaded++;
     }
 
-    static int frame_count = 0;
-    frame_count++;
-    if (frame_count % 60 == 0) {
-        int pending = chunk_worker_pending_count(world->worker);
-        printf("[WORLD] Pending: %d, Uploaded this frame: %d\n", pending, uploaded);
-    }
 
     // Load chunks in view distance if not already loaded
     for (int x = -world->view_distance; x <= world->view_distance; x++) {
@@ -411,12 +407,22 @@ static Vector3 get_ambient_color(float time) {
     }
 }
 
+/**
+ * Public wrapper for ambient color (for entity rendering)
+ */
+Vector3 world_get_ambient_color(float time_of_day) {
+    return get_ambient_color(time_of_day);
+}
+
 // ============================================================================
 // RENDERING
 // ============================================================================
 
 void world_render_with_time(World* world, float time_of_day) {
     if (!world) return;
+
+    // Enable alpha blending for transparent blocks (leaves, water, etc.)
+    rlSetBlendMode(RL_BLEND_ALPHA);
 
     Material material = texture_atlas_get_material();
 

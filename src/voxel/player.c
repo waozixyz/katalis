@@ -69,6 +69,14 @@ Player* player_create(Vector3 start_position) {
     // Create inventory
     player->inventory = inventory_create();
 
+    // Animation state (start at rest)
+    player->walk_animation_time = 0.0f;
+    player->arm_swing_angle = 0.0f;
+    player->leg_swing_angle = 0.0f;
+
+    // Lighting (default to full brightness)
+    player->ambient_light = (Vector3){1.0f, 1.0f, 1.0f};
+
     printf("[PLAYER] Created at (%.1f, %.1f, %.1f)\n",
            start_position.x, start_position.y, start_position.z);
 
@@ -157,6 +165,9 @@ static bool check_collision(World * world, Vector3 position) {
 static void update_camera_rotation(Player* player, float dt) {
     (void)dt; // Unused
 
+    // Skip mouse input if window is not focused
+    if (!IsWindowFocused()) return;
+
     // Get mouse delta
     Vector2 mouse_delta = GetMouseDelta();
 
@@ -196,13 +207,22 @@ static void update_movement(Player* player, World * world, float dt) {
     Vector3 forward, right;
     get_movement_vectors(player, &forward, &right);
 
+    // Invert controls in front-facing view (camera is in front, looking at player)
+    if (player->view_mode == VIEW_MODE_THIRD_PERSON_FRONT) {
+        forward = Vector3Negate(forward);
+        right = Vector3Negate(right);
+    }
+
     Vector3 move_direction = {0.0f, 0.0f, 0.0f};
 
-    // WASD movement
-    if (IsKeyDown(KEY_W)) move_direction = Vector3Add(move_direction, forward);
-    if (IsKeyDown(KEY_S)) move_direction = Vector3Subtract(move_direction, forward);
-    if (IsKeyDown(KEY_A)) move_direction = Vector3Add(move_direction, right);
-    if (IsKeyDown(KEY_D)) move_direction = Vector3Subtract(move_direction, right);
+    // Skip keyboard input if window is not focused
+    bool window_focused = IsWindowFocused();
+
+    // WASD movement (only when window focused)
+    if (window_focused && IsKeyDown(KEY_W)) move_direction = Vector3Add(move_direction, forward);
+    if (window_focused && IsKeyDown(KEY_S)) move_direction = Vector3Subtract(move_direction, forward);
+    if (window_focused && IsKeyDown(KEY_A)) move_direction = Vector3Add(move_direction, right);
+    if (window_focused && IsKeyDown(KEY_D)) move_direction = Vector3Subtract(move_direction, right);
 
     // Normalize diagonal movement
     if (Vector3Length(move_direction) > 0.0f) {
@@ -212,8 +232,8 @@ static void update_movement(Player* player, World * world, float dt) {
     // Calculate speed
     float speed = player->is_flying ? player->fly_speed : player->move_speed;
 
-    // Sprint modifier
-    if (IsKeyDown(KEY_LEFT_SHIFT)) {
+    // Sprint modifier (only when window focused)
+    if (window_focused && IsKeyDown(KEY_LEFT_SHIFT)) {
         speed *= player->sprint_multiplier;
     }
 
@@ -222,9 +242,9 @@ static void update_movement(Player* player, World * world, float dt) {
         // Flying mode: direct movement in all directions
         Vector3 velocity = Vector3Scale(move_direction, speed);
 
-        // Vertical movement
-        if (IsKeyDown(KEY_SPACE)) velocity.y = speed;
-        if (IsKeyDown(KEY_LEFT_CONTROL)) velocity.y = -speed;
+        // Vertical movement (only when window focused)
+        if (window_focused && IsKeyDown(KEY_SPACE)) velocity.y = speed;
+        if (window_focused && IsKeyDown(KEY_LEFT_CONTROL)) velocity.y = -speed;
 
         player->velocity = velocity;
     } else {
@@ -232,8 +252,8 @@ static void update_movement(Player* player, World * world, float dt) {
         player->velocity.x = move_direction.x * speed;
         player->velocity.z = move_direction.z * speed;
 
-        // Jump
-        if (IsKeyDown(KEY_SPACE) && player->is_grounded) {
+        // Jump (only when window focused)
+        if (window_focused && IsKeyDown(KEY_SPACE) && player->is_grounded) {
             player->velocity.y = JUMP_VELOCITY;
             player->is_grounded = false;
         }
@@ -304,13 +324,24 @@ static void update_camera(Player* player) {
         player->camera.position = player->position;
         player->camera.position.y += PLAYER_EYE_HEIGHT;
         player->camera.target = Vector3Add(player->camera.position, direction);
-    } else {
+    } else if (player->view_mode == VIEW_MODE_THIRD_PERSON) {
         // Third-person: Camera is behind the player
         Vector3 player_eye_pos = player->position;
         player_eye_pos.y += PLAYER_EYE_HEIGHT;
 
         // Position camera behind the player
         Vector3 camera_offset = Vector3Scale(direction, -player->third_person_distance);
+        player->camera.position = Vector3Add(player_eye_pos, camera_offset);
+
+        // Camera looks at the player
+        player->camera.target = player_eye_pos;
+    } else {
+        // Front-facing: Camera is in front of the player
+        Vector3 player_eye_pos = player->position;
+        player_eye_pos.y += PLAYER_EYE_HEIGHT;
+
+        // Position camera IN FRONT of the player (positive direction)
+        Vector3 camera_offset = Vector3Scale(direction, player->third_person_distance);
         player->camera.position = Vector3Add(player_eye_pos, camera_offset);
 
         // Camera looks at the player
@@ -327,6 +358,13 @@ static void update_camera(Player* player) {
  */
 void player_update(Player* player, World * world, float dt) {
     if (!player) return;
+
+    // Skip all input if window is not focused
+    if (!IsWindowFocused()) {
+        // Still update camera position to follow player
+        update_camera(player);
+        return;
+    }
 
     // Handle flying mode toggle
     if (IsKeyPressed(KEY_F)) {
@@ -346,6 +384,25 @@ void player_update(Player* player, World * world, float dt) {
 
     // Update camera
     update_camera(player);
+
+    // Update walk animation based on horizontal velocity
+    float horiz_speed = sqrtf(player->velocity.x * player->velocity.x +
+                              player->velocity.z * player->velocity.z);
+    if (horiz_speed > 0.5f) {
+        // Moving: animate walk cycle
+        player->walk_animation_time += dt * horiz_speed * 0.8f;
+        player->arm_swing_angle = sinf(player->walk_animation_time) * 30.0f;
+        player->leg_swing_angle = sinf(player->walk_animation_time) * 25.0f;
+    } else {
+        // Idle: smoothly return to rest pose
+        player->arm_swing_angle *= 0.85f;
+        player->leg_swing_angle *= 0.85f;
+    }
+
+    // Update ambient lighting from world time
+    if (world) {
+        player->ambient_light = world_get_ambient_color(world->time_of_day);
+    }
 }
 
 /**
@@ -419,17 +476,24 @@ void player_toggle_flying(Player* player) {
 }
 
 /**
- * Toggle view mode between first-person and third-person
+ * Toggle view mode: First-Person -> Third-Person -> Front-Facing -> First-Person
  */
 void player_toggle_view_mode(Player* player) {
     if (!player) return;
 
-    if (player->view_mode == VIEW_MODE_FIRST_PERSON) {
-        player->view_mode = VIEW_MODE_THIRD_PERSON;
-        printf("[PLAYER] Switched to third-person view\n");
-    } else {
-        player->view_mode = VIEW_MODE_FIRST_PERSON;
-        printf("[PLAYER] Switched to first-person view\n");
+    switch (player->view_mode) {
+        case VIEW_MODE_FIRST_PERSON:
+            player->view_mode = VIEW_MODE_THIRD_PERSON;
+            printf("[PLAYER] Switched to third-person view\n");
+            break;
+        case VIEW_MODE_THIRD_PERSON:
+            player->view_mode = VIEW_MODE_THIRD_PERSON_FRONT;
+            printf("[PLAYER] Switched to front-facing view\n");
+            break;
+        case VIEW_MODE_THIRD_PERSON_FRONT:
+            player->view_mode = VIEW_MODE_FIRST_PERSON;
+            printf("[PLAYER] Switched to first-person view\n");
+            break;
     }
 }
 
@@ -470,19 +534,32 @@ bool player_collides_with_position(Player* player, Vector3 block_pos) {
 }
 
 /**
+ * Apply ambient lighting to a color
+ */
+static Color apply_player_ambient(Color c, Vector3 ambient) {
+    return (Color){
+        (unsigned char)(c.r * ambient.x),
+        (unsigned char)(c.g * ambient.y),
+        (unsigned char)(c.b * ambient.z),
+        c.a
+    };
+}
+
+/**
  * Render the player model (for third-person view)
- * Draws a simple block-based humanoid character
+ * Draws a simple block-based humanoid character with walk animation and eyes
  */
 void player_render_model(Player* player) {
-    if (!player || player->view_mode != VIEW_MODE_THIRD_PERSON) return;
+    // Render player model in both third-person views (behind and front)
+    if (!player || player->view_mode == VIEW_MODE_FIRST_PERSON) return;
 
     Vector3 pos = player->position;
     float yaw_rad = player->yaw * DEG2RAD;
 
-    // Player colors
-    Color head_color = (Color){255, 200, 150, 255};   // Skin tone
-    Color torso_color = (Color){100, 100, 200, 255};  // Blue shirt
-    Color leg_color = (Color){50, 50, 80, 255};       // Dark pants
+    // Player colors with ambient lighting applied
+    Color head_color = apply_player_ambient((Color){255, 200, 150, 255}, player->ambient_light);   // Skin tone
+    Color torso_color = apply_player_ambient((Color){100, 100, 200, 255}, player->ambient_light);  // Blue shirt
+    Color leg_color = apply_player_ambient((Color){50, 50, 80, 255}, player->ambient_light);       // Dark pants
     Color arm_color = torso_color;
 
     // Body proportions (similar to block_human)
@@ -503,23 +580,34 @@ void player_render_model(Player* player) {
     float y = pos.y;
 
     // ========================================================================
-    // LEGS (2 blocks, spaced apart, rotated with player)
+    // LEGS (2 blocks, animated with walking)
     // ========================================================================
     float leg_spacing = 0.125f;
 
-    // Left leg offset (perpendicular to facing direction)
-    float left_leg_x = pos.x + leg_spacing * cos_yaw;
-    float left_leg_z = pos.z - leg_spacing * sin_yaw;
+    // Left leg pivot point (at hip)
+    float left_hip_x = pos.x + leg_spacing * cos_yaw;
+    float left_hip_z = pos.z - leg_spacing * sin_yaw;
+    float hip_y = y + leg_length;
 
-    // Right leg offset
-    float right_leg_x = pos.x - leg_spacing * cos_yaw;
-    float right_leg_z = pos.z + leg_spacing * sin_yaw;
+    // Right leg pivot point
+    float right_hip_x = pos.x - leg_spacing * cos_yaw;
+    float right_hip_z = pos.z + leg_spacing * sin_yaw;
 
-    Vector3 left_leg_center = {left_leg_x, y + leg_length / 2.0f, left_leg_z};
-    Vector3 right_leg_center = {right_leg_x, y + leg_length / 2.0f, right_leg_z};
+    // Left leg (swings forward when right arm swings forward)
+    rlPushMatrix();
+    rlTranslatef(left_hip_x, hip_y, left_hip_z);
+    rlRotatef(player->yaw, 0, 1, 0);
+    rlRotatef(player->leg_swing_angle, 1, 0, 0);  // Swing around X axis
+    DrawCube((Vector3){0, -leg_length / 2.0f, 0}, leg_width, leg_length, leg_width, leg_color);
+    rlPopMatrix();
 
-    DrawCube(left_leg_center, leg_width, leg_length, leg_width, leg_color);
-    DrawCube(right_leg_center, leg_width, leg_length, leg_width, leg_color);
+    // Right leg (swings opposite to left)
+    rlPushMatrix();
+    rlTranslatef(right_hip_x, hip_y, right_hip_z);
+    rlRotatef(player->yaw, 0, 1, 0);
+    rlRotatef(-player->leg_swing_angle, 1, 0, 0);  // Opposite swing
+    DrawCube((Vector3){0, -leg_length / 2.0f, 0}, leg_width, leg_length, leg_width, leg_color);
+    rlPopMatrix();
 
     y += leg_length;
 
@@ -536,29 +624,79 @@ void player_render_model(Player* player) {
     rlPopMatrix();
 
     // ========================================================================
-    // ARMS (attached to torso sides)
+    // ARMS (animated with walking)
     // ========================================================================
-    float arm_attach_height = y + torso_height * 0.75f;
+    float arm_attach_height = y + torso_height * 0.85f;  // Shoulder level
     float arm_offset = (torso_width / 2.0f) + (arm_width / 2.0f);
 
-    // Left arm (offset perpendicular to facing)
-    float left_arm_x = pos.x + arm_offset * cos_yaw;
-    float left_arm_z = pos.z - arm_offset * sin_yaw;
-    Vector3 left_arm_center = {left_arm_x, arm_attach_height - arm_length / 2.0f, left_arm_z};
+    // Left shoulder position
+    float left_shoulder_x = pos.x + arm_offset * cos_yaw;
+    float left_shoulder_z = pos.z - arm_offset * sin_yaw;
 
-    // Right arm
-    float right_arm_x = pos.x - arm_offset * cos_yaw;
-    float right_arm_z = pos.z + arm_offset * sin_yaw;
-    Vector3 right_arm_center = {right_arm_x, arm_attach_height - arm_length / 2.0f, right_arm_z};
+    // Right shoulder position
+    float right_shoulder_x = pos.x - arm_offset * cos_yaw;
+    float right_shoulder_z = pos.z + arm_offset * sin_yaw;
 
-    DrawCube(left_arm_center, arm_width, arm_length, arm_width, arm_color);
-    DrawCube(right_arm_center, arm_width, arm_length, arm_width, arm_color);
+    // Left arm (swings opposite to left leg, same as right leg)
+    rlPushMatrix();
+    rlTranslatef(left_shoulder_x, arm_attach_height, left_shoulder_z);
+    rlRotatef(player->yaw, 0, 1, 0);
+    rlRotatef(-player->arm_swing_angle, 1, 0, 0);  // Opposite to left leg
+    DrawCube((Vector3){0, -arm_length / 2.0f, 0}, arm_width, arm_length, arm_width, arm_color);
+    rlPopMatrix();
+
+    // Right arm (swings same as left leg)
+    rlPushMatrix();
+    rlTranslatef(right_shoulder_x, arm_attach_height, right_shoulder_z);
+    rlRotatef(player->yaw, 0, 1, 0);
+    rlRotatef(player->arm_swing_angle, 1, 0, 0);  // Same as left leg
+    DrawCube((Vector3){0, -arm_length / 2.0f, 0}, arm_width, arm_length, arm_width, arm_color);
+    rlPopMatrix();
 
     y += torso_height;
 
     // ========================================================================
-    // HEAD (sphere)
+    // HEAD (sphere with eyes)
     // ========================================================================
     Vector3 head_center = {pos.x, y + head_size, pos.z};
     DrawSphere(head_center, head_size, head_color);
+
+    // Eye colors with ambient lighting
+    Color eye_white = apply_player_ambient(WHITE, player->ambient_light);
+    Color eye_black = apply_player_ambient((Color){30, 30, 30, 255}, player->ambient_light);
+
+    // Eye parameters
+    float eye_offset_y = 0.05f;       // Slightly above center
+    float eye_offset_side = 0.12f;    // Distance apart (half)
+    float eye_offset_forward = head_size * 0.9f;  // On head surface
+
+    // Forward direction based on yaw
+    Vector3 forward = {sin_yaw, 0, -cos_yaw};
+    Vector3 right = {cos_yaw, 0, sin_yaw};
+
+    // Left eye (white part)
+    Vector3 left_eye_pos = head_center;
+    left_eye_pos.x += forward.x * eye_offset_forward - right.x * eye_offset_side;
+    left_eye_pos.y += eye_offset_y;
+    left_eye_pos.z += forward.z * eye_offset_forward - right.z * eye_offset_side;
+    DrawSphere(left_eye_pos, 0.07f, eye_white);
+
+    // Left pupil (black, slightly forward)
+    Vector3 left_pupil_pos = left_eye_pos;
+    left_pupil_pos.x += forward.x * 0.04f;
+    left_pupil_pos.z += forward.z * 0.04f;
+    DrawSphere(left_pupil_pos, 0.035f, eye_black);
+
+    // Right eye (white part)
+    Vector3 right_eye_pos = head_center;
+    right_eye_pos.x += forward.x * eye_offset_forward + right.x * eye_offset_side;
+    right_eye_pos.y += eye_offset_y;
+    right_eye_pos.z += forward.z * eye_offset_forward + right.z * eye_offset_side;
+    DrawSphere(right_eye_pos, 0.07f, eye_white);
+
+    // Right pupil (black, slightly forward)
+    Vector3 right_pupil_pos = right_eye_pos;
+    right_pupil_pos.x += forward.x * 0.04f;
+    right_pupil_pos.z += forward.z * 0.04f;
+    DrawSphere(right_pupil_pos, 0.035f, eye_black);
 }

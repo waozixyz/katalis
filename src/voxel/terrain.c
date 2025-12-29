@@ -5,6 +5,7 @@
 #include "voxel/terrain.h"
 #include "voxel/noise.h"
 #include "voxel/block.h"
+#include "voxel/biome.h"
 #include "voxel/tree.h"
 #include "voxel/light.h"
 #include <stdio.h>
@@ -106,6 +107,7 @@ TerrainParams terrain_default_params(void) {
 
 /**
  * Get terrain height at world coordinates
+ * Applies biome-specific height scaling for varied terrain
  */
 int terrain_get_height_at(int world_x, int world_z, TerrainParams params) {
     float noise_value = noise_fbm_2d(
@@ -117,8 +119,13 @@ int terrain_get_height_at(int world_x, int world_z, TerrainParams params) {
         params.height_persistence
     );
 
-    // Convert noise (-1 to 1) to height
-    float height = params.height_offset + (noise_value * params.height_scale);
+    // Apply biome height scaling
+    BiomeType biome = biome_get_at(world_x, world_z);
+    const BiomeProperties* bp = biome_get_properties(biome);
+    float biome_scale = bp->height_scale;
+
+    // Convert noise (-1 to 1) to height with biome scaling
+    float height = params.height_offset + (noise_value * params.height_scale * biome_scale);
     return (int)height;
 }
 
@@ -157,21 +164,24 @@ static bool is_cave(int world_x, int world_y, int world_z, int terrain_height, T
 
 /**
  * Get block type at world coordinates
+ * Uses biome-specific surface and subsurface blocks
  */
-static BlockType get_terrain_block(int world_x, int world_y, int world_z, int terrain_height, TerrainParams params) {
+static BlockType get_terrain_block(int world_x, int world_y, int world_z, int terrain_height, TerrainParams params, BiomeType biome) {
+    const BiomeProperties* bp = biome_get_properties(biome);
+
     // 1. Air above terrain
     if (world_y > terrain_height) {
         return BLOCK_AIR;
     }
 
-    // 2. Grass surface
+    // 2. Surface block (biome-specific: grass, sand, snow)
     if (world_y == terrain_height) {
-        return BLOCK_GRASS;
+        return bp->surface_block;
     }
 
-    // 3. Dirt subsurface (8 blocks deep now)
+    // 3. Subsurface (biome-specific: dirt, sand)
     if (world_y > terrain_height - params.dirt_depth) {
-        return BLOCK_DIRT;
+        return bp->subsurface_block;
     }
 
     // 4. Subsoil layer - mixed clay and gravel (6 blocks)
@@ -669,15 +679,16 @@ void terrain_generate_chunk(Chunk* chunk, TerrainParams params) {
             int world_x = chunk->x * CHUNK_SIZE + x;
             int world_z = chunk->z * CHUNK_SIZE + z;
 
-            // Get terrain height at this column
+            // Get biome and terrain height at this column
+            BiomeType biome = biome_get_at(world_x, world_z);
             int terrain_height = terrain_get_height_at(world_x, world_z, params);
 
             // Fill vertical column
             for (int y = 0; y < CHUNK_HEIGHT; y++) {
                 int world_y = y;
 
-                // Determine block type
-                BlockType block_type = get_terrain_block(world_x, world_y, world_z, terrain_height, params);
+                // Determine block type (biome-aware)
+                BlockType block_type = get_terrain_block(world_x, world_y, world_z, terrain_height, params, biome);
 
                 // Set block
                 Block block = {block_type, 0, 0};

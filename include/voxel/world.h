@@ -12,8 +12,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// Forward declaration
+// Forward declarations
 typedef struct ChunkWorker ChunkWorker;
+typedef struct Player Player;
 
 // ============================================================================
 // WORLD CONSTANTS
@@ -49,6 +50,8 @@ typedef struct World {
     int center_chunk_z;
     int view_distance;       // How many chunks to load around center
     TerrainParams terrain_params;  // Terrain generation parameters
+    Player* player;          // Reference to player (for entity AI)
+    float time_of_day;       // Current time (0-24 hours) for lighting
 } World;
 
 // ============================================================================
@@ -114,5 +117,11 @@ void world_to_chunk_coords(int world_x, int world_z, int* chunk_x, int* chunk_z)
 void world_to_local_coords(int world_x, int world_y, int world_z,
                            int* chunk_x, int* chunk_z,
                            int* local_x, int* local_y, int* local_z);
+
+/**
+ * Get ambient light color for a given time of day
+ * Returns RGB values in range 0.0 to 1.0
+ */
+Vector3 world_get_ambient_color(float time_of_day);
 
 #endif // VOXEL_WORLD_H

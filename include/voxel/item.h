@@ -40,6 +40,9 @@ typedef enum {
     ITEM_WOODEN_AXE,
     ITEM_STONE_AXE,
 
+    // Food
+    ITEM_MEAT,
+
     ITEM_COUNT
 } ItemType;
 

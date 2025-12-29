@@ -35,6 +35,29 @@ static bool g_initialized = false;
 // ============================================================================
 
 /**
+ * Generate a leaf tile with real semi-transparency
+ * All pixels have alpha ~180 for see-through foliage effect
+ */
+static void generate_leaf_tile(Image* atlas, int tile_x, int tile_y, Color base_color) {
+    int start_x = tile_x * TILE_SIZE;
+    int start_y = tile_y * TILE_SIZE;
+
+    for (int y = 0; y < TILE_SIZE; y++) {
+        for (int x = 0; x < TILE_SIZE; x++) {
+            // Color variation with noise
+            int noise = (x * 11 + y * 17) % 30 - 15;
+            Color pixel_color = {
+                (unsigned char)clamp_int(base_color.r + noise, 0, 255),
+                (unsigned char)clamp_int(base_color.g + noise, 0, 255),
+                (unsigned char)clamp_int(base_color.b + noise / 2, 0, 255),
+                180  // Semi-transparent alpha
+            };
+            ImageDrawPixel(atlas, start_x + x, start_y + y, pixel_color);
+        }
+    }
+}
+
+/**
  * Generate a colored tile in the atlas
  */
 static void generate_tile(Image* atlas, int tile_x, int tile_y, Color color, bool add_border) {
@@ -96,8 +119,8 @@ static Image generate_atlas_image(void) {
     generate_tile(&atlas, 0, 3, (Color){120, 80, 50, 255}, true);     // Sides: Dark bark
     generate_tile(&atlas, 1, 3, (Color){200, 150, 100, 255}, true);   // Top/Bottom: Light wood rings
 
-    // LEAVES - Row 4 (Bright foliage green)
-    generate_tile(&atlas, 0, 4, (Color){60, 180, 75, 255}, true);     // All faces: Bright green leaves
+    // LEAVES - Row 4 (Bright foliage green with transparency holes - Luanti style)
+    generate_leaf_tile(&atlas, 0, 4, (Color){60, 180, 75, 255});     // All faces: Semi-transparent leaves
 
     // SAND - Row 5 (Warm golden sand)
     generate_tile(&atlas, 0, 5, (Color){240, 220, 130, 255}, true);   // All faces: Golden sand
@@ -144,6 +167,16 @@ static Image generate_atlas_image(void) {
 
     // CLAY - Row 17 (Blue-gray clay)
     generate_tile(&atlas, 0, 17, (Color){160, 165, 180, 255}, true);  // Blue-gray clay
+
+    // SNOW - Row 18 (white with slight blue tint)
+    generate_tile(&atlas, 0, 18, (Color){250, 250, 255, 255}, true);  // Snow surface
+
+    // CACTUS - Row 19 (dark green)
+    generate_tile(&atlas, 0, 19, (Color){40, 120, 40, 255}, true);    // Cactus
+
+    // ITEM TEXTURES (Row 0, columns 3+)
+    // MEAT - Raw meat item (pinkish-red)
+    generate_tile(&atlas, 6, 0, (Color){200, 100, 100, 255}, true);   // Raw meat
 
     return atlas;
 }
@@ -305,6 +338,14 @@ TextureCoords texture_atlas_get_coords(BlockType block_type, BlockFace face) {
 
         case BLOCK_CLAY:
             tile_x = 0; tile_y = 17;
+            break;
+
+        case BLOCK_SNOW:
+            tile_x = 0; tile_y = 18;
+            break;
+
+        case BLOCK_CACTUS:
+            tile_x = 0; tile_y = 19;
             break;
 
         default:

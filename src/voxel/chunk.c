@@ -353,9 +353,11 @@ static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** t
                 uint8_t block_light = get_block_light(chunk, x, y, z);
 
                 // Only render faces adjacent to air/transparent blocks (culling)
+                // For transparent blocks like leaves, we can see through them so render adjacent faces
 
-                // Face: Top (+Y) - only if neighbor above is not solid
-                if (y + 1 >= CHUNK_HEIGHT || !block_is_solid(chunk_get_block(chunk, x, y + 1, z))) {
+                // Face: Top (+Y) - render if neighbor is air or transparent
+                Block neighbor_top = (y + 1 < CHUNK_HEIGHT) ? chunk_get_block(chunk, x, y + 1, z) : (Block){BLOCK_AIR, 0, 0};
+                if (!block_is_solid(neighbor_top) || block_is_transparent(neighbor_top)) {
                     Vector3 v1 = {wx, wy + 1, wz};
                     Vector3 v2 = {wx + 1, wy + 1, wz};
                     Vector3 v3 = {wx + 1, wy + 1, wz + 1};
@@ -365,8 +367,9 @@ static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** t
                             v1, v2, v3, v4, normal, block.type, 1, 1, block_light);
                 }
 
-                // Face: Bottom (-Y) - only if neighbor below is not solid
-                if (y - 1 < 0 || !block_is_solid(chunk_get_block(chunk, x, y - 1, z))) {
+                // Face: Bottom (-Y) - render if neighbor is air or transparent
+                Block neighbor_bottom = (y - 1 >= 0) ? chunk_get_block(chunk, x, y - 1, z) : (Block){BLOCK_AIR, 0, 0};
+                if (!block_is_solid(neighbor_bottom) || block_is_transparent(neighbor_bottom)) {
                     Vector3 v1 = {wx, wy, wz + 1};
                     Vector3 v2 = {wx + 1, wy, wz + 1};
                     Vector3 v3 = {wx + 1, wy, wz};
@@ -376,8 +379,9 @@ static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** t
                             v1, v2, v3, v4, normal, block.type, 1, 1, block_light);
                 }
 
-                // Face: Front (-Z) - only if neighbor in front is not solid
-                if (z - 1 < 0 || !block_is_solid(chunk_get_block(chunk, x, y, z - 1))) {
+                // Face: Front (-Z) - render if neighbor is air or transparent
+                Block neighbor_front = (z - 1 >= 0) ? chunk_get_block(chunk, x, y, z - 1) : (Block){BLOCK_AIR, 0, 0};
+                if (!block_is_solid(neighbor_front) || block_is_transparent(neighbor_front)) {
                     Vector3 v1 = {wx, wy, wz};
                     Vector3 v2 = {wx + 1, wy, wz};
                     Vector3 v3 = {wx + 1, wy + 1, wz};
@@ -387,8 +391,9 @@ static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** t
                             v1, v2, v3, v4, normal, block.type, 1, 1, block_light);
                 }
 
-                // Face: Back (+Z) - only if neighbor behind is not solid
-                if (z + 1 >= CHUNK_SIZE || !block_is_solid(chunk_get_block(chunk, x, y, z + 1))) {
+                // Face: Back (+Z) - render if neighbor is air or transparent
+                Block neighbor_back = (z + 1 < CHUNK_SIZE) ? chunk_get_block(chunk, x, y, z + 1) : (Block){BLOCK_AIR, 0, 0};
+                if (!block_is_solid(neighbor_back) || block_is_transparent(neighbor_back)) {
                     Vector3 v1 = {wx + 1, wy, wz + 1};
                     Vector3 v2 = {wx, wy, wz + 1};
                     Vector3 v3 = {wx, wy + 1, wz + 1};
@@ -398,8 +403,9 @@ static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** t
                             v1, v2, v3, v4, normal, block.type, 1, 1, block_light);
                 }
 
-                // Face: Left (-X) - only if neighbor to the left is not solid
-                if (x - 1 < 0 || !block_is_solid(chunk_get_block(chunk, x - 1, y, z))) {
+                // Face: Left (-X) - render if neighbor is air or transparent
+                Block neighbor_left = (x - 1 >= 0) ? chunk_get_block(chunk, x - 1, y, z) : (Block){BLOCK_AIR, 0, 0};
+                if (!block_is_solid(neighbor_left) || block_is_transparent(neighbor_left)) {
                     Vector3 v1 = {wx, wy, wz + 1};
                     Vector3 v2 = {wx, wy, wz};
                     Vector3 v3 = {wx, wy + 1, wz};
@@ -409,8 +415,9 @@ static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** t
                             v1, v2, v3, v4, normal, block.type, 1, 1, block_light);
                 }
 
-                // Face: Right (+X) - only if neighbor to the right is not solid
-                if (x + 1 >= CHUNK_SIZE || !block_is_solid(chunk_get_block(chunk, x + 1, y, z))) {
+                // Face: Right (+X) - render if neighbor is air or transparent
+                Block neighbor_right = (x + 1 < CHUNK_SIZE) ? chunk_get_block(chunk, x + 1, y, z) : (Block){BLOCK_AIR, 0, 0};
+                if (!block_is_solid(neighbor_right) || block_is_transparent(neighbor_right)) {
                     Vector3 v1 = {wx + 1, wy, wz};
                     Vector3 v2 = {wx + 1, wy, wz + 1};
                     Vector3 v3 = {wx + 1, wy + 1, wz + 1};

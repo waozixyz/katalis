@@ -18,18 +18,28 @@
 #include "voxel/pause_menu.h"
 #include "voxel/entity.h"
 #include "voxel/block_human.h"
+#include "voxel/sheep.h"
 #include "voxel/sky.h"
 #include "voxel/tree.h"
 #include "voxel/network.h"
 #include "voxel/minimap.h"
+#include <kryon.h>  // For shutdown API
 #include <raylib.h>
 #include <raymath.h>
 #include <rlgl.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 #include <time.h>
 #include <float.h>
+
+// ============================================================================
+// FORWARD DECLARATIONS
+// ============================================================================
+
+// Cleanup callback for Kryon shutdown system (defined later)
+static void game_cleanup_callback(void* user_data);
 
 // ============================================================================
 // GAME STATE
@@ -57,6 +67,8 @@ typedef struct {
     Minimap* minimap;            // Top-right minimap overlay
     // Exit flag
     bool should_exit;            // Set to true to cleanly exit game
+    // Entity targeting
+    Entity* target_entity;       // Currently targeted entity (or NULL)
 } GameState;
 
 static GameState g_state;
@@ -156,6 +168,77 @@ static bool raycast_block(World* world, Vector3 origin, Vector3 direction, float
 }
 
 // ============================================================================
+// ENTITY RAYCASTING
+// ============================================================================
+
+/**
+ * Ray-AABB intersection test
+ * Returns true if ray hits box, outputs intersection distance to t_out
+ */
+static bool ray_intersects_aabb(Vector3 origin, Vector3 dir, Vector3 box_min, Vector3 box_max, float* t_out) {
+    float tmin = 0.0f, tmax = FLT_MAX;
+
+    // For each axis
+    float* o = (float*)&origin;
+    float* d = (float*)&dir;
+    float* bmin = (float*)&box_min;
+    float* bmax = (float*)&box_max;
+
+    for (int i = 0; i < 3; i++) {
+        if (fabsf(d[i]) < 0.0001f) {
+            // Ray parallel to this axis
+            if (o[i] < bmin[i] || o[i] > bmax[i]) return false;
+        } else {
+            float t1 = (bmin[i] - o[i]) / d[i];
+            float t2 = (bmax[i] - o[i]) / d[i];
+
+            if (t1 > t2) {
+                float tmp = t1;
+                t1 = t2;
+                t2 = tmp;
+            }
+
+            tmin = fmaxf(tmin, t1);
+            tmax = fminf(tmax, t2);
+
+            if (tmin > tmax) return false;
+        }
+    }
+
+    *t_out = tmin;
+    return true;
+}
+
+/**
+ * Raycast against all entities to find the closest hit
+ * Returns the entity hit or NULL
+ */
+static Entity* raycast_entity(EntityManager* manager, Vector3 origin, Vector3 dir, float max_dist) {
+    if (!manager) return NULL;
+
+    Entity* closest = NULL;
+    float closest_t = max_dist;
+
+    Entity* e = manager->entities;
+    while (e) {
+        if (e->active) {
+            // Calculate world-space bounding box
+            Vector3 box_min = Vector3Add(e->position, e->bbox_min);
+            Vector3 box_max = Vector3Add(e->position, e->bbox_max);
+
+            float t;
+            if (ray_intersects_aabb(origin, dir, box_min, box_max, &t) && t < closest_t && t >= 0) {
+                closest_t = t;
+                closest = e;
+            }
+        }
+        e = e->next;
+    }
+
+    return closest;
+}
+
+// ============================================================================
 // LIFECYCLE HOOKS (Internal)
 // ============================================================================
 
@@ -163,6 +246,9 @@ static bool raycast_block(World* world, Vector3 origin, Vector3 direction, float
  * Initialize game - called once on first frame
  */
 static void game_init(void) {
+    // Reduce raylib log spam (only show warnings and errors)
+    SetTraceLogLevel(LOG_WARNING);
+
     printf("[GAME] Initializing voxel world...\n");
 
     // Initialize exit flag
@@ -230,6 +316,9 @@ static void game_init(void) {
     Vector3 spawn_position = {(float)spawn_x, (float)(surface_height + 2), (float)spawn_z};
     g_state.player = player_create(spawn_position);
 
+    // Set player reference in world for entity AI
+    g_state.world->player = g_state.player;
+
     // Start in walking mode (toggle with Shift)
     g_state.player->is_flying = false;
     printf("[GAME] Player spawned at (%.1f, %.1f, %.1f)\n",
@@ -272,12 +361,35 @@ static void game_init(void) {
     // Initialize leaf decay system
     leaf_decay_init();
 
-    // Initialize entity system (no NPCs spawned by default)
+    // Initialize entity system
     g_state.entity_manager = entity_manager_create();
+
+    // Spawn initial sheep near player spawn
+    printf("[GAME] Spawning 20 sheep around player at (%d, %d)...\n", spawn_x, spawn_z);
+    int sheep_spawned = 0;
+    for (int i = 0; i < 20; i++) {
+        // Spawn within 30 blocks around player
+        float offset_x = (float)((rand() % 60) - 30);
+        float offset_z = (float)((rand() % 60) - 30);
+        int sheep_x = spawn_x + (int)offset_x;
+        int sheep_z = spawn_z + (int)offset_z;
+        int sheep_y = terrain_get_height_at(sheep_x, sheep_z, terrain_params) + 1;
+
+        Vector3 sheep_pos = {(float)sheep_x + 0.5f, (float)sheep_y, (float)sheep_z + 0.5f};
+        Entity* sheep = sheep_spawn(g_state.entity_manager, sheep_pos);
+        if (sheep) sheep_spawned++;
+    }
+    printf("[GAME] Total sheep spawned: %d, Entity count: %d\n",
+           sheep_spawned, entity_manager_get_count(g_state.entity_manager));
 
     // Initialize minimap
     g_state.minimap = minimap_create();
     printf("[GAME] Minimap initialized\n");
+
+    // Register cleanup callback with Kryon shutdown system
+    // This ensures game resources are freed BEFORE the window is closed
+    kryon_set_cleanup_callback(NULL, game_cleanup_callback, NULL);
+    printf("[GAME] Registered shutdown cleanup callback\n");
 
     printf("[GAME] Procedural world initialized with %d chunks!\n", g_state.world->chunks->chunk_count);
 }
@@ -286,10 +398,13 @@ static void game_init(void) {
  * Update game logic - called every frame with delta time
  */
 static void game_update(float dt) {
-    // Block ALL game input when pause menu is open (except ESC which is handled separately)
-    bool menu_blocking_input = pause_menu_is_open(g_state.pause_menu);
+    // Block ALL input when window is not focused
+    bool window_focused = IsWindowFocused();
 
-    // Toggle inventory with E key (only when pause menu closed)
+    // Block ALL game input when pause menu is open (except ESC which is handled separately)
+    bool menu_blocking_input = pause_menu_is_open(g_state.pause_menu) || !window_focused;
+
+    // Toggle inventory with E key (only when pause menu closed and window focused)
     if (!menu_blocking_input && IsKeyPressed(KEY_E)) {
         g_state.player->inventory->is_open = !g_state.player->inventory->is_open;
 
@@ -387,6 +502,9 @@ static void game_update(float dt) {
                           &player_chunk_x, &player_chunk_z);
     world_update(g_state.world, player_chunk_x, player_chunk_z);
 
+    // Sync time of day to world for entity lighting
+    g_state.world->time_of_day = g_state.time_of_day;
+
     // Update all entities
     entity_manager_update(g_state.entity_manager, (struct World*)g_state.world, dt);
 
@@ -410,9 +528,34 @@ static void game_update(float dt) {
         &g_state.target_face
     );
 
-    // Mine/delete block on left click (only when inventory closed and not paused)
+    // Raycast for entities (shorter range than blocks for melee)
+    g_state.target_entity = raycast_entity(
+        g_state.entity_manager,
+        camera.position,
+        camera_direction,
+        4.0f  // Entity reach distance
+    );
+
+    // Attack entity or mine block on left click (only when inventory closed and not paused)
     if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && !g_state.player->inventory->is_open && !pause_menu_is_open(g_state.pause_menu)) {
-        if (g_state.has_target_block) {
+        // Check entity first (priority over blocks)
+        if (g_state.target_entity && g_state.target_entity->type == ENTITY_TYPE_SHEEP) {
+            // Damage the sheep
+            bool died = sheep_damage(g_state.target_entity, 1);
+
+            if (died) {
+                // Drop 1-2 meat
+                int meat_count = 1 + (rand() % 2);
+                inventory_add_item(g_state.player->inventory, ITEM_MEAT, meat_count);
+                printf("[GAME] Sheep killed! Dropped %d meat\n", meat_count);
+
+                // Remove entity from manager and destroy
+                entity_manager_remove(g_state.entity_manager, g_state.target_entity);
+                entity_destroy(g_state.target_entity);
+                g_state.target_entity = NULL;
+            }
+        }
+        else if (g_state.has_target_block) {
             int x = (int)g_state.target_block_pos.x;
             int y = (int)g_state.target_block_pos.y;
             int z = (int)g_state.target_block_pos.z;
@@ -505,8 +648,8 @@ static void game_update(float dt) {
         }
     }
 
-    // Inventory mouse interaction (only when inventory is open)
-    if (g_state.player->inventory->is_open) {
+    // Inventory mouse interaction (only when inventory is open and window focused)
+    if (g_state.player->inventory->is_open && window_focused) {
         Vector2 mouse_pos = GetMousePosition();
         int mouse_x = (int)mouse_pos.x;
         int mouse_y = (int)mouse_pos.y;
@@ -531,8 +674,8 @@ static void game_update(float dt) {
     // Update network (always, even when paused)
     network_update(g_state.network, dt);
 
-    // Pause menu interaction (only when pause menu is open)
-    if (pause_menu_is_open(g_state.pause_menu)) {
+    // Pause menu interaction (only when pause menu is open and window focused)
+    if (pause_menu_is_open(g_state.pause_menu) && window_focused) {
         Vector2 mouse_pos = GetMousePosition();
         int action = pause_menu_handle_input(
             g_state.pause_menu,
@@ -607,8 +750,8 @@ static void game_update(float dt) {
         }
     }
 
-    // ESC key hierarchy: inventory > pause menu > open pause menu
-    if (IsKeyPressed(KEY_ESCAPE)) {
+    // ESC key hierarchy: inventory > pause menu > open pause menu (only when window focused)
+    if (window_focused && IsKeyPressed(KEY_ESCAPE)) {
         if (g_state.player->inventory->is_open) {
             // Priority 1: Close inventory
             g_state.player->inventory->is_open = false;
@@ -703,8 +846,22 @@ static void game_draw(void) {
 
     // Draw view mode notification
     if (g_state.view_mode_message_timer > 0.0f) {
-        const char* message = (g_state.player->view_mode == VIEW_MODE_THIRD_PERSON)
-            ? "THIRD PERSON VIEW" : "FIRST PERSON VIEW";
+        const char* message;
+        Color text_color;
+        switch (g_state.player->view_mode) {
+            case VIEW_MODE_THIRD_PERSON:
+                message = "THIRD PERSON VIEW";
+                text_color = SKYBLUE;
+                break;
+            case VIEW_MODE_THIRD_PERSON_FRONT:
+                message = "FRONT VIEW";
+                text_color = PURPLE;
+                break;
+            default:
+                message = "FIRST PERSON VIEW";
+                text_color = WHITE;
+                break;
+        }
         int font_size = 24;
         int text_width = MeasureText(message, font_size);
         int text_x = (screen_width - text_width) / 2;
@@ -714,7 +871,6 @@ static void game_draw(void) {
         DrawRectangle(text_x - 10, text_y - 5, text_width + 20, font_size + 10, (Color){0, 0, 0, 180});
 
         // Draw text
-        Color text_color = (g_state.player->view_mode == VIEW_MODE_THIRD_PERSON) ? SKYBLUE : WHITE;
         DrawText(message, text_x, text_y, font_size, text_color);
     }
 
@@ -829,110 +985,109 @@ static void game_draw(void) {
 
 /**
  * Clean up all game resources - called BEFORE CloseWindow()
+ * This function is registered as Kryon's cleanup callback, which is called
+ * after the main loop exits but before the window is closed.
  */
 static void game_shutdown(void) {
     if (!g_initialized) return;
 
-    printf("[GAME] Shutting down...\n"); fflush(stdout);
+    printf("[GAME] Shutting down...\n");
 
-    // Disconnect and destroy network first (may send packets)
-    printf("[GAME] Destroying network...\n"); fflush(stdout);
+    // Disconnect and destroy network first
     if (g_state.network) {
         network_disconnect(g_state.network);
         network_destroy(g_state.network);
         g_state.network = NULL;
     }
 
-    // Destroy minimap (has RenderTexture - GPU resource)
-    printf("[GAME] Destroying minimap...\n"); fflush(stdout);
+    // Destroy minimap (has RenderTexture)
     if (g_state.minimap) {
         minimap_destroy(g_state.minimap);
         g_state.minimap = NULL;
     }
 
     // Destroy entity manager
-    printf("[GAME] Destroying entity manager...\n"); fflush(stdout);
     if (g_state.entity_manager) {
         entity_manager_destroy(g_state.entity_manager);
         g_state.entity_manager = NULL;
     }
 
     // Destroy pause menu
-    printf("[GAME] Destroying pause menu...\n"); fflush(stdout);
     if (g_state.pause_menu) {
         pause_menu_destroy(g_state.pause_menu);
         g_state.pause_menu = NULL;
     }
 
     // Destroy player
-    printf("[GAME] Destroying player...\n"); fflush(stdout);
     if (g_state.player) {
         player_destroy(g_state.player);
         g_state.player = NULL;
     }
 
-    // Destroy world (chunks have meshes - GPU resources)
-    printf("[GAME] Destroying world...\n"); fflush(stdout);
+    // Destroy world (chunks have meshes)
     if (g_state.world) {
         world_destroy(g_state.world);
         g_state.world = NULL;
     }
 
-    // Destroy sky shader (GPU resource)
-    printf("[GAME] Destroying sky...\n"); fflush(stdout);
+    // Destroy sky shader
     sky_destroy();
 
-    // Destroy texture atlas (GPU resources)
-    printf("[GAME] Destroying texture atlas...\n"); fflush(stdout);
+    // Destroy texture atlas
     texture_atlas_destroy();
 
     g_initialized = false;
-    printf("[GAME] Shutdown complete\n"); fflush(stdout);
+    printf("[GAME] Shutdown complete\n");
+}
+
+/**
+ * Cleanup callback wrapper for Kryon shutdown API
+ * Called by Kryon after main loop exits, before window closes
+ */
+static void game_cleanup_callback(void* user_data) {
+    (void)user_data;
+    game_shutdown();
 }
 
 // ============================================================================
 // MAIN ENTRY POINT (Public)
 // ============================================================================
 
-static bool g_window_closed = false;
+static bool g_shutdown_requested = false;
 
 /**
  * Game entry point - called every frame by render callback
+ *
+ * Shutdown flow:
+ * 1. should_exit flag set (from pause menu "Quit" or other)
+ * 2. We call kryon_request_shutdown() which signals Kryon to exit
+ * 3. Kryon exits main loop and calls our cleanup callback (game_cleanup_callback)
+ * 4. game_shutdown() frees all GPU resources
+ * 5. Kryon closes the window
  */
 void game_run(uint32_t component_id) {
-    (void)component_id; // Unused, suppress warning
+    (void)component_id;
 
-    static int frame = 0;
-    frame++;
-    printf("[GAME_RUN] Frame %d ENTRY\n", frame); fflush(stdout);
-
-    // Already closed - don't call ANY raylib functions
-    if (g_window_closed) {
-        printf("[GAME_RUN] Already closed, returning\n"); fflush(stdout);
+    // Already requested shutdown - don't process frames
+    if (g_shutdown_requested) {
         return;
     }
 
     // One-time initialization
     if (!g_initialized) {
-        printf("[GAME_RUN] Calling game_init...\n"); fflush(stdout);
         game_init();
         g_initialized = true;
-        printf("[GAME_RUN] game_init complete\n"); fflush(stdout);
     }
 
-    // Check if window close requested (X button) - but NOT on first few frames
-    // to avoid race condition with window initialization
-    if (frame > 5 && WindowShouldClose()) {
-        printf("[GAME_RUN] WindowShouldClose triggered\n"); fflush(stdout);
-        g_state.should_exit = true;
-    }
+    // Note: Window close button (X) is handled by Kryon's raylib input handler
+    // which sets renderer->running = false and triggers graceful shutdown
 
-    // Clean exit - shutdown resources BEFORE closing window
+    // User-initiated exit (e.g., from pause menu "Quit" button)
     if (g_state.should_exit) {
-        printf("[GAME_RUN] Exiting...\n"); fflush(stdout);
-        game_shutdown();  // Clean up all GPU resources first
-        g_window_closed = true;
-        CloseWindow();    // Close window - Kryon will detect via IsWindowReady()
+        printf("[GAME] User requested exit, initiating Kryon shutdown...\n");
+        g_shutdown_requested = true;
+        // Request Kryon to shut down - it will call our cleanup callback
+        kryon_request_shutdown(NULL, KRYON_SHUTDOWN_REASON_USER);
         return;
     }
 

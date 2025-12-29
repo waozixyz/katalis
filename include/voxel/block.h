@@ -35,6 +35,8 @@ typedef enum {
     BLOCK_STONE_BRICK,      // Dungeon structure
     BLOCK_CRACKED_BRICK,    // Damaged dungeon walls
     BLOCK_CLAY,             // Underground clay deposits
+    BLOCK_SNOW,             // Tundra surface block
+    BLOCK_CACTUS,           // Desert vegetation
     BLOCK_COUNT  // Total number of block types
 } BlockType;
 

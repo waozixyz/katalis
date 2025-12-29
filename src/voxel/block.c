@@ -182,6 +182,22 @@ void block_system_init(void) {
         .is_fluid = false
     };
 
+    // SNOW (Tundra biome surface)
+    g_block_properties[BLOCK_SNOW] = (BlockProperties){
+        .name = "Snow",
+        .is_solid = true,
+        .is_transparent = false,
+        .is_fluid = false
+    };
+
+    // CACTUS (Desert vegetation)
+    g_block_properties[BLOCK_CACTUS] = (BlockProperties){
+        .name = "Cactus",
+        .is_solid = true,
+        .is_transparent = false,
+        .is_fluid = false
+    };
+
     g_initialized = true;
     printf("[BLOCK] Block system initialized with %d block types\n", BLOCK_COUNT);
 }

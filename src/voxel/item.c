@@ -22,7 +22,7 @@ static const DropEntry g_drop_table[] = {
     {BLOCK_DIRT,        ITEM_DIRT,         1, 1},
     {BLOCK_STONE,       ITEM_COBBLESTONE,  1, 1},
     {BLOCK_WOOD,        ITEM_WOOD_LOG,     1, 1},
-    {BLOCK_LEAVES,      ITEM_NONE,         0, 0},  // No drop
+    {BLOCK_LEAVES,      ITEM_LEAVES,       1, 1},  // Drops leaves
     {BLOCK_SAND,        ITEM_SAND,         1, 1},
     {BLOCK_WATER,       ITEM_NONE,         0, 0},  // No drop
     {BLOCK_COBBLESTONE, ITEM_COBBLESTONE,  1, 1},
@@ -209,6 +209,16 @@ static const ItemProperties g_item_properties[ITEM_COUNT] = {
         .durability = 132,
         .atlas_tile_x = 5,
         .atlas_tile_y = 1,
+    },
+    [ITEM_MEAT] = {
+        .name = "Raw Meat",
+        .max_stack_size = 64,
+        .is_placeable = false,
+        .places_as = BLOCK_AIR,
+        .is_tool = false,
+        .durability = 0,
+        .atlas_tile_x = 6,
+        .atlas_tile_y = 0,
     },
 };
 

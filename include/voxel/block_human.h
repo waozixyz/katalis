@@ -60,10 +60,13 @@ typedef struct {
 typedef struct {
     BlockHumanAppearance appearance;
 
-    // Future animation/state data:
-    // float arm_swing_angle;
-    // float leg_swing_angle;
-    // AnimationState state;
+    // Animation state
+    float walk_animation_time;  // Accumulated time for walk cycle
+    float arm_swing_angle;      // Current arm rotation angle (degrees)
+    float leg_swing_angle;      // Current leg rotation angle (degrees)
+
+    // Lighting (updated each frame)
+    Vector3 ambient_light;      // Current ambient light color (0-1)
 } BlockHumanData;
 
 // ============================================================================
