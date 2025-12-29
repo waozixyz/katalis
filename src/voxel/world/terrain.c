@@ -34,7 +34,7 @@ TerrainParams terrain_default_params(void) {
     params.cave_min_depth = 25;           // Caves start 25 blocks below surface
 
     // Biomes
-    params.generate_biomes = false;
+    params.generate_biomes = true;
     params.biome_frequency = 0.005f;
 
     // Layers

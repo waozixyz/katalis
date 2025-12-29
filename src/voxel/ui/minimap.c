@@ -45,6 +45,12 @@ static Color get_block_color(BlockType type, int height) {
         case BLOCK_IRON_ORE:    base = (Color){180, 140, 100, 255}; break;  // Iron tan
         case BLOCK_GOLD_ORE:    base = (Color){255, 215, 0, 255}; break;    // Gold
         case BLOCK_DIAMOND_ORE: base = (Color){0, 255, 255, 255}; break;    // Cyan
+        case BLOCK_MOSSY_COBBLE: base = (Color){80, 110, 80, 255}; break;   // Mossy gray-green
+        case BLOCK_STONE_BRICK:  base = (Color){140, 140, 140, 255}; break; // Light stone
+        case BLOCK_CRACKED_BRICK: base = (Color){110, 100, 100, 255}; break; // Darker brick
+        case BLOCK_CLAY:         base = (Color){180, 140, 120, 255}; break; // Clay tan
+        case BLOCK_SNOW:         base = (Color){240, 250, 255, 255}; break; // White/ice blue
+        case BLOCK_CACTUS:       base = (Color){50, 180, 50, 255}; break;   // Cactus green
         case BLOCK_AIR:
         default:                base = (Color){0, 0, 0, 255}; break;        // Black
     }

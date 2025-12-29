@@ -99,7 +99,7 @@ struct Entity {
 // ENTITY MANAGER
 // ============================================================================
 
-typedef struct {
+typedef struct EntityManager {
     Entity* entities;                   // Linked list head
     EntityId next_id;                   // ID counter
     int entity_count;                   // Number of active entities

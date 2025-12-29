@@ -44,6 +44,7 @@ Chunk* chunk_create(int x, int z) {
     chunk->needs_remesh = true;
     chunk->is_empty = true;
     chunk->mesh_generated = false;
+    chunk->has_spawned = false;
     chunk->solid_block_count = 0;
     chunk->state = CHUNK_STATE_EMPTY;
 

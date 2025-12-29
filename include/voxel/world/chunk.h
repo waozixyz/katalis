@@ -41,6 +41,7 @@ typedef struct {
     bool needs_remesh;                                         // Dirty flag
     bool is_empty;                                             // Optimization: all air
     bool mesh_generated;                                       // Has mesh been created?
+    bool has_spawned;                                          // Animals already spawned for this chunk
     int solid_block_count;                                     // Count of non-air blocks (O(1) empty check)
     ChunkState state;                                          // Generation state for threading
 } Chunk;

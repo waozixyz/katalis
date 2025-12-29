@@ -15,6 +15,7 @@
 // Forward declarations
 typedef struct ChunkWorker ChunkWorker;
 typedef struct Player Player;
+typedef struct EntityManager EntityManager;
 
 // ============================================================================
 // WORLD CONSTANTS
@@ -51,6 +52,7 @@ typedef struct World {
     int view_distance;       // How many chunks to load around center
     TerrainParams terrain_params;  // Terrain generation parameters
     Player* player;          // Reference to player (for entity AI)
+    EntityManager* entity_manager;  // Entity manager for mobs
     float time_of_day;       // Current time (0-24 hours) for lighting
 } World;
 
@@ -123,5 +125,15 @@ void world_to_local_coords(int world_x, int world_y, int world_z,
  * Returns RGB values in range 0.0 to 1.0
  */
 Vector3 world_get_ambient_color(float time_of_day);
+
+/**
+ * Get the entity manager for this world
+ */
+EntityManager* world_get_entity_manager(World* world);
+
+/**
+ * Set the entity manager for this world
+ */
+void world_set_entity_manager(World* world, EntityManager* manager);
 
 #endif // VOXEL_WORLD_H

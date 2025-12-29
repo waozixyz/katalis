@@ -4,9 +4,11 @@
 
 #include "voxel/world/world.h"
 #include "voxel/world/chunk_worker.h"
+#include "voxel/world/spawn.h"
 #include "voxel/core/texture_atlas.h"
 #include "voxel/world/terrain.h"
 #include "voxel/render/light.h"
+#include "voxel/entity/entity.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -236,7 +238,11 @@ World* world_create(TerrainParams terrain_params) {
     world->view_distance = WORLD_VIEW_DISTANCE;
     world->terrain_params = terrain_params;
     world->player = NULL;  // Set by game after player creation
+    world->entity_manager = NULL;  // Set by game after entity manager creation
     world->time_of_day = 12.0f;  // Default to noon
+
+    // Initialize spawn system
+    spawn_system_init();
 
     printf("[WORLD] Created world with view distance %d\n", world->view_distance);
     return world;
@@ -323,6 +329,13 @@ void world_update(World* world, int center_chunk_x, int center_chunk_z) {
 
         // Upload mesh to GPU (must be on main thread)
         chunk_worker_upload_mesh(completed->chunk, &completed->mesh);
+
+        // Spawn animals for newly completed chunks (biome-aware herds)
+        if (world->entity_manager && !completed->chunk->has_spawned) {
+            spawn_animals_for_chunk(world, completed->chunk->x, completed->chunk->z, world->terrain_params);
+            completed->chunk->has_spawned = true;
+        }
+
         free(completed);
         uploaded++;
     }
@@ -422,6 +435,20 @@ static Vector3 get_ambient_color(float time) {
  */
 Vector3 world_get_ambient_color(float time_of_day) {
     return get_ambient_color(time_of_day);
+}
+
+// ============================================================================
+// ENTITY MANAGER ACCESS
+// ============================================================================
+
+EntityManager* world_get_entity_manager(World* world) {
+    if (!world) return NULL;
+    return world->entity_manager;
+}
+
+void world_set_entity_manager(World* world, EntityManager* manager) {
+    if (!world) return;
+    world->entity_manager = manager;
 }
 
 // ============================================================================

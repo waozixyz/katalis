@@ -373,43 +373,10 @@ static void game_init(void) {
     // Initialize leaf decay system
     leaf_decay_init();
 
-    // Initialize entity system
+    // Initialize entity system and link to world for biome-aware spawning
     g_state.entity_manager = entity_manager_create();
-
-    // Spawn initial sheep near player spawn
-    printf("[GAME] Spawning 20 sheep around player at (%d, %d)...\n", spawn_x, spawn_z);
-    int sheep_spawned = 0;
-    for (int i = 0; i < 20; i++) {
-        // Spawn within 30 blocks around player
-        float offset_x = (float)((rand() % 60) - 30);
-        float offset_z = (float)((rand() % 60) - 30);
-        int sheep_x = spawn_x + (int)offset_x;
-        int sheep_z = spawn_z + (int)offset_z;
-        int sheep_y = terrain_get_height_at(sheep_x, sheep_z, terrain_params) + 1;
-
-        Vector3 sheep_pos = {(float)sheep_x + 0.5f, (float)sheep_y, (float)sheep_z + 0.5f};
-        Entity* sheep = sheep_spawn(g_state.entity_manager, sheep_pos);
-        if (sheep) sheep_spawned++;
-    }
-    printf("[GAME] Total sheep spawned: %d, Entity count: %d\n",
-           sheep_spawned, entity_manager_get_count(g_state.entity_manager));
-
-    // Spawn initial pigs near player spawn
-    printf("[GAME] Spawning 15 pigs around player at (%d, %d)...\n", spawn_x, spawn_z);
-    int pigs_spawned = 0;
-    for (int i = 0; i < 15; i++) {
-        float offset_x = (float)((rand() % 60) - 30);
-        float offset_z = (float)((rand() % 60) - 30);
-        int pig_x = spawn_x + (int)offset_x;
-        int pig_z = spawn_z + (int)offset_z;
-        int pig_y = terrain_get_height_at(pig_x, pig_z, terrain_params) + 1;
-
-        Vector3 pig_pos = {(float)pig_x + 0.5f, (float)pig_y, (float)pig_z + 0.5f};
-        Entity* pig = pig_spawn(g_state.entity_manager, pig_pos);
-        if (pig) pigs_spawned++;
-    }
-    printf("[GAME] Total pigs spawned: %d, Entity count: %d\n",
-           pigs_spawned, entity_manager_get_count(g_state.entity_manager));
+    world_set_entity_manager(g_state.world, g_state.entity_manager);
+    printf("[GAME] Entity system initialized (biome-aware herd spawning enabled)\n");
 
     // Initialize minimap
     g_state.minimap = minimap_create();
