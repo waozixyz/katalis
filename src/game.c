@@ -562,11 +562,12 @@ static void game_update(float dt) {
 
             case 5: {  // Start Server
                 uint16_t port = pause_menu_get_port(g_state.pause_menu);
-                if (network_host(g_state.network, port, g_state.world, g_state.player,
+                const char* host_name = pause_menu_get_player_name(g_state.pause_menu);
+                if (network_host(g_state.network, port, host_name, g_state.world, g_state.player,
                                 g_state.entity_manager, &g_state.time_of_day, &g_state.day_speed)) {
                     pause_menu_set_state(g_state.pause_menu, MENU_STATE_HOSTING);
                     pause_menu_set_status(g_state.pause_menu, "Server started!", false);
-                    printf("[NETWORK] Hosting on port %d\n", port);
+                    printf("[NETWORK] Hosting as '%s' on port %d\n", host_name, port);
                 } else {
                     pause_menu_set_status(g_state.pause_menu, "Failed to start server", true);
                 }
@@ -663,6 +664,9 @@ static void game_draw(void) {
     }
 
     EndMode3D();
+
+    // Draw nametags above remote players (2D overlay)
+    network_draw_nametags(g_state.network, camera);
 
     // Draw crosshair in center of screen
     int screen_width = 800;   // From window size

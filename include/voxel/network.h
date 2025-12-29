@@ -189,6 +189,9 @@ typedef struct {
     NetClientSlot      clients[NET_MAX_CLIENTS];
     uint8_t            client_count;
 
+    // Host info
+    char               host_name[NET_PLAYER_NAME_MAX];
+
     // Game state references
     World*             world;
     Player*            host_player;
@@ -252,6 +255,7 @@ typedef struct NetworkContext {
 
     // Remote player entities (for rendering)
     Entity*            remote_entities[NET_MAX_CLIENTS];
+    char               remote_names[NET_MAX_CLIENTS][NET_PLAYER_NAME_MAX];
 
     // Send rate limiting
     float              send_timer;
@@ -378,8 +382,9 @@ void network_destroy(NetworkContext* ctx);
 /**
  * Start hosting a game
  */
-bool network_host(NetworkContext* ctx, uint16_t port, World* world, Player* player,
-                  EntityManager* entities, float* time_of_day, float* day_speed);
+bool network_host(NetworkContext* ctx, uint16_t port, const char* host_name,
+                  World* world, Player* player, EntityManager* entities,
+                  float* time_of_day, float* day_speed);
 
 /**
  * Join a game
@@ -428,5 +433,11 @@ bool network_is_player_active(NetworkContext* ctx, uint8_t client_id);
  * Get remote player name
  */
 const char* network_get_player_name(NetworkContext* ctx, uint8_t client_id);
+
+/**
+ * Draw nametags above all remote players
+ * Should be called during 3D rendering phase
+ */
+void network_draw_nametags(NetworkContext* ctx, Camera3D camera);
 
 #endif // VOXEL_NETWORK_H

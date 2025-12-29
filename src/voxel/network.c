@@ -369,13 +369,14 @@ static void server_handle_connect_request(NetServer* server, int client_id, cons
 
     printf("[NET_SERVER] Player '%s' joining as client %d\n", client->player_name, client_id);
 
-    // Send accept
-    uint8_t accept_buf[64];
+    // Send accept (includes host name so client knows who the host is)
+    uint8_t accept_buf[128];
     uint8_t* ap = accept_buf;
     write_u8(&ap, client_id);
     write_u32(&ap, 0);  // world_seed (not used currently)
     write_f32(&ap, server->time_of_day ? *server->time_of_day : 12.0f);
     write_u8(&ap, server->client_count + 1);
+    write_string(&ap, server->host_name, NET_PLAYER_NAME_MAX);  // Host name
 
     server_send_packet(server, client_id, NET_PACKET_CONNECT_ACCEPT, accept_buf, ap - accept_buf);
     client->authenticated = true;
@@ -785,13 +786,16 @@ static void client_handle_connect_accept(NetClient* client, const uint8_t* data)
     read_u32(&p);  // world_seed
     float time_of_day = read_f32(&p);
     read_u8(&p);  // player_count
+    read_string(&p, client->player_names[0], NET_PLAYER_NAME_MAX);  // Host name is always slot 0
+    client->player_active[0] = true;  // Host is always active
 
     if (client->time_of_day) {
         *client->time_of_day = time_of_day;
     }
 
     client->state = NET_STATE_CONNECTED;
-    printf("[NET_CLIENT] Connected as client %d\n", client->my_client_id);
+    printf("[NET_CLIENT] Connected as client %d, host is '%s'\n",
+           client->my_client_id, client->player_names[0]);
 }
 
 static void client_handle_player_states(NetClient* client, const uint8_t* data) {
@@ -1047,14 +1051,23 @@ void network_destroy(NetworkContext* ctx) {
     printf("[NETWORK] Context destroyed\n");
 }
 
-bool network_host(NetworkContext* ctx, uint16_t port, World* world, Player* player,
-                  EntityManager* entities, float* time_of_day, float* day_speed) {
+bool network_host(NetworkContext* ctx, uint16_t port, const char* host_name,
+                  World* world, Player* player, EntityManager* entities,
+                  float* time_of_day, float* day_speed) {
     if (!ctx) return false;
 
     network_disconnect(ctx);
 
     ctx->server = net_server_create(port, world, player, entities, time_of_day, day_speed);
     if (!ctx->server) return false;
+
+    // Set host name
+    if (host_name && host_name[0]) {
+        strncpy(ctx->server->host_name, host_name, NET_PLAYER_NAME_MAX - 1);
+        ctx->server->host_name[NET_PLAYER_NAME_MAX - 1] = '\0';
+    } else {
+        strcpy(ctx->server->host_name, "Host");
+    }
 
     if (!net_server_start(ctx->server)) {
         net_server_destroy(ctx->server);
@@ -1063,7 +1076,7 @@ bool network_host(NetworkContext* ctx, uint16_t port, World* world, Player* play
     }
 
     ctx->mode = NET_MODE_HOST;
-    printf("[NETWORK] Now hosting on port %d\n", port);
+    printf("[NETWORK] Now hosting as '%s' on port %d\n", ctx->server->host_name, port);
     return true;
 }
 
@@ -1135,6 +1148,9 @@ void network_update(NetworkContext* ctx, float dt) {
             ctx->send_timer = 0;
             net_server_broadcast_states(ctx->server);
         }
+
+        // Update remote player entities and names
+        network_update_remote_players(ctx, dt);
     }
     else if (ctx->mode == NET_MODE_CLIENT && ctx->client) {
         net_client_poll(ctx->client, 0);
@@ -1145,6 +1161,9 @@ void network_update(NetworkContext* ctx, float dt) {
                 ctx->send_timer = 0;
                 net_client_send_player_state(ctx->client);
             }
+
+            // Update remote player entities and names
+            network_update_remote_players(ctx, dt);
         }
     }
 }
@@ -1170,6 +1189,9 @@ void network_update_remote_players(NetworkContext* ctx, float dt) {
             NetClientSlot* slot = &ctx->server->clients[i];
 
             if (slot->connected && slot->authenticated) {
+                // Copy name to context for rendering
+                strncpy(ctx->remote_names[i], slot->player_name, NET_PLAYER_NAME_MAX - 1);
+
                 // Create entity if needed
                 if (!ctx->remote_entities[i]) {
                     Vector3 pos = {slot->last_state.pos_x, slot->last_state.pos_y, slot->last_state.pos_z};
@@ -1179,7 +1201,7 @@ void network_update_remote_players(NetworkContext* ctx, float dt) {
                         (Color){100, 200, 100, 255},  // Green for clients
                         (Color){60, 60, 60, 255}
                     );
-                    printf("[NETWORK] Spawned entity for client %d\n", i);
+                    printf("[NETWORK] Spawned entity for client %d '%s'\n", i, slot->player_name);
                 }
 
                 // Update entity position
@@ -1199,6 +1221,7 @@ void network_update_remote_players(NetworkContext* ctx, float dt) {
                     ctx->remote_entities[i]->active = false;
                     ctx->remote_entities[i] = NULL;
                 }
+                ctx->remote_names[i][0] = '\0';
             }
         }
     }
@@ -1208,6 +1231,9 @@ void network_update_remote_players(NetworkContext* ctx, float dt) {
             if (i == ctx->client->my_client_id) continue;
 
             if (ctx->client->player_active[i]) {
+                // Copy name to context for rendering
+                strncpy(ctx->remote_names[i], ctx->client->player_names[i], NET_PLAYER_NAME_MAX - 1);
+
                 // Create entity if needed
                 if (!ctx->remote_entities[i]) {
                     NetPlayerState* s = &ctx->client->remote_players[i];
@@ -1223,7 +1249,7 @@ void network_update_remote_players(NetworkContext* ctx, float dt) {
                         shirt,
                         (Color){60, 60, 60, 255}
                     );
-                    printf("[NETWORK] Spawned entity for player %d\n", i);
+                    printf("[NETWORK] Spawned entity for player %d '%s'\n", i, ctx->client->player_names[i]);
                 }
 
                 // Update entity position
@@ -1243,6 +1269,7 @@ void network_update_remote_players(NetworkContext* ctx, float dt) {
                     ctx->remote_entities[i]->active = false;
                     ctx->remote_entities[i] = NULL;
                 }
+                ctx->remote_names[i][0] = '\0';
             }
         }
     }
@@ -1289,7 +1316,7 @@ const char* network_get_player_name(NetworkContext* ctx, uint8_t client_id) {
     if (!ctx || client_id >= NET_MAX_CLIENTS) return "";
 
     if (ctx->mode == NET_MODE_HOST && ctx->server) {
-        if (client_id == 0) return "Host";
+        if (client_id == 0) return ctx->server->host_name;
         return ctx->server->clients[client_id].player_name;
     }
     else if (ctx->mode == NET_MODE_CLIENT && ctx->client) {
@@ -1298,4 +1325,111 @@ const char* network_get_player_name(NetworkContext* ctx, uint8_t client_id) {
     }
 
     return "";
+}
+
+void network_draw_nametags(NetworkContext* ctx, Camera3D camera) {
+    if (!ctx) return;
+
+    int screen_width = GetScreenWidth();
+    int screen_height = GetScreenHeight();
+
+    // Debug: count how many remote players we have
+    static int debug_frame = 0;
+    debug_frame++;
+    if (debug_frame % 120 == 0) {
+        int count = 0;
+        for (int j = 0; j < NET_MAX_CLIENTS; j++) {
+            if (ctx->remote_entities[j] && ctx->remote_entities[j]->active) count++;
+        }
+        if (count > 0 || ctx->mode != NET_MODE_NONE) {
+            printf("[NAMETAG] mode=%d, remote_entities=%d\n", ctx->mode, count);
+        }
+    }
+
+    for (int i = 0; i < NET_MAX_CLIENTS; i++) {
+        Entity* entity = ctx->remote_entities[i];
+        const char* name = ctx->remote_names[i];
+
+        if (!entity || !entity->active || !name || name[0] == '\0') continue;
+
+        // Position above the player's head
+        Vector3 world_pos = {
+            entity->position.x,
+            entity->position.y + 2.5f,  // Above head
+            entity->position.z
+        };
+
+        // Calculate distance
+        Vector3 to_entity = {
+            world_pos.x - camera.position.x,
+            world_pos.y - camera.position.y,
+            world_pos.z - camera.position.z
+        };
+        float dist = sqrtf(to_entity.x * to_entity.x + to_entity.y * to_entity.y + to_entity.z * to_entity.z);
+        if (dist < 1.0f) dist = 1.0f;
+
+        // Check if behind camera
+        Vector3 forward = {
+            camera.target.x - camera.position.x,
+            camera.target.y - camera.position.y,
+            camera.target.z - camera.position.z
+        };
+        float dot = to_entity.x * forward.x + to_entity.y * forward.y + to_entity.z * forward.z;
+
+        int font_size = 16;  // Fixed size for readability
+        int text_width = MeasureText(name, font_size);
+
+        int text_x, text_y;
+
+        if (dot < 0) {
+            // Behind camera - show at edge of screen with arrow
+            // Calculate direction on screen
+            float angle = atan2f(to_entity.x * forward.z - to_entity.z * forward.x,
+                                 to_entity.x * forward.x + to_entity.z * forward.z);
+
+            // Position at bottom of screen with direction indicator
+            text_x = screen_width / 2 + (int)(sinf(angle) * 150);
+            text_y = screen_height - 40;
+
+            // Clamp to screen
+            if (text_x < 10) text_x = 10;
+            if (text_x > screen_width - text_width - 10) text_x = screen_width - text_width - 10;
+
+            // Draw with "behind you" indicator
+            char label[64];
+            snprintf(label, sizeof(label), "< %s (%.0fm)", name, dist);
+            text_width = MeasureText(label, font_size);
+            text_x = screen_width / 2 - text_width / 2 + (int)(sinf(angle) * 100);
+            if (text_x < 10) text_x = 10;
+            if (text_x > screen_width - text_width - 10) text_x = screen_width - text_width - 10;
+
+            DrawRectangle(text_x - 4, text_y - 2, text_width + 8, font_size + 4, (Color){0, 0, 0, 180});
+            DrawText(label, text_x, text_y, font_size, (Color){255, 200, 100, 255});
+        } else {
+            // In front - show at world position
+            Vector2 screen_pos = GetWorldToScreen(world_pos, camera);
+
+            // Clamp to screen edges if off-screen
+            bool clamped = false;
+            text_x = (int)screen_pos.x - text_width / 2;
+            text_y = (int)screen_pos.y - font_size / 2;
+
+            if (text_x < 10) { text_x = 10; clamped = true; }
+            if (text_x > screen_width - text_width - 10) { text_x = screen_width - text_width - 10; clamped = true; }
+            if (text_y < 10) { text_y = 10; clamped = true; }
+            if (text_y > screen_height - font_size - 10) { text_y = screen_height - font_size - 10; clamped = true; }
+
+            // Show distance
+            char label[64];
+            snprintf(label, sizeof(label), "%s (%.0fm)", name, dist);
+            text_width = MeasureText(label, font_size);
+            text_x = (int)screen_pos.x - text_width / 2;
+            if (text_x < 10) text_x = 10;
+            if (text_x > screen_width - text_width - 10) text_x = screen_width - text_width - 10;
+
+            // Background for visibility
+            DrawRectangle(text_x - 4, text_y - 2, text_width + 8, font_size + 4, (Color){0, 0, 0, 150});
+            DrawText(label, text_x, text_y, font_size, WHITE);
+        }
+    }
 }
