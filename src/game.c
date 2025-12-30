@@ -1108,6 +1108,16 @@ static void game_draw(void) {
     Texture2D atlas = texture_atlas_get_texture();
     inventory_ui_draw_hotbar(g_state.player->inventory, atlas);
 
+    // Draw held item in first-person view (after hotbar, before other UI)
+    if (g_state.player->view_mode == VIEW_MODE_FIRST_PERSON &&
+        !g_state.player->inventory->is_open &&
+        !g_state.open_chest &&
+        !pause_menu_is_open(g_state.pause_menu)) {
+        // Calculate bob from player walk animation
+        float bob = sinf(g_state.player->walk_animation_time * 2.0f) * 4.0f;
+        inventory_ui_draw_held_item(g_state.player->inventory, atlas, bob);
+    }
+
     // Draw minimap (top-right corner, shows remote players too)
     minimap_draw(g_state.minimap, g_state.player, g_state.network);
 

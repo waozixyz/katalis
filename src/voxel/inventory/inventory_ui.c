@@ -1053,3 +1053,78 @@ void inventory_ui_handle_guide_key(int key) {
 bool inventory_ui_is_search_active(void) {
     return guide_search_active;
 }
+
+// ============================================================================
+// HELD ITEM DISPLAY (First-Person View)
+// ============================================================================
+
+// Hand texture position in atlas
+#define HAND_TILE_X 8
+#define HAND_TILE_Y 0
+
+/**
+ * Draw held item in first-person view (bottom-right corner)
+ * Shows the currently selected hotbar item as a large sprite with hand
+ */
+void inventory_ui_draw_held_item(Inventory* inv, Texture2D atlas, float bob_offset) {
+    if (!inv) return;
+
+    int screen_width = GetScreenWidth();
+    int screen_height = GetScreenHeight();
+
+    // Configuration
+    int hand_size = 180;    // Hand is larger
+    int icon_size = 120;    // Item icon size
+    int margin_x = 60;      // Distance from right edge
+    int margin_y = -30;     // Negative = extends below screen (coming from body)
+
+    // Hand source rectangle from atlas
+    Rectangle hand_source = {
+        (float)(HAND_TILE_X * TILE_SIZE),
+        (float)(HAND_TILE_Y * TILE_SIZE),
+        (float)TILE_SIZE,
+        (float)TILE_SIZE
+    };
+
+    // Hand destination - positioned at bottom right, extending from below
+    Rectangle hand_dest = {
+        (float)(screen_width - hand_size / 2 - margin_x + 30),
+        (float)(screen_height - hand_size / 2 + margin_y + bob_offset),
+        (float)hand_size,
+        (float)hand_size
+    };
+
+    // Hand origin for rotation (bottom-right corner, where arm would connect)
+    Vector2 hand_origin = {hand_size * 0.7f, (float)hand_size};
+
+    // Draw hand first (rotated to look like it's reaching up from body)
+    DrawTexturePro(atlas, hand_source, hand_dest, hand_origin, -25.0f, WHITE);
+
+    // Get currently selected hotbar item
+    ItemStack* held = inventory_get_selected_hotbar_item(inv);
+    if (!held || held->type == ITEM_NONE) return;
+
+    const ItemProperties* props = item_get_properties(held->type);
+
+    // Item source rectangle from atlas (16x16 tile)
+    Rectangle item_source = {
+        (float)(props->atlas_tile_x * TILE_SIZE),
+        (float)(props->atlas_tile_y * TILE_SIZE),
+        (float)TILE_SIZE,
+        (float)TILE_SIZE
+    };
+
+    // Item destination - positioned in the grip of the hand
+    Rectangle item_dest = {
+        (float)(screen_width - icon_size - margin_x + 10),
+        (float)(screen_height - icon_size - 80 + bob_offset),
+        (float)icon_size,
+        (float)icon_size
+    };
+
+    // Item origin for rotation (bottom-center for natural pivot)
+    Vector2 item_origin = {icon_size / 2.0f, (float)icon_size};
+
+    // Draw item rotated to match hand angle
+    DrawTexturePro(atlas, item_source, item_dest, item_origin, -25.0f, WHITE);
+}

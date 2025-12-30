@@ -76,4 +76,11 @@ void inventory_ui_handle_guide_key(int key);
  */
 bool inventory_ui_is_search_active(void);
 
+/**
+ * Draw held item in first-person view (bottom-right corner)
+ * Shows the currently selected hotbar item as a large sprite
+ * bob_offset: vertical offset for walk animation
+ */
+void inventory_ui_draw_held_item(Inventory* inv, Texture2D atlas, float bob_offset);
+
 #endif // VOXEL_INVENTORY_UI_H

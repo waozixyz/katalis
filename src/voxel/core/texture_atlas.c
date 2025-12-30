@@ -244,12 +244,10 @@ static void generate_pickaxe_tile(Image* atlas, int tile_x, int tile_y, Color he
         255
     };
 
-    // Draw handle (diagonal from bottom-left to center)
-    for (int i = 0; i < 8; i++) {
-        int x = 4 + i;
-        int y = 11 - i;
-        ImageDrawPixel(atlas, start_x + x, start_y + y, stick_dark);
-        ImageDrawPixel(atlas, start_x + x + 1, start_y + y, stick_light);
+    // Draw handle (vertical, centered under head)
+    for (int y = 5; y <= 14; y++) {
+        ImageDrawPixel(atlas, start_x + 7, start_y + y, stick_dark);
+        ImageDrawPixel(atlas, start_x + 8, start_y + y, stick_light);
     }
 
     // Draw pickaxe head (horizontal with diagonal tips)
@@ -293,17 +291,13 @@ static void generate_shovel_tile(Image* atlas, int tile_x, int tile_y, Color hea
         255
     };
 
-    // Draw handle (diagonal from bottom-left to upper-right)
-    for (int i = 0; i < 9; i++) {
-        int x = 5 + i;
-        int y = 13 - i;
-        ImageDrawPixel(atlas, start_x + x, start_y + y, stick_dark);
-        if (x + 1 < TILE_SIZE) {
-            ImageDrawPixel(atlas, start_x + x + 1, start_y + y, stick_light);
-        }
+    // Draw handle (vertical, centered under head)
+    for (int y = 8; y <= 14; y++) {
+        ImageDrawPixel(atlas, start_x + 10, start_y + y, stick_dark);
+        ImageDrawPixel(atlas, start_x + 11, start_y + y, stick_light);
     }
 
-    // Draw shovel head (rounded rectangle at top-right)
+    // Draw shovel head (rounded rectangle at top)
     // Top row
     for (int x = 9; x <= 12; x++) {
         ImageDrawPixel(atlas, start_x + x, start_y + 1, head_color);
@@ -370,6 +364,85 @@ static void generate_axe_tile(Image* atlas, int tile_x, int tile_y, Color head_c
     // Back of axe (near handle)
     for (int y = 3; y <= 5; y++) {
         ImageDrawPixel(atlas, start_x + 8, start_y + y, head_dark);
+    }
+}
+
+/**
+ * Draw a hand texture for first-person view
+ */
+static void generate_hand_tile(Image* atlas, int tile_x, int tile_y) {
+    int start_x = tile_x * TILE_SIZE;
+    int start_y = tile_y * TILE_SIZE;
+
+    // Clear to transparent
+    for (int y = 0; y < TILE_SIZE; y++) {
+        for (int x = 0; x < TILE_SIZE; x++) {
+            ImageDrawPixel(atlas, start_x + x, start_y + y, (Color){0, 0, 0, 0});
+        }
+    }
+
+    // Skin colors
+    Color skin = {220, 180, 140, 255};       // Main skin tone
+    Color skin_dark = {190, 150, 110, 255};  // Shadow/outline
+    Color skin_light = {240, 200, 160, 255}; // Highlight
+
+    // Draw a blocky Minecraft-style hand (side view, gripping position)
+    // Palm area (main block)
+    for (int y = 6; y <= 13; y++) {
+        for (int x = 4; x <= 11; x++) {
+            Color c = skin;
+            // Add shading
+            if (x == 4 || y == 13) c = skin_dark;
+            if (x == 11 || y == 6) c = skin_light;
+            ImageDrawPixel(atlas, start_x + x, start_y + y, c);
+        }
+    }
+
+    // Thumb (sticking up on left side)
+    for (int y = 3; y <= 7; y++) {
+        for (int x = 2; x <= 4; x++) {
+            Color c = skin;
+            if (x == 2 || y == 7) c = skin_dark;
+            if (y == 3) c = skin_light;
+            ImageDrawPixel(atlas, start_x + x, start_y + y, c);
+        }
+    }
+
+    // Fingers (curled on right side, gripping)
+    // Index finger
+    for (int y = 4; y <= 6; y++) {
+        for (int x = 11; x <= 13; x++) {
+            Color c = skin;
+            if (y == 6) c = skin_dark;
+            if (y == 4) c = skin_light;
+            ImageDrawPixel(atlas, start_x + x, start_y + y, c);
+        }
+    }
+    // Middle finger
+    for (int y = 5; y <= 7; y++) {
+        for (int x = 12; x <= 14; x++) {
+            Color c = skin;
+            if (y == 7) c = skin_dark;
+            if (y == 5) c = skin_light;
+            ImageDrawPixel(atlas, start_x + x, start_y + y, c);
+        }
+    }
+    // Ring/pinky fingers (combined)
+    for (int y = 7; y <= 9; y++) {
+        for (int x = 11; x <= 13; x++) {
+            Color c = skin;
+            if (y == 9) c = skin_dark;
+            if (y == 7 && x > 11) c = skin_light;
+            ImageDrawPixel(atlas, start_x + x, start_y + y, c);
+        }
+    }
+
+    // Wrist area (bottom)
+    for (int y = 13; y <= 15; y++) {
+        for (int x = 5; x <= 10; x++) {
+            Color c = skin_dark;
+            ImageDrawPixel(atlas, start_x + x, start_y + y, c);
+        }
     }
 }
 
@@ -638,6 +711,9 @@ static Image generate_atlas_image(void) {
 
     // STICK - Crafting material
     generate_stick_tile(&atlas, 2, 3);  // Stick at (2, 3) - already correct in item.c
+
+    // HAND - For first-person held item display
+    generate_hand_tile(&atlas, 8, 0);   // Hand at (8, 0)
 
     // CRACK TEXTURES - Row 20 (10 stages of block damage)
     for (int i = 0; i < 10; i++) {
