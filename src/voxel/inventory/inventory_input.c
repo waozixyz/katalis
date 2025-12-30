@@ -12,7 +12,7 @@
 // CONSTANTS (must match inventory_ui.c layout)
 // ============================================================================
 
-#define PANEL_X 150
+#define PANEL_X 50   // Adjusted to make room for crafting guide sidebar
 #define PANEL_Y 100
 
 #define SLOT_SIZE 40

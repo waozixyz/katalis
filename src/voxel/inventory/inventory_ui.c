@@ -3,8 +3,10 @@
  */
 
 #include "voxel/inventory/inventory_ui.h"
+#include "voxel/inventory/crafting.h"
 #include "voxel/core/item.h"
 #include "voxel/inventory/inventory_input.h"
+#include "voxel/world/chest.h"
 #include <raylib.h>
 #include <stdio.h>
 
@@ -24,6 +26,20 @@
 #define ATLAS_SIZE 256
 #define TILE_SIZE 16
 #define TILES_PER_ROW 16
+
+// Crafting guide sidebar constants
+#define GUIDE_X 440
+#define GUIDE_Y 100
+#define GUIDE_WIDTH 180
+#define GUIDE_HEIGHT 400
+#define RECIPE_ENTRY_HEIGHT 24
+#define RECIPE_ICON_SIZE 16
+
+// ============================================================================
+// CRAFTING GUIDE STATE
+// ============================================================================
+
+static int recipe_scroll_offset = 0;
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -65,6 +81,133 @@ static void draw_item_count(int x, int y, int slot_size, uint8_t count) {
     // Simple shadow for readability
     DrawText(count_text, text_x + 1, text_y + 1, font_size, BLACK);
     DrawText(count_text, text_x, text_y, font_size, WHITE);
+}
+
+/**
+ * Draw a mini item icon with color tint (for crafting guide)
+ */
+static void draw_mini_item_icon(ItemType type, int x, int y, int size, Texture2D atlas, Color tint) {
+    if (type == ITEM_NONE) return;
+
+    const ItemProperties* props = item_get_properties(type);
+
+    Rectangle source = {
+        (float)(props->atlas_tile_x * TILE_SIZE),
+        (float)(props->atlas_tile_y * TILE_SIZE),
+        (float)TILE_SIZE,
+        (float)TILE_SIZE
+    };
+
+    Rectangle dest = {
+        (float)x,
+        (float)y,
+        (float)size,
+        (float)size
+    };
+
+    DrawTexturePro(atlas, source, dest, (Vector2){0, 0}, 0.0f, tint);
+}
+
+/**
+ * Draw a single recipe entry in the crafting guide
+ */
+static void draw_recipe_entry(const CraftingRecipe* recipe, int x, int y,
+                               Inventory* inv, Texture2D atlas) {
+    if (!recipe) return;
+
+    // Collect unique ingredients (up to 3 for display)
+    ItemType ingredients[3] = {ITEM_NONE, ITEM_NONE, ITEM_NONE};
+    int ingredient_count = 0;
+
+    for (int i = 0; i < 9 && ingredient_count < 3; i++) {
+        if (recipe->inputs[i] != ITEM_NONE) {
+            // Check if already in list
+            bool found = false;
+            for (int j = 0; j < ingredient_count; j++) {
+                if (ingredients[j] == recipe->inputs[i]) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                ingredients[ingredient_count++] = recipe->inputs[i];
+            }
+        }
+    }
+
+    // Check if craftable (has all ingredients in inventory)
+    bool can_craft = crafting_can_craft_recipe(inv, recipe);
+    Color tint = can_craft ? WHITE : (Color){100, 100, 100, 180};
+    Color text_color = can_craft ? LIGHTGRAY : (Color){80, 80, 80, 180};
+
+    // Draw ingredient icons
+    int icon_x = x;
+    for (int i = 0; i < ingredient_count; i++) {
+        draw_mini_item_icon(ingredients[i], icon_x, y + 4, RECIPE_ICON_SIZE, atlas, tint);
+        icon_x += RECIPE_ICON_SIZE + 2;
+    }
+
+    // Draw arrow
+    DrawText("->", icon_x + 2, y + 6, 10, text_color);
+    icon_x += 20;
+
+    // Draw output icon
+    draw_mini_item_icon(recipe->output, icon_x, y + 4, RECIPE_ICON_SIZE, atlas, tint);
+
+    // Draw output count if > 1
+    if (recipe->output_count > 1) {
+        DrawText(TextFormat("x%d", recipe->output_count),
+                 icon_x + RECIPE_ICON_SIZE + 2, y + 7, 10, text_color);
+    }
+}
+
+/**
+ * Draw the crafting guide sidebar
+ */
+static void draw_crafting_guide(Inventory* inv, Texture2D atlas) {
+    // Draw sidebar panel background
+    DrawRectangle(GUIDE_X, GUIDE_Y, GUIDE_WIDTH, GUIDE_HEIGHT, (Color){40, 40, 40, 240});
+    DrawRectangleLines(GUIDE_X, GUIDE_Y, GUIDE_WIDTH, GUIDE_HEIGHT, (Color){150, 150, 150, 255});
+
+    // Draw "Recipes" title
+    DrawText("Recipes", GUIDE_X + 10, GUIDE_Y + 10, 18, WHITE);
+
+    // Divider line under title
+    DrawLine(GUIDE_X + 10, GUIDE_Y + 32, GUIDE_X + GUIDE_WIDTH - 10, GUIDE_Y + 32,
+             (Color){100, 100, 100, 255});
+
+    // Get recipe list info
+    int recipe_count = crafting_get_recipe_count();
+    int visible_count = (GUIDE_HEIGHT - 50) / RECIPE_ENTRY_HEIGHT;
+    int start_y = GUIDE_Y + 40;
+
+    // Clamp scroll offset
+    int max_scroll = recipe_count - visible_count;
+    if (max_scroll < 0) max_scroll = 0;
+    if (recipe_scroll_offset > max_scroll) recipe_scroll_offset = max_scroll;
+    if (recipe_scroll_offset < 0) recipe_scroll_offset = 0;
+
+    // Draw recipe entries
+    for (int i = 0; i < visible_count && i + recipe_scroll_offset < recipe_count; i++) {
+        int recipe_idx = i + recipe_scroll_offset;
+        const CraftingRecipe* recipe = crafting_get_recipe(recipe_idx);
+
+        if (recipe) {
+            draw_recipe_entry(recipe, GUIDE_X + 8, start_y + i * RECIPE_ENTRY_HEIGHT,
+                              inv, atlas);
+        }
+    }
+
+    // Draw scroll indicators if needed
+    if (recipe_scroll_offset > 0) {
+        DrawText("^", GUIDE_X + GUIDE_WIDTH - 18, GUIDE_Y + 38, 14, GRAY);
+    }
+    if (recipe_scroll_offset + visible_count < recipe_count) {
+        DrawText("v", GUIDE_X + GUIDE_WIDTH - 18, GUIDE_Y + GUIDE_HEIGHT - 18, 14, GRAY);
+    }
+
+    // Show hint at bottom
+    DrawText("Scroll to see more", GUIDE_X + 10, GUIDE_Y + GUIDE_HEIGHT - 18, 10, DARKGRAY);
 }
 
 // ============================================================================
@@ -167,10 +310,10 @@ void inventory_ui_draw_full_screen(Inventory* inv, Texture2D atlas) {
     // Draw semi-transparent background overlay
     DrawRectangle(0, 0, 800, 600, (Color){0, 0, 0, 150});
 
-    // Draw inventory panel
-    int panel_x = 150;
+    // Draw inventory panel (adjusted to make room for crafting guide)
+    int panel_x = 50;
     int panel_y = 100;
-    int panel_w = 500;
+    int panel_w = 380;
     int panel_h = 400;
 
     DrawRectangle(panel_x, panel_y, panel_w, panel_h, (Color){40, 40, 40, 240});
@@ -267,6 +410,8 @@ void inventory_ui_draw_full_screen(Inventory* inv, Texture2D atlas) {
         }
     }
 
+    // Draw crafting guide sidebar
+    draw_crafting_guide(inv, atlas);
 }
 
 void inventory_ui_draw_tooltip(Inventory* inv, int mouse_x, int mouse_y) {
@@ -338,4 +483,224 @@ void inventory_ui_draw_tooltip(Inventory* inv, int mouse_x, int mouse_y) {
 
     // Draw item name
     DrawText(item_name, tooltip_x + padding, tooltip_y + padding, font_size, WHITE);
+}
+
+// ============================================================================
+// CHEST UI
+// ============================================================================
+
+// Chest UI layout constants
+#define CHEST_PANEL_X 150
+#define CHEST_PANEL_Y 80
+#define CHEST_SLOT_SIZE 40
+#define CHEST_SLOT_GAP 2
+
+void inventory_ui_draw_chest(ChestData* chest, Inventory* inv, Texture2D atlas) {
+    if (!chest || !inv) return;
+
+    const int SLOT_SIZE = CHEST_SLOT_SIZE;
+    const int SLOT_GAP = CHEST_SLOT_GAP;
+
+    // Draw semi-transparent background overlay
+    DrawRectangle(0, 0, 800, 600, (Color){0, 0, 0, 150});
+
+    // Calculate panel dimensions
+    int panel_x = CHEST_PANEL_X;
+    int panel_y = CHEST_PANEL_Y;
+    int panel_w = 500;
+    int panel_h = 450;
+
+    // Draw panel background
+    DrawRectangle(panel_x, panel_y, panel_w, panel_h, (Color){40, 40, 40, 240});
+    DrawRectangleLines(panel_x, panel_y, panel_w, panel_h, (Color){150, 150, 150, 255});
+
+    // Title
+    DrawText("Chest", panel_x + 20, panel_y + 10, 24, WHITE);
+
+    // Section 1: Chest contents (3 rows x 9 columns = 27 slots)
+    int chest_x = panel_x + 20;
+    int chest_y = panel_y + 50;
+
+    for (int row = 0; row < 3; row++) {
+        for (int col = 0; col < 9; col++) {
+            int x = chest_x + col * (SLOT_SIZE + SLOT_GAP);
+            int y = chest_y + row * (SLOT_SIZE + SLOT_GAP);
+            int slot_index = row * 9 + col;
+
+            draw_slot(x, y, SLOT_SIZE);
+
+            // Draw item if present
+            if (slot_index < CHEST_SLOTS) {
+                ItemStack* slot = &chest->slots[slot_index];
+                if (slot->type != ITEM_NONE && slot->count > 0) {
+                    int icon_x = x + (SLOT_SIZE - 28) / 2;
+                    int icon_y = y + (SLOT_SIZE - 28) / 2;
+                    inventory_ui_draw_item_icon(slot->type, icon_x, icon_y, 28, atlas);
+                    draw_item_count(x, y, SLOT_SIZE, slot->count);
+                }
+            }
+        }
+    }
+
+    // Divider line
+    int div_y = chest_y + 3 * (SLOT_SIZE + SLOT_GAP) + 10;
+    DrawLine(panel_x + 20, div_y, panel_x + panel_w - 20, div_y, (Color){100, 100, 100, 255});
+
+    // Section 2: Player main inventory (3 rows x 9 columns)
+    int inv_x = panel_x + 20;
+    int inv_y = div_y + 20;
+
+    DrawText("Inventory", inv_x, inv_y - 15, 14, LIGHTGRAY);
+
+    for (int row = 0; row < 3; row++) {
+        for (int col = 0; col < 9; col++) {
+            int x = inv_x + col * (SLOT_SIZE + SLOT_GAP);
+            int y = inv_y + row * (SLOT_SIZE + SLOT_GAP);
+            int slot_index = row * 9 + col;
+
+            draw_slot(x, y, SLOT_SIZE);
+
+            // Draw item if present
+            ItemStack* slot = &inv->main_inventory[slot_index];
+            if (slot->type != ITEM_NONE && slot->count > 0) {
+                int icon_x = x + (SLOT_SIZE - 28) / 2;
+                int icon_y = y + (SLOT_SIZE - 28) / 2;
+                inventory_ui_draw_item_icon(slot->type, icon_x, icon_y, 28, atlas);
+                draw_item_count(x, y, SLOT_SIZE, slot->count);
+            }
+        }
+    }
+
+    // Section 3: Player hotbar (1 row x 9 columns)
+    int hotbar_x = inv_x;
+    int hotbar_y = inv_y + 3 * (SLOT_SIZE + SLOT_GAP) + 10;
+
+    for (int i = 0; i < 9; i++) {
+        int x = hotbar_x + i * (SLOT_SIZE + SLOT_GAP);
+        int y = hotbar_y;
+
+        draw_slot(x, y, SLOT_SIZE);
+
+        // Draw item if present
+        ItemStack* slot = &inv->hotbar[i];
+        if (slot->type != ITEM_NONE && slot->count > 0) {
+            int icon_x = x + (SLOT_SIZE - 28) / 2;
+            int icon_y = y + (SLOT_SIZE - 28) / 2;
+            inventory_ui_draw_item_icon(slot->type, icon_x, icon_y, 28, atlas);
+            draw_item_count(x, y, SLOT_SIZE, slot->count);
+        }
+    }
+
+    // Instructions
+    DrawText("Click items to transfer. Press E or ESC to close.", panel_x + 20, panel_y + panel_h - 25, 14, GRAY);
+}
+
+void inventory_ui_handle_chest_click(ChestData* chest, Inventory* inv, int mouse_x, int mouse_y) {
+    if (!chest || !inv) return;
+
+    const int SLOT_SIZE = CHEST_SLOT_SIZE;
+    const int SLOT_GAP = CHEST_SLOT_GAP;
+    int panel_x = CHEST_PANEL_X;
+    int panel_y = CHEST_PANEL_Y;
+
+    // Check chest slots (3 rows x 9 columns)
+    int chest_x = panel_x + 20;
+    int chest_y = panel_y + 50;
+
+    for (int row = 0; row < 3; row++) {
+        for (int col = 0; col < 9; col++) {
+            int x = chest_x + col * (SLOT_SIZE + SLOT_GAP);
+            int y = chest_y + row * (SLOT_SIZE + SLOT_GAP);
+            int slot_index = row * 9 + col;
+
+            if (mouse_x >= x && mouse_x < x + SLOT_SIZE &&
+                mouse_y >= y && mouse_y < y + SLOT_SIZE) {
+                // Clicked on chest slot - transfer to player inventory
+                if (slot_index < CHEST_SLOTS && chest->slots[slot_index].type != ITEM_NONE) {
+                    ItemStack item = chest->slots[slot_index];
+
+                    // Try to add to player inventory
+                    if (inventory_add_item(inv, item.type, item.count)) {
+                        // Remove from chest
+                        chest->slots[slot_index] = (ItemStack){ITEM_NONE, 0, 0, 0};
+                        printf("[CHEST] Took %d %s\n", item.count, item_get_name(item.type));
+                    }
+                }
+                return;
+            }
+        }
+    }
+
+    // Check player inventory slots
+    int div_y = chest_y + 3 * (SLOT_SIZE + SLOT_GAP) + 10;
+    int inv_x = panel_x + 20;
+    int inv_y = div_y + 20;
+
+    // Main inventory (3 rows x 9)
+    for (int row = 0; row < 3; row++) {
+        for (int col = 0; col < 9; col++) {
+            int x = inv_x + col * (SLOT_SIZE + SLOT_GAP);
+            int y = inv_y + row * (SLOT_SIZE + SLOT_GAP);
+            int slot_index = row * 9 + col;
+
+            if (mouse_x >= x && mouse_x < x + SLOT_SIZE &&
+                mouse_y >= y && mouse_y < y + SLOT_SIZE) {
+                // Clicked on inventory slot - transfer to chest
+                if (inv->main_inventory[slot_index].type != ITEM_NONE) {
+                    ItemStack item = inv->main_inventory[slot_index];
+
+                    // Try to add to chest
+                    if (chest_add_item(chest, item)) {
+                        // Remove from inventory
+                        inv->main_inventory[slot_index] = (ItemStack){ITEM_NONE, 0, 0, 0};
+                        printf("[CHEST] Stored %d %s\n", item.count, item_get_name(item.type));
+                    }
+                }
+                return;
+            }
+        }
+    }
+
+    // Hotbar (1 row x 9)
+    int hotbar_x = inv_x;
+    int hotbar_y = inv_y + 3 * (SLOT_SIZE + SLOT_GAP) + 10;
+
+    for (int i = 0; i < 9; i++) {
+        int x = hotbar_x + i * (SLOT_SIZE + SLOT_GAP);
+        int y = hotbar_y;
+
+        if (mouse_x >= x && mouse_x < x + SLOT_SIZE &&
+            mouse_y >= y && mouse_y < y + SLOT_SIZE) {
+            // Clicked on hotbar slot - transfer to chest
+            if (inv->hotbar[i].type != ITEM_NONE) {
+                ItemStack item = inv->hotbar[i];
+
+                // Try to add to chest
+                if (chest_add_item(chest, item)) {
+                    // Remove from hotbar
+                    inv->hotbar[i] = (ItemStack){ITEM_NONE, 0, 0, 0};
+                    printf("[CHEST] Stored %d %s\n", item.count, item_get_name(item.type));
+                }
+            }
+            return;
+        }
+    }
+}
+
+// ============================================================================
+// CRAFTING GUIDE SCROLL HANDLING
+// ============================================================================
+
+void inventory_ui_handle_scroll(int scroll_delta) {
+    int recipe_count = crafting_get_recipe_count();
+    int visible_count = (GUIDE_HEIGHT - 50) / RECIPE_ENTRY_HEIGHT;
+    int max_scroll = recipe_count - visible_count;
+    if (max_scroll < 0) max_scroll = 0;
+
+    // Scroll up = positive delta, scroll down = negative delta
+    recipe_scroll_offset -= scroll_delta;
+
+    // Clamp to valid range
+    if (recipe_scroll_offset < 0) recipe_scroll_offset = 0;
+    if (recipe_scroll_offset > max_scroll) recipe_scroll_offset = max_scroll;
 }

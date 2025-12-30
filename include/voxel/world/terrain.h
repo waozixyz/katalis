@@ -90,6 +90,16 @@ typedef struct {
     int rooms_per_chunk;         // Maximum rooms per chunk (default: 2)
     float room_radius_min;       // Minimum room radius (default: 4.0)
     float room_radius_max;       // Maximum room radius (default: 10.0)
+
+    // Cave formation settings - stalactites and stalagmites
+    bool generate_formations;    // Enable cave formations (default: true)
+    float formation_density;     // Formations per valid spot (default: 0.03)
+    int formation_max_height;    // Maximum formation height (default: 4)
+
+    // Underground water pool settings
+    bool generate_water_pools;   // Enable water in caves (default: true)
+    int water_pool_max_y;        // Maximum Y for water pools (default: 80)
+    float water_pool_frequency;  // Chance per low point (default: 0.15)
 } TerrainParams;
 
 // ============================================================================

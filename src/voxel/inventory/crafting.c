@@ -372,3 +372,52 @@ ItemStack crafting_craft_all(Inventory* inv) {
 
     return result;
 }
+
+// ============================================================================
+// RECIPE QUERY API (for crafting guide)
+// ============================================================================
+
+int crafting_get_recipe_count(void) {
+    return g_recipe_count;
+}
+
+const CraftingRecipe* crafting_get_recipe(int index) {
+    if (index < 0 || index >= g_recipe_count) {
+        return NULL;
+    }
+    return &g_recipes[index];
+}
+
+bool crafting_can_craft_recipe(Inventory* inv, const CraftingRecipe* recipe) {
+    if (!inv || !recipe) return false;
+
+    // Count required ingredients from recipe
+    int required[ITEM_COUNT] = {0};
+    for (int i = 0; i < 9; i++) {
+        if (recipe->inputs[i] != ITEM_NONE) {
+            required[recipe->inputs[i]]++;
+        }
+    }
+
+    // Count available items in inventory (hotbar + main inventory)
+    int available[ITEM_COUNT] = {0};
+    for (int i = 0; i < HOTBAR_SIZE; i++) {
+        if (inv->hotbar[i].type != ITEM_NONE) {
+            available[inv->hotbar[i].type] += inv->hotbar[i].count;
+        }
+    }
+    for (int i = 0; i < MAIN_INVENTORY_SIZE; i++) {
+        if (inv->main_inventory[i].type != ITEM_NONE) {
+            available[inv->main_inventory[i].type] += inv->main_inventory[i].count;
+        }
+    }
+
+    // Check if all required ingredients are available
+    for (int i = 0; i < ITEM_COUNT; i++) {
+        if (required[i] > available[i]) {
+            return false;
+        }
+    }
+
+    return true;
+}

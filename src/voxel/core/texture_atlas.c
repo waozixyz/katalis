@@ -191,6 +191,240 @@ static void generate_crack_tile(Image* atlas, int stage, int tile_x, int tile_y)
 }
 
 /**
+ * Draw a stick item texture (diagonal brown stick)
+ */
+static void generate_stick_tile(Image* atlas, int tile_x, int tile_y) {
+    int start_x = tile_x * TILE_SIZE;
+    int start_y = tile_y * TILE_SIZE;
+
+    // Clear to transparent
+    for (int y = 0; y < TILE_SIZE; y++) {
+        for (int x = 0; x < TILE_SIZE; x++) {
+            ImageDrawPixel(atlas, start_x + x, start_y + y, (Color){0, 0, 0, 0});
+        }
+    }
+
+    // Draw diagonal stick from bottom-left to top-right
+    Color stick_dark = {100, 70, 40, 255};
+    Color stick_light = {140, 100, 60, 255};
+
+    // Stick pattern (2 pixels wide, diagonal)
+    for (int i = 0; i < 12; i++) {
+        int x = 3 + i;
+        int y = 12 - i;
+        if (x >= 0 && x < TILE_SIZE && y >= 0 && y < TILE_SIZE) {
+            ImageDrawPixel(atlas, start_x + x, start_y + y, stick_dark);
+            if (x + 1 < TILE_SIZE) {
+                ImageDrawPixel(atlas, start_x + x + 1, start_y + y, stick_light);
+            }
+        }
+    }
+}
+
+/**
+ * Draw a pickaxe tool texture
+ */
+static void generate_pickaxe_tile(Image* atlas, int tile_x, int tile_y, Color head_color) {
+    int start_x = tile_x * TILE_SIZE;
+    int start_y = tile_y * TILE_SIZE;
+
+    // Clear to transparent
+    for (int y = 0; y < TILE_SIZE; y++) {
+        for (int x = 0; x < TILE_SIZE; x++) {
+            ImageDrawPixel(atlas, start_x + x, start_y + y, (Color){0, 0, 0, 0});
+        }
+    }
+
+    Color stick_dark = {100, 70, 40, 255};
+    Color stick_light = {140, 100, 60, 255};
+    Color head_dark = {
+        (unsigned char)(head_color.r * 0.7f),
+        (unsigned char)(head_color.g * 0.7f),
+        (unsigned char)(head_color.b * 0.7f),
+        255
+    };
+
+    // Draw handle (diagonal from bottom-left to center)
+    for (int i = 0; i < 8; i++) {
+        int x = 4 + i;
+        int y = 11 - i;
+        ImageDrawPixel(atlas, start_x + x, start_y + y, stick_dark);
+        ImageDrawPixel(atlas, start_x + x + 1, start_y + y, stick_light);
+    }
+
+    // Draw pickaxe head (horizontal with diagonal tips)
+    // Top edge
+    for (int x = 2; x <= 13; x++) {
+        ImageDrawPixel(atlas, start_x + x, start_y + 2, head_color);
+    }
+    // Second row
+    for (int x = 3; x <= 12; x++) {
+        ImageDrawPixel(atlas, start_x + x, start_y + 3, head_color);
+    }
+    // Third row (narrower)
+    for (int x = 5; x <= 10; x++) {
+        ImageDrawPixel(atlas, start_x + x, start_y + 4, head_dark);
+    }
+    // Tip details
+    ImageDrawPixel(atlas, start_x + 1, start_y + 3, head_dark);
+    ImageDrawPixel(atlas, start_x + 14, start_y + 3, head_dark);
+}
+
+/**
+ * Draw a shovel tool texture
+ */
+static void generate_shovel_tile(Image* atlas, int tile_x, int tile_y, Color head_color) {
+    int start_x = tile_x * TILE_SIZE;
+    int start_y = tile_y * TILE_SIZE;
+
+    // Clear to transparent
+    for (int y = 0; y < TILE_SIZE; y++) {
+        for (int x = 0; x < TILE_SIZE; x++) {
+            ImageDrawPixel(atlas, start_x + x, start_y + y, (Color){0, 0, 0, 0});
+        }
+    }
+
+    Color stick_dark = {100, 70, 40, 255};
+    Color stick_light = {140, 100, 60, 255};
+    Color head_dark = {
+        (unsigned char)(head_color.r * 0.7f),
+        (unsigned char)(head_color.g * 0.7f),
+        (unsigned char)(head_color.b * 0.7f),
+        255
+    };
+
+    // Draw handle (diagonal from bottom-left to upper-right)
+    for (int i = 0; i < 9; i++) {
+        int x = 5 + i;
+        int y = 13 - i;
+        ImageDrawPixel(atlas, start_x + x, start_y + y, stick_dark);
+        if (x + 1 < TILE_SIZE) {
+            ImageDrawPixel(atlas, start_x + x + 1, start_y + y, stick_light);
+        }
+    }
+
+    // Draw shovel head (rounded rectangle at top-right)
+    // Top row
+    for (int x = 9; x <= 12; x++) {
+        ImageDrawPixel(atlas, start_x + x, start_y + 1, head_color);
+    }
+    // Middle rows
+    for (int y = 2; y <= 5; y++) {
+        for (int x = 8; x <= 13; x++) {
+            ImageDrawPixel(atlas, start_x + x, start_y + y, head_color);
+        }
+    }
+    // Bottom rounded
+    for (int x = 9; x <= 12; x++) {
+        ImageDrawPixel(atlas, start_x + x, start_y + 6, head_dark);
+    }
+    ImageDrawPixel(atlas, start_x + 10, start_y + 7, head_dark);
+    ImageDrawPixel(atlas, start_x + 11, start_y + 7, head_dark);
+}
+
+/**
+ * Draw an axe tool texture
+ */
+static void generate_axe_tile(Image* atlas, int tile_x, int tile_y, Color head_color) {
+    int start_x = tile_x * TILE_SIZE;
+    int start_y = tile_y * TILE_SIZE;
+
+    // Clear to transparent
+    for (int y = 0; y < TILE_SIZE; y++) {
+        for (int x = 0; x < TILE_SIZE; x++) {
+            ImageDrawPixel(atlas, start_x + x, start_y + y, (Color){0, 0, 0, 0});
+        }
+    }
+
+    Color stick_dark = {100, 70, 40, 255};
+    Color stick_light = {140, 100, 60, 255};
+    Color head_dark = {
+        (unsigned char)(head_color.r * 0.7f),
+        (unsigned char)(head_color.g * 0.7f),
+        (unsigned char)(head_color.b * 0.7f),
+        255
+    };
+
+    // Draw handle (diagonal from bottom-left)
+    for (int i = 0; i < 10; i++) {
+        int x = 3 + i;
+        int y = 13 - i;
+        ImageDrawPixel(atlas, start_x + x, start_y + y, stick_dark);
+        if (x + 1 < TILE_SIZE) {
+            ImageDrawPixel(atlas, start_x + x + 1, start_y + y, stick_light);
+        }
+    }
+
+    // Draw axe head (angular shape on right side)
+    // Main blade
+    for (int y = 2; y <= 6; y++) {
+        for (int x = 9; x <= 13 - (y - 2); x++) {
+            ImageDrawPixel(atlas, start_x + x, start_y + y, head_color);
+        }
+    }
+    // Cutting edge (darker)
+    for (int y = 2; y <= 6; y++) {
+        int x = 13 - (y - 2);
+        ImageDrawPixel(atlas, start_x + x, start_y + y, head_dark);
+    }
+    // Back of axe (near handle)
+    for (int y = 3; y <= 5; y++) {
+        ImageDrawPixel(atlas, start_x + 8, start_y + y, head_dark);
+    }
+}
+
+/**
+ * Draw a sword weapon texture
+ */
+static void generate_sword_tile(Image* atlas, int tile_x, int tile_y, Color blade_color) {
+    int start_x = tile_x * TILE_SIZE;
+    int start_y = tile_y * TILE_SIZE;
+
+    // Clear to transparent
+    for (int y = 0; y < TILE_SIZE; y++) {
+        for (int x = 0; x < TILE_SIZE; x++) {
+            ImageDrawPixel(atlas, start_x + x, start_y + y, (Color){0, 0, 0, 0});
+        }
+    }
+
+    Color stick_dark = {100, 70, 40, 255};
+    Color blade_dark = {
+        (unsigned char)(blade_color.r * 0.7f),
+        (unsigned char)(blade_color.g * 0.7f),
+        (unsigned char)(blade_color.b * 0.7f),
+        255
+    };
+    Color guard = {80, 80, 80, 255};
+
+    // Draw handle (bottom)
+    for (int i = 0; i < 4; i++) {
+        int x = 6 + i;
+        int y = 12 - i;
+        ImageDrawPixel(atlas, start_x + x, start_y + y, stick_dark);
+        ImageDrawPixel(atlas, start_x + x + 1, start_y + y, stick_dark);
+    }
+
+    // Draw guard (crossguard)
+    for (int x = 7; x <= 11; x++) {
+        ImageDrawPixel(atlas, start_x + x, start_y + 8, guard);
+    }
+
+    // Draw blade (diagonal upward)
+    for (int i = 0; i < 7; i++) {
+        int x = 10 + i;
+        int y = 7 - i;
+        if (x < TILE_SIZE && y >= 0) {
+            ImageDrawPixel(atlas, start_x + x, start_y + y, blade_color);
+            if (x + 1 < TILE_SIZE) {
+                ImageDrawPixel(atlas, start_x + x + 1, start_y + y, blade_dark);
+            }
+        }
+    }
+    // Tip
+    ImageDrawPixel(atlas, start_x + 14, start_y + 1, blade_dark);
+}
+
+/**
  * Generate a colored tile in the atlas
  */
 static void generate_tile(Image* atlas, int tile_x, int tile_y, Color color, bool add_border) {
@@ -328,9 +562,45 @@ static Image generate_atlas_image(void) {
     // ACACIA_LEAVES - Row 26 (yellow-green)
     generate_leaf_tile(&atlas, 0, 26, (Color){140, 180, 60, 255});
 
-    // ITEM TEXTURES (Row 0, columns 3+)
+    // STALACTITE - Row 27 (gray pointed stone, darker than regular stone)
+    generate_tile(&atlas, 0, 27, (Color){100, 100, 105, 255}, true);
+
+    // STALAGMITE - Row 28 (gray pointed stone, slightly different shade)
+    generate_tile(&atlas, 0, 28, (Color){95, 95, 100, 255}, true);
+
+    // CHEST - Row 29 (brown wood with darker band)
+    generate_tile(&atlas, 0, 29, (Color){139, 90, 43, 255}, true);   // Sides: Wood
+    generate_tile(&atlas, 1, 29, (Color){100, 60, 30, 255}, true);   // Top: Darker lid
+
+    // =========================================================================
+    // ITEM TEXTURES (Columns 3+)
+    // =========================================================================
+
+    // Tool head colors
+    Color wood_color = {160, 120, 70, 255};    // Warm wood color for tool heads
+    Color stone_color = {140, 140, 145, 255};  // Gray stone color for tool heads
+
+    // PICKAXES - Column 3
+    generate_pickaxe_tile(&atlas, 3, 0, wood_color);   // Wooden pickaxe
+    generate_pickaxe_tile(&atlas, 3, 1, stone_color);  // Stone pickaxe
+
+    // SHOVELS - Column 4
+    generate_shovel_tile(&atlas, 4, 0, wood_color);    // Wooden shovel
+    generate_shovel_tile(&atlas, 4, 1, stone_color);   // Stone shovel
+
+    // AXES - Column 5
+    generate_axe_tile(&atlas, 5, 0, wood_color);       // Wooden axe
+    generate_axe_tile(&atlas, 5, 1, stone_color);      // Stone axe
+
+    // SWORDS - Column 7 (for future use)
+    generate_sword_tile(&atlas, 7, 0, wood_color);     // Wooden sword
+    generate_sword_tile(&atlas, 7, 1, stone_color);    // Stone sword
+
     // MEAT - Raw meat item (pinkish-red)
     generate_tile(&atlas, 6, 0, (Color){200, 100, 100, 255}, true);   // Raw meat
+
+    // STICK - Crafting material
+    generate_stick_tile(&atlas, 2, 3);  // Stick at (2, 3) - already correct in item.c
 
     // CRACK TEXTURES - Row 20 (10 stages of block damage)
     for (int i = 0; i < 10; i++) {
@@ -541,6 +811,22 @@ TextureCoords texture_atlas_get_coords(BlockType block_type, BlockFace face) {
 
         case BLOCK_ACACIA_LEAVES:
             tile_x = 0; tile_y = 26;
+            break;
+
+        case BLOCK_STALACTITE:
+            tile_x = 0; tile_y = 27;
+            break;
+
+        case BLOCK_STALAGMITE:
+            tile_x = 0; tile_y = 28;
+            break;
+
+        case BLOCK_CHEST:
+            if (face == FACE_TOP || face == FACE_BOTTOM) {
+                tile_x = 1; tile_y = 29;  // Darker lid
+            } else {
+                tile_x = 0; tile_y = 29;  // Wood sides
+            }
             break;
 
         default:

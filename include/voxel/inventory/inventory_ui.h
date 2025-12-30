@@ -38,4 +38,24 @@ void inventory_ui_draw_item_icon(ItemType type, int x, int y, int size, Texture2
  */
 void inventory_ui_draw_tooltip(Inventory* inv, int mouse_x, int mouse_y);
 
+// Forward declaration for chest
+typedef struct ChestData ChestData;
+
+/**
+ * Draw chest UI with player inventory below
+ */
+void inventory_ui_draw_chest(ChestData* chest, Inventory* inv, Texture2D atlas);
+
+/**
+ * Handle click on chest UI
+ * Transfers items between chest and player inventory
+ */
+void inventory_ui_handle_chest_click(ChestData* chest, Inventory* inv, int mouse_x, int mouse_y);
+
+/**
+ * Handle scroll input for crafting guide
+ * scroll_delta: positive = scroll up, negative = scroll down
+ */
+void inventory_ui_handle_scroll(int scroll_delta);
+
 #endif // VOXEL_INVENTORY_UI_H

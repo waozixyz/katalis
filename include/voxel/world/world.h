@@ -16,6 +16,8 @@
 typedef struct ChunkWorker ChunkWorker;
 typedef struct Player Player;
 typedef struct EntityManager EntityManager;
+typedef struct WaterUpdateQueue WaterUpdateQueue;
+typedef struct ChestRegistry ChestRegistry;
 
 // ============================================================================
 // WORLD CONSTANTS
@@ -54,6 +56,9 @@ typedef struct World {
     Player* player;          // Reference to player (for entity AI)
     EntityManager* entity_manager;  // Entity manager for mobs
     float time_of_day;       // Current time (0-24 hours) for lighting
+    WaterUpdateQueue* water_queue;  // Water flow update system
+    int game_tick;           // Game tick counter for water updates
+    ChestRegistry* chest_registry;  // Chest data storage
 } World;
 
 // ============================================================================

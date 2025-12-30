@@ -24,6 +24,7 @@
 #include "voxel/entity/tree.h"
 #include "voxel/network/network.h"
 #include "voxel/ui/minimap.h"
+#include "voxel/world/chest.h"
 #include <kryon.h>  // For shutdown API
 #include <raylib.h>
 #include <raymath.h>
@@ -70,6 +71,8 @@ typedef struct {
     bool should_exit;            // Set to true to cleanly exit game
     // Entity targeting
     Entity* target_entity;       // Currently targeted entity (or NULL)
+    // Chest interaction
+    ChestData* open_chest;       // Currently open chest (or NULL)
 } GameState;
 
 static GameState g_state;
@@ -382,6 +385,9 @@ static void game_init(void) {
     g_state.minimap = minimap_create();
     printf("[GAME] Minimap initialized\n");
 
+    // Initialize chest interaction state
+    g_state.open_chest = NULL;
+
     // Register cleanup callback with Kryon shutdown system
     // This ensures game resources are freed BEFORE the window is closed
     kryon_set_cleanup_callback(NULL, game_cleanup_callback, NULL);
@@ -681,12 +687,37 @@ static void game_update(float dt) {
     }
 
     // Place block on right click (only when inventory closed and not paused)
-    if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON) && !g_state.player->inventory->is_open && !pause_menu_is_open(g_state.pause_menu)) {
+    if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON) && !g_state.player->inventory->is_open && !g_state.open_chest && !pause_menu_is_open(g_state.pause_menu)) {
         if (g_state.has_target_block) {
-            ItemStack* selected = inventory_get_selected_hotbar_item(g_state.player->inventory);
+            // Check if clicking on a chest - open it instead of placing
+            int target_x = (int)g_state.target_block_pos.x;
+            int target_y = (int)g_state.target_block_pos.y;
+            int target_z = (int)g_state.target_block_pos.z;
+            Block target_block = world_get_block(g_state.world, target_x, target_y, target_z);
 
-            if (selected && selected->type != ITEM_NONE) {
-                const ItemProperties* props = item_get_properties(selected->type);
+            if (target_block.type == BLOCK_CHEST) {
+                // Open the chest
+                ChestData* chest = chest_get(g_state.world->chest_registry, target_x, target_y, target_z);
+                if (!chest) {
+                    // First time opening - create chest data and generate loot
+                    chest = chest_create(g_state.world->chest_registry, target_x, target_y, target_z);
+                    if (chest) {
+                        unsigned int loot_seed = (unsigned int)(target_x * 73856093 ^ target_y * 19349663 ^ target_z * 83492791);
+                        chest_generate_dungeon_loot(chest, loot_seed);
+                    }
+                }
+
+                if (chest) {
+                    g_state.open_chest = chest;
+                    EnableCursor();
+                    printf("[GAME] Opened chest at (%d, %d, %d)\n", target_x, target_y, target_z);
+                }
+            } else {
+                // Normal block placement
+                ItemStack* selected = inventory_get_selected_hotbar_item(g_state.player->inventory);
+
+                if (selected && selected->type != ITEM_NONE) {
+                    const ItemProperties* props = item_get_properties(selected->type);
 
                 if (props->is_placeable) {
                     // Calculate placement position (adjacent to hit face)
@@ -732,7 +763,28 @@ static void game_update(float dt) {
                         printf("[BLOCKED] Cannot place block inside player\n");
                     }
                 }
-            }
+                }  // if (selected && selected->type != ITEM_NONE)
+            }  // else (not a chest)
+        }  // if (g_state.has_target_block)
+    }  // if (IsMouseButtonPressed...)
+
+    // Close chest with ESC or E key
+    if (g_state.open_chest) {
+        if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_E)) {
+            g_state.open_chest = NULL;
+            DisableCursor();
+            printf("[GAME] Closed chest\n");
+        }
+    }
+
+    // Chest interaction (when chest is open)
+    if (g_state.open_chest && window_focused) {
+        Vector2 mouse_pos = GetMousePosition();
+        int mouse_x = (int)mouse_pos.x;
+        int mouse_y = (int)mouse_pos.y;
+
+        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+            inventory_ui_handle_chest_click(g_state.open_chest, g_state.player->inventory, mouse_x, mouse_y);
         }
     }
 
@@ -753,6 +805,12 @@ static void game_update(float dt) {
         // Right-click: Pick up/place half stack
         else if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON)) {
             inventory_input_handle_right_click(g_state.player->inventory, mouse_x, mouse_y);
+        }
+
+        // Mouse wheel: Scroll crafting guide
+        int scroll = (int)GetMouseWheelMove();
+        if (scroll != 0) {
+            inventory_ui_handle_scroll(scroll);
         }
     }
 
@@ -1077,8 +1135,13 @@ static void game_draw(void) {
         }
     }
 
+    // Draw chest UI if open
+    if (g_state.open_chest) {
+        inventory_ui_draw_chest(g_state.open_chest, g_state.player->inventory, atlas);
+    }
+
     // Draw full inventory if open
-    if (g_state.player->inventory->is_open) {
+    if (g_state.player->inventory->is_open && !g_state.open_chest) {
         inventory_ui_draw_full_screen(g_state.player->inventory, atlas);
 
         // Draw tooltip for hovered item (only when not holding item)

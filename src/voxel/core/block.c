@@ -330,6 +330,39 @@ void block_system_init(void) {
         .requires_tool = false
     };
 
+    // STALACTITE (Cave decoration - hanging from ceiling)
+    g_block_properties[BLOCK_STALACTITE] = (BlockProperties){
+        .name = "Stalactite",
+        .is_solid = true,
+        .is_transparent = false,
+        .is_fluid = false,
+        .hardness = 1.0f,
+        .preferred_tool = TOOL_PICKAXE,
+        .requires_tool = false
+    };
+
+    // STALAGMITE (Cave decoration - rising from floor)
+    g_block_properties[BLOCK_STALAGMITE] = (BlockProperties){
+        .name = "Stalagmite",
+        .is_solid = true,
+        .is_transparent = false,
+        .is_fluid = false,
+        .hardness = 1.0f,
+        .preferred_tool = TOOL_PICKAXE,
+        .requires_tool = false
+    };
+
+    // CHEST (Interactive loot container)
+    g_block_properties[BLOCK_CHEST] = (BlockProperties){
+        .name = "Chest",
+        .is_solid = true,
+        .is_transparent = false,
+        .is_fluid = false,
+        .hardness = 2.5f,
+        .preferred_tool = TOOL_AXE,
+        .requires_tool = false
+    };
+
     g_initialized = true;
     printf("[BLOCK] Block system initialized with %d block types\n", BLOCK_COUNT);
 }

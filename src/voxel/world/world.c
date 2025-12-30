@@ -5,6 +5,8 @@
 #include "voxel/world/world.h"
 #include "voxel/world/chunk_worker.h"
 #include "voxel/world/spawn.h"
+#include "voxel/world/water.h"
+#include "voxel/world/chest.h"
 #include "voxel/core/texture_atlas.h"
 #include "voxel/world/terrain.h"
 #include "voxel/render/light.h"
@@ -240,6 +242,9 @@ World* world_create(TerrainParams terrain_params) {
     world->player = NULL;  // Set by game after player creation
     world->entity_manager = NULL;  // Set by game after entity manager creation
     world->time_of_day = 12.0f;  // Default to noon
+    world->water_queue = water_queue_create();
+    world->game_tick = 0;
+    world->chest_registry = chest_registry_create();
 
     // Initialize spawn system
     spawn_system_init();
@@ -254,6 +259,16 @@ void world_destroy(World* world) {
     // Stop worker threads first
     if (world->worker) {
         chunk_worker_destroy(world->worker);
+    }
+
+    // Destroy water system
+    if (world->water_queue) {
+        water_queue_destroy(world->water_queue);
+    }
+
+    // Destroy chest registry
+    if (world->chest_registry) {
+        chest_registry_destroy(world->chest_registry);
     }
 
     chunk_hashmap_destroy(world->chunks);
@@ -303,10 +318,21 @@ void world_set_block(World* world, int x, int y, int z, Block block) {
 
     // Recalculate lighting for this chunk when a block changes
     light_calculate_chunk(chunk);
+
+    // Notify water system of block change
+    if (world->water_queue) {
+        water_on_block_change(world->water_queue, world, x, y, z);
+    }
 }
 
 void world_update(World* world, int center_chunk_x, int center_chunk_z) {
     if (!world) return;
+
+    // Process water flow updates (every 2 frames for performance)
+    world->game_tick++;
+    if (world->water_queue && (world->game_tick % 2 == 0)) {
+        water_process_tick(world->water_queue, world);
+    }
 
     static bool first_update = true;
     static int last_center_x = 0;

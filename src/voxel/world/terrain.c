@@ -98,6 +98,16 @@ TerrainParams terrain_default_params(void) {
     params.room_radius_min = 4.0f;
     params.room_radius_max = 7.0f;
 
+    // Cave formations (stalactites and stalagmites)
+    params.generate_formations = true;
+    params.formation_density = 0.03f;   // 3% chance per valid air block
+    params.formation_max_height = 4;    // Up to 4 blocks tall
+
+    // Underground water pools
+    params.generate_water_pools = true;
+    params.water_pool_max_y = 80;       // Water only below y=80
+    params.water_pool_frequency = 0.15f; // 15% chance at valid low points
+
     return params;
 }
 
@@ -483,6 +493,31 @@ static void generate_dungeon(Chunk* chunk, TerrainParams params) {
             }
         }
     }
+
+    // Place 1-2 chests in the dungeon
+    unsigned int chest_seed = hash * 31337;
+    int num_chests = 1 + (chest_seed % 2);  // 1 or 2 chests
+
+    for (int c = 0; c < num_chests; c++) {
+        // Place chest somewhere in the interior (not on walls)
+        int chest_x = start_x + 1 + (chest_seed % (size_x - 2));
+        chest_seed = chest_seed * 1103515245 + 12345;
+        int chest_z = start_z + 1 + (chest_seed % (size_z - 2));
+        chest_seed = chest_seed * 1103515245 + 12345;
+        int chest_y = start_y + 1;  // On the floor (y=1 is first interior layer)
+
+        // Check bounds
+        if (chest_x >= 0 && chest_x < CHUNK_SIZE &&
+            chest_z >= 0 && chest_z < CHUNK_SIZE &&
+            chest_y >= 0 && chest_y < CHUNK_HEIGHT) {
+
+            Block chest = {BLOCK_CHEST, 0, 0};
+            chunk_set_block(chunk, chest_x, chest_y, chest_z, chest);
+
+            printf("[TERRAIN] Placed chest at chunk (%d,%d) local (%d,%d,%d)\n",
+                   chunk->x, chunk->z, chest_x, chest_y, chest_z);
+        }
+    }
 }
 
 // ============================================================================
@@ -617,6 +652,53 @@ static void generate_cave_tunnels(Chunk* chunk, TerrainParams params, int terrai
             if (y > terrain_height - params.cave_min_depth - 30) {
                 dir_y = -fabsf(dir_y);  // Go down
             }
+
+            // Branching tunnels - 25% chance every 20 segments
+            if (seg % 20 == 10 && random_from_seed(&seed) < 0.25f) {
+                // Create a branch in a perpendicular direction
+                float branch_x = x;
+                float branch_y = y;
+                float branch_z = z;
+
+                // Branch direction - perpendicular to main tunnel
+                float branch_dir_x = -dir_z + (random_from_seed(&seed) * 0.4f - 0.2f);
+                float branch_dir_y = random_from_seed(&seed) * 0.3f - 0.15f;
+                float branch_dir_z = dir_x + (random_from_seed(&seed) * 0.4f - 0.2f);
+
+                // Normalize branch direction
+                float branch_len = sqrtf(branch_dir_x*branch_dir_x + branch_dir_y*branch_dir_y + branch_dir_z*branch_dir_z);
+                if (branch_len > 0.01f) {
+                    branch_dir_x /= branch_len;
+                    branch_dir_y /= branch_len;
+                    branch_dir_z /= branch_len;
+                }
+
+                // Branch is smaller and shorter
+                float branch_radius = radius * 0.7f;
+                int branch_segments = 15 + (int)(random_from_seed(&seed) * 20);
+
+                // Carve the branch
+                for (int b = 0; b < branch_segments; b++) {
+                    if (branch_x >= -branch_radius && branch_x < CHUNK_SIZE + branch_radius &&
+                        branch_z >= -branch_radius && branch_z < CHUNK_SIZE + branch_radius) {
+                        carve_sphere(chunk, branch_x, branch_y, branch_z, branch_radius, terrain_height, params);
+                    }
+
+                    // Move branch forward with slight wobble
+                    branch_x += branch_dir_x + noise_3d((float)(seg * 10 + b) * 0.1f, 0, 0) * 0.3f;
+                    branch_y += branch_dir_y + noise_3d((float)(seg * 10 + b) * 0.1f + 50.0f, 0, 0) * 0.2f;
+                    branch_z += branch_dir_z + noise_3d((float)(seg * 10 + b) * 0.1f + 100.0f, 0, 0) * 0.3f;
+
+                    // Taper the branch
+                    branch_radius *= 0.97f;
+                    if (branch_radius < 1.5f) break;
+
+                    // Keep branch in valid Y range
+                    if (branch_y < params.bedrock_start + 10 || branch_y > terrain_height - params.cave_min_depth - 20) {
+                        break;
+                    }
+                }
+            }
         }
     }
 }
@@ -695,6 +777,269 @@ static void generate_cave_rooms(Chunk* chunk, TerrainParams params, int terrain_
     }
 }
 
+// ============================================================================
+// CAVE FORMATIONS (Stalactites & Stalagmites)
+// ============================================================================
+
+/**
+ * Place a stalactite (hanging from ceiling) at position, growing downward
+ */
+static void place_stalactite(Chunk* chunk, int x, int y, int z, int height) {
+    for (int i = 0; i < height; i++) {
+        int py = y - i;
+        if (py < 0) break;
+
+        Block current = chunk_get_block(chunk, x, py, z);
+        if (current.type != BLOCK_AIR) break;
+
+        Block block = {BLOCK_STALACTITE, 0, 0};
+        chunk_set_block(chunk, x, py, z, block);
+    }
+}
+
+/**
+ * Place a stalagmite (rising from floor) at position, growing upward
+ */
+static void place_stalagmite(Chunk* chunk, int x, int y, int z, int height) {
+    for (int i = 0; i < height; i++) {
+        int py = y + i;
+        if (py >= CHUNK_HEIGHT) break;
+
+        Block current = chunk_get_block(chunk, x, py, z);
+        if (current.type != BLOCK_AIR) break;
+
+        Block block = {BLOCK_STALAGMITE, 0, 0};
+        chunk_set_block(chunk, x, py, z, block);
+    }
+}
+
+/**
+ * Generate cave formations (stalactites and stalagmites) in carved caves
+ */
+static void generate_cave_formations(Chunk* chunk, TerrainParams params, int terrain_height) {
+    if (!params.generate_formations) return;
+
+    unsigned int seed = chunk_hash(chunk->x * 41, chunk->z * 37);
+
+    // Scan all air blocks in cave range
+    int min_y = params.bedrock_start + 1;
+    int max_y = terrain_height - params.cave_min_depth;
+    if (max_y > CHUNK_HEIGHT - 1) max_y = CHUNK_HEIGHT - 1;
+
+    for (int x = 0; x < CHUNK_SIZE; x++) {
+        for (int z = 0; z < CHUNK_SIZE; z++) {
+            for (int y = min_y; y < max_y; y++) {
+                Block block = chunk_get_block(chunk, x, y, z);
+                if (block.type != BLOCK_AIR) continue;
+
+                // Check for stalactite (stone ceiling above)
+                Block above = chunk_get_block(chunk, x, y + 1, z);
+                if (above.type == BLOCK_STONE || above.type == BLOCK_DEEP_STONE) {
+                    if (random_from_seed(&seed) < params.formation_density) {
+                        int height = 1 + ((int)(random_from_seed(&seed) * 1000) % params.formation_max_height);
+                        place_stalactite(chunk, x, y, z, height);
+                        continue;  // Don't also place a stalagmite here
+                    }
+                }
+
+                // Check for stalagmite (stone floor below)
+                Block below = chunk_get_block(chunk, x, y - 1, z);
+                if (below.type == BLOCK_STONE || below.type == BLOCK_DEEP_STONE) {
+                    if (random_from_seed(&seed) < params.formation_density) {
+                        int height = 1 + ((int)(random_from_seed(&seed) * 1000) % params.formation_max_height);
+                        place_stalagmite(chunk, x, y, z, height);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// UNDERGROUND WATER POOLS
+// ============================================================================
+
+/**
+ * Check if a position is a valid candidate for a water pool
+ * Returns true if surrounded by walls or higher floor on most sides
+ */
+static bool is_pool_candidate(Chunk* chunk, int x, int y, int z) {
+    int enclosed_sides = 0;
+
+    // Check the 4 horizontal neighbors
+    int dx[] = {1, -1, 0, 0};
+    int dz[] = {0, 0, 1, -1};
+
+    for (int i = 0; i < 4; i++) {
+        int nx = x + dx[i];
+        int nz = z + dz[i];
+
+        // Chunk boundary counts as enclosed
+        if (nx < 0 || nx >= CHUNK_SIZE || nz < 0 || nz >= CHUNK_SIZE) {
+            enclosed_sides++;
+            continue;
+        }
+
+        // Check if neighbor is solid at this level or has higher floor
+        Block neighbor = chunk_get_block(chunk, nx, y, nz);
+        Block neighbor_below = chunk_get_block(chunk, nx, y - 1, nz);
+
+        if (neighbor.type != BLOCK_AIR || neighbor_below.type == BLOCK_AIR) {
+            // Solid wall or no floor = enclosed
+            if (neighbor.type != BLOCK_AIR) {
+                enclosed_sides++;
+            }
+        }
+    }
+
+    // Need at least 2 enclosed sides to be a depression
+    return enclosed_sides >= 2;
+}
+
+/**
+ * Flood fill water from a starting point
+ * Fills connected air blocks up to max_y level
+ */
+static void flood_fill_water(Chunk* chunk, int start_x, int start_y, int start_z, int max_depth, TerrainParams params) {
+    // Simple stack-based flood fill (limited size for performance)
+    #define MAX_FILL_SIZE 200
+    int stack_x[MAX_FILL_SIZE];
+    int stack_z[MAX_FILL_SIZE];
+    int stack_top = 0;
+    int filled = 0;
+
+    // Track visited positions (simple bitfield for 16x16 chunk)
+    unsigned int visited[CHUNK_SIZE] = {0};  // One bit per z per x
+
+    stack_x[stack_top] = start_x;
+    stack_z[stack_top] = start_z;
+    stack_top++;
+
+    while (stack_top > 0 && filled < MAX_FILL_SIZE) {
+        stack_top--;
+        int x = stack_x[stack_top];
+        int z = stack_z[stack_top];
+
+        // Skip if out of bounds
+        if (x < 0 || x >= CHUNK_SIZE || z < 0 || z >= CHUNK_SIZE) continue;
+
+        // Skip if already visited
+        if (visited[x] & (1 << z)) continue;
+        visited[x] |= (1 << z);
+
+        // Fill this column with water up to max_depth
+        for (int depth = 0; depth < max_depth; depth++) {
+            int y = start_y + depth;
+            if (y >= CHUNK_HEIGHT) break;
+            if (y > params.water_pool_max_y) break;
+
+            Block block = chunk_get_block(chunk, x, y, z);
+            Block below = chunk_get_block(chunk, x, y - 1, z);
+
+            // Only fill air blocks with solid floor
+            if (block.type == BLOCK_AIR &&
+                (depth == 0 || below.type == BLOCK_WATER ||
+                 below.type == BLOCK_STONE || below.type == BLOCK_DEEP_STONE)) {
+
+                // Check if this level is enclosed (not flowing off the edge)
+                bool can_fill = true;
+
+                // Simple check - must have solid floor
+                if (below.type == BLOCK_AIR && below.type != BLOCK_WATER) {
+                    can_fill = false;
+                }
+
+                if (can_fill) {
+                    Block water = {BLOCK_WATER, 0, 0};  // metadata 0 = source water
+                    chunk_set_block(chunk, x, y, z, water);
+                    filled++;
+                }
+            } else if (block.type != BLOCK_WATER) {
+                // Hit solid block, stop filling this column upward
+                break;
+            }
+        }
+
+        // Add horizontal neighbors to stack
+        if (stack_top < MAX_FILL_SIZE - 4) {
+            int dx[] = {1, -1, 0, 0};
+            int dz[] = {0, 0, 1, -1};
+
+            for (int i = 0; i < 4; i++) {
+                int nx = x + dx[i];
+                int nz = z + dz[i];
+
+                if (nx >= 0 && nx < CHUNK_SIZE && nz >= 0 && nz < CHUNK_SIZE) {
+                    if (!(visited[nx] & (1 << nz))) {
+                        // Check if neighbor has valid floor at start_y
+                        Block floor = chunk_get_block(chunk, nx, start_y - 1, nz);
+                        Block air = chunk_get_block(chunk, nx, start_y, nz);
+
+                        if (air.type == BLOCK_AIR &&
+                            (floor.type == BLOCK_STONE || floor.type == BLOCK_DEEP_STONE)) {
+                            stack_x[stack_top] = nx;
+                            stack_z[stack_top] = nz;
+                            stack_top++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #undef MAX_FILL_SIZE
+}
+
+/**
+ * Generate underground water pools in caves
+ */
+static void generate_cave_water(Chunk* chunk, TerrainParams params, int terrain_height) {
+    if (!params.generate_water_pools) return;
+
+    unsigned int seed = chunk_hash(chunk->x * 53, chunk->z * 59);
+
+    // Scan for potential pool locations
+    int min_y = params.bedrock_start + 5;  // Not too close to bedrock
+    int max_y = params.water_pool_max_y;
+    if (max_y > terrain_height - params.cave_min_depth - 10) {
+        max_y = terrain_height - params.cave_min_depth - 10;
+    }
+
+    // Track which areas we've already filled to avoid duplicates
+    int pools_created = 0;
+    const int MAX_POOLS_PER_CHUNK = 3;
+
+    for (int x = 2; x < CHUNK_SIZE - 2; x += 4) {  // Sample every 4 blocks
+        for (int z = 2; z < CHUNK_SIZE - 2; z += 4) {
+            if (pools_created >= MAX_POOLS_PER_CHUNK) break;
+
+            for (int y = min_y; y < max_y; y++) {
+                Block block = chunk_get_block(chunk, x, y, z);
+                Block below = chunk_get_block(chunk, x, y - 1, z);
+
+                // Found air with stone floor - potential pool spot
+                if (block.type == BLOCK_AIR &&
+                    (below.type == BLOCK_STONE || below.type == BLOCK_DEEP_STONE)) {
+
+                    // Check if it's a good candidate
+                    if (is_pool_candidate(chunk, x, y, z)) {
+                        // Random chance to create pool
+                        if (random_from_seed(&seed) < params.water_pool_frequency) {
+                            // Determine pool depth (1-3 blocks)
+                            int depth = 1 + ((int)(random_from_seed(&seed) * 1000) % 3);
+
+                            flood_fill_water(chunk, x, y, z, depth, params);
+                            pools_created++;
+                            break;  // Move to next x,z position
+                        }
+                    }
+                }
+            }
+        }
+        if (pools_created >= MAX_POOLS_PER_CHUNK) break;
+    }
+}
+
 /**
  * Generate terrain for chunk
  */
@@ -739,6 +1084,12 @@ void terrain_generate_chunk(Chunk* chunk, TerrainParams params) {
 
     // Generate dungeons underground
     generate_dungeon(chunk, params);
+
+    // Generate cave formations (stalactites & stalagmites)
+    generate_cave_formations(chunk, params, avg_terrain_height);
+
+    // Generate underground water pools in caves
+    generate_cave_water(chunk, params, avg_terrain_height);
 
     // Generate trees on the terrain
     tree_generate_for_chunk(chunk);

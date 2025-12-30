@@ -80,4 +80,25 @@ int crafting_get_max_craft_count(Inventory* inv);
  */
 ItemStack crafting_craft_all(Inventory* inv);
 
+// ============================================================================
+// RECIPE QUERY API (for crafting guide)
+// ============================================================================
+
+/**
+ * Get the total number of registered recipes
+ */
+int crafting_get_recipe_count(void);
+
+/**
+ * Get a recipe by index (0 to count-1)
+ * Returns NULL if index is out of bounds
+ */
+const CraftingRecipe* crafting_get_recipe(int index);
+
+/**
+ * Check if player has all ingredients in their inventory to craft a recipe
+ * Checks both hotbar and main inventory
+ */
+bool crafting_can_craft_recipe(Inventory* inv, const CraftingRecipe* recipe);
+
 #endif // VOXEL_CRAFTING_H

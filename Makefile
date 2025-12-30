@@ -30,7 +30,9 @@ VOXEL_WORLD = src/voxel/world/world.c \
               src/voxel/world/terrain.c \
               src/voxel/world/noise.c \
               src/voxel/world/biome.c \
-              src/voxel/world/spawn.c
+              src/voxel/world/spawn.c \
+              src/voxel/world/water.c \
+              src/voxel/world/chest.c
 
 # Entity module
 VOXEL_ENTITY = src/voxel/entity/entity.c \

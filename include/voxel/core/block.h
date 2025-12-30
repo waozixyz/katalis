@@ -55,6 +55,11 @@ typedef enum {
     BLOCK_SPRUCE_LEAVES,    // Dark blue-green needles
     BLOCK_ACACIA_WOOD,      // Orange-brown bark
     BLOCK_ACACIA_LEAVES,    // Yellow-green leaves
+    // Cave decorations
+    BLOCK_STALACTITE,       // Hanging stone spikes from cave ceilings
+    BLOCK_STALAGMITE,       // Rising stone spikes from cave floors
+    // Interactive blocks
+    BLOCK_CHEST,            // Loot container
     BLOCK_COUNT  // Total number of block types
 } BlockType;
 
