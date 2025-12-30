@@ -1073,10 +1073,8 @@ void inventory_ui_draw_held_item(Inventory* inv, Texture2D atlas, float bob_offs
     int screen_height = GetScreenHeight();
 
     // Configuration
-    int hand_size = 180;    // Hand is larger
-    int icon_size = 120;    // Item icon size
-    int margin_x = 60;      // Distance from right edge
-    int margin_y = -30;     // Negative = extends below screen (coming from body)
+    int hand_size = 220;    // Hand/arm size (larger for better visibility)
+    int icon_size = 90;     // Item icon size
 
     // Hand source rectangle from atlas
     Rectangle hand_source = {
@@ -1086,19 +1084,24 @@ void inventory_ui_draw_held_item(Inventory* inv, Texture2D atlas, float bob_offs
         (float)TILE_SIZE
     };
 
-    // Hand destination - positioned at bottom right, extending from below
+    // Position hand so the bottom-right of the texture (sleeve) is at bottom-right corner
+    // The sleeve occupies roughly the bottom-right quadrant of the texture
+    // We want NO gap - sleeve should touch screen edges
+    float hand_x = screen_width - hand_size * 0.55f;   // Center of arm near right edge
+    float hand_y = screen_height - hand_size * 0.65f + bob_offset;  // Sleeve bottom at screen bottom
+
     Rectangle hand_dest = {
-        (float)(screen_width - hand_size / 2 - margin_x + 30),
-        (float)(screen_height - hand_size / 2 + margin_y + bob_offset),
+        hand_x,
+        hand_y,
         (float)hand_size,
         (float)hand_size
     };
 
-    // Hand origin for rotation (bottom-right corner, where arm would connect)
-    Vector2 hand_origin = {hand_size * 0.7f, (float)hand_size};
+    // No rotation origin offset - draw from top-left of dest rect
+    Vector2 hand_origin = {0, 0};
 
-    // Draw hand first (rotated to look like it's reaching up from body)
-    DrawTexturePro(atlas, hand_source, hand_dest, hand_origin, -25.0f, WHITE);
+    // Draw hand (slight rotation for natural angle)
+    DrawTexturePro(atlas, hand_source, hand_dest, hand_origin, -15.0f, WHITE);
 
     // Get currently selected hotbar item
     ItemStack* held = inventory_get_selected_hotbar_item(inv);
@@ -1114,17 +1117,26 @@ void inventory_ui_draw_held_item(Inventory* inv, Texture2D atlas, float bob_offs
         (float)TILE_SIZE
     };
 
-    // Item destination - positioned in the grip of the hand
+    // Item position - in the grip area (upper portion of hand, between thumb and fingers)
+    // Grip is at approximately y=0-4, x=4-10 in the 16x16 texture
+    // Normalized to 0-1: grip_x ~= 0.45, grip_y ~= 0.15
+    float grip_x = 0.35f;   // Slightly left of center (between thumb and fingers)
+    float grip_y = 0.12f;   // Upper portion (where fingers grip)
+
+    // Calculate screen position of grip, accounting for rotation
+    float item_center_x = hand_x + hand_size * grip_x;
+    float item_center_y = hand_y + hand_size * grip_y + bob_offset * 0.5f;
+
     Rectangle item_dest = {
-        (float)(screen_width - icon_size - margin_x + 10),
-        (float)(screen_height - icon_size - 80 + bob_offset),
+        item_center_x - icon_size / 2.0f,
+        item_center_y - icon_size / 2.0f,
         (float)icon_size,
         (float)icon_size
     };
 
-    // Item origin for rotation (bottom-center for natural pivot)
-    Vector2 item_origin = {icon_size / 2.0f, (float)icon_size};
+    // Item origin for rotation (center of item)
+    Vector2 item_origin = {icon_size / 2.0f, icon_size / 2.0f};
 
     // Draw item rotated to match hand angle
-    DrawTexturePro(atlas, item_source, item_dest, item_origin, -25.0f, WHITE);
+    DrawTexturePro(atlas, item_source, item_dest, item_origin, -15.0f, WHITE);
 }

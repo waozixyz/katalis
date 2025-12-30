@@ -368,7 +368,8 @@ static void generate_axe_tile(Image* atlas, int tile_x, int tile_y, Color head_c
 }
 
 /**
- * Draw a hand texture for first-person view
+ * Draw a hand with long arm texture for first-person view
+ * Layout: fingers at top, hand in upper portion, long arm extending to bottom
  */
 static void generate_hand_tile(Image* atlas, int tile_x, int tile_y) {
     int start_x = tile_x * TILE_SIZE;
@@ -381,66 +382,105 @@ static void generate_hand_tile(Image* atlas, int tile_x, int tile_y) {
         }
     }
 
-    // Skin colors
-    Color skin = {220, 180, 140, 255};       // Main skin tone
-    Color skin_dark = {190, 150, 110, 255};  // Shadow/outline
-    Color skin_light = {240, 200, 160, 255}; // Highlight
+    // Skin colors with better gradients
+    Color skin = {220, 180, 140, 255};        // Main skin tone
+    Color skin_dark = {180, 140, 100, 255};   // Shadow
+    Color skin_light = {245, 210, 175, 255};  // Highlight
+    Color skin_mid = {200, 160, 120, 255};    // Mid-tone
 
-    // Draw a blocky Minecraft-style hand (side view, gripping position)
-    // Palm area (main block)
-    for (int y = 6; y <= 13; y++) {
-        for (int x = 4; x <= 11; x++) {
-            Color c = skin;
-            // Add shading
-            if (x == 4 || y == 13) c = skin_dark;
-            if (x == 11 || y == 6) c = skin_light;
+    // Sleeve colors (blue shirt) with gradient
+    Color sleeve = {70, 110, 170, 255};        // Base blue
+    Color sleeve_dark = {45, 75, 120, 255};    // Dark edge
+    Color sleeve_light = {95, 140, 200, 255};  // Light edge
+    Color sleeve_fold = {55, 90, 145, 255};    // Fold line
+
+    // SLEEVE - large portion at bottom (y = 7 to 15 = 9 pixels, ~56% of tile)
+    // Arm is wide: x = 2 to 13 = 12 pixels
+    for (int y = 7; y <= 15; y++) {
+        for (int x = 2; x <= 13; x++) {
+            Color c = sleeve;
+            // Horizontal shading - darker at edges
+            if (x <= 3) c = sleeve_dark;
+            else if (x >= 12) c = sleeve_light;
+            // Vertical shading - darker at bottom
+            if (y >= 14) c = sleeve_dark;
+            // Fold detail in middle
+            if (y == 9 && x >= 5 && x <= 10) c = sleeve_fold;
+            if (y == 10 && x >= 4 && x <= 11) c = sleeve_fold;
             ImageDrawPixel(atlas, start_x + x, start_y + y, c);
         }
     }
 
-    // Thumb (sticking up on left side)
-    for (int y = 3; y <= 7; y++) {
-        for (int x = 2; x <= 4; x++) {
+    // FOREARM - bare skin above sleeve (y = 4 to 7)
+    // Wide arm: x = 3 to 12
+    for (int y = 4; y <= 7; y++) {
+        for (int x = 3; x <= 12; x++) {
             Color c = skin;
-            if (x == 2 || y == 7) c = skin_dark;
-            if (y == 3) c = skin_light;
-            ImageDrawPixel(atlas, start_x + x, start_y + y, c);
-        }
-    }
-
-    // Fingers (curled on right side, gripping)
-    // Index finger
-    for (int y = 4; y <= 6; y++) {
-        for (int x = 11; x <= 13; x++) {
-            Color c = skin;
-            if (y == 6) c = skin_dark;
+            // Shading
+            if (x <= 4) c = skin_dark;
+            else if (x >= 11) c = skin_light;
+            else if (x >= 6 && x <= 8) c = skin_mid;
+            // Top of forearm slightly lighter
             if (y == 4) c = skin_light;
             ImageDrawPixel(atlas, start_x + x, start_y + y, c);
         }
     }
-    // Middle finger
-    for (int y = 5; y <= 7; y++) {
-        for (int x = 12; x <= 14; x++) {
+
+    // PALM/HAND area (y = 2 to 4)
+    // Slightly wider for palm: x = 2 to 13
+    for (int y = 2; y <= 4; y++) {
+        for (int x = 2; x <= 13; x++) {
             Color c = skin;
-            if (y == 7) c = skin_dark;
-            if (y == 5) c = skin_light;
-            ImageDrawPixel(atlas, start_x + x, start_y + y, c);
-        }
-    }
-    // Ring/pinky fingers (combined)
-    for (int y = 7; y <= 9; y++) {
-        for (int x = 11; x <= 13; x++) {
-            Color c = skin;
-            if (y == 9) c = skin_dark;
-            if (y == 7 && x > 11) c = skin_light;
+            if (x <= 3) c = skin_dark;
+            else if (x >= 12) c = skin_light;
+            if (y == 4) c = skin_mid;
             ImageDrawPixel(atlas, start_x + x, start_y + y, c);
         }
     }
 
-    // Wrist area (bottom)
-    for (int y = 13; y <= 15; y++) {
-        for (int x = 5; x <= 10; x++) {
-            Color c = skin_dark;
+    // THUMB (left side, pointing up) - wider
+    for (int y = 0; y <= 3; y++) {
+        for (int x = 1; x <= 4; x++) {
+            Color c = skin;
+            if (x == 1) c = skin_dark;
+            if (x == 4 || y == 0) c = skin_light;
+            ImageDrawPixel(atlas, start_x + x, start_y + y, c);
+        }
+    }
+
+    // FINGERS (curled on right side, gripping position)
+    // Index finger
+    for (int y = 0; y <= 2; y++) {
+        for (int x = 11; x <= 14; x++) {
+            Color c = skin;
+            if (y == 2) c = skin_dark;
+            if (y == 0) c = skin_light;
+            if (x == 14) c = skin_light;
+            ImageDrawPixel(atlas, start_x + x, start_y + y, c);
+        }
+    }
+    // Middle finger
+    for (int y = 1; y <= 3; y++) {
+        for (int x = 12; x <= 15; x++) {
+            Color c = skin;
+            if (y == 3) c = skin_dark;
+            if (y == 1) c = skin_light;
+            ImageDrawPixel(atlas, start_x + x, start_y + y, c);
+        }
+    }
+    // Ring finger
+    for (int y = 2; y <= 4; y++) {
+        for (int x = 11; x <= 14; x++) {
+            Color c = skin;
+            if (y == 4) c = skin_dark;
+            ImageDrawPixel(atlas, start_x + x, start_y + y, c);
+        }
+    }
+    // Pinky finger
+    for (int y = 3; y <= 5; y++) {
+        for (int x = 10; x <= 13; x++) {
+            Color c = skin;
+            if (y == 5) c = skin_dark;
             ImageDrawPixel(atlas, start_x + x, start_y + y, c);
         }
     }
