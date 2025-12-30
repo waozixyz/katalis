@@ -57,7 +57,8 @@ VOXEL_UI = src/voxel/ui/pause_menu.c \
 
 # Render module
 VOXEL_RENDER = src/voxel/render/sky.c \
-               src/voxel/render/light.c
+               src/voxel/render/light.c \
+               src/voxel/render/particle.c
 
 # Network module
 VOXEL_NETWORK = src/voxel/network/network.c

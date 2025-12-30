@@ -481,7 +481,27 @@ void world_set_entity_manager(World* world, EntityManager* manager) {
 // RENDERING
 // ============================================================================
 
-void world_render_with_time(World* world, float time_of_day) {
+/**
+ * Get fog color that blends with sky at horizon
+ */
+static Vector3 get_fog_color(float time_of_day) {
+    // Fog should match the sky horizon color for seamless blending
+    if (time_of_day >= 5.0f && time_of_day < 9.0f) {
+        // Dawn: warm orange horizon
+        return (Vector3){0.9f, 0.7f, 0.5f};
+    } else if (time_of_day >= 16.0f && time_of_day < 20.0f) {
+        // Dusk: warm red/orange horizon
+        return (Vector3){0.8f, 0.5f, 0.4f};
+    } else if (time_of_day < 5.0f || time_of_day >= 20.0f) {
+        // Night: dark blue
+        return (Vector3){0.05f, 0.08f, 0.15f};
+    } else {
+        // Day: light blue sky
+        return (Vector3){0.6f, 0.75f, 0.95f};
+    }
+}
+
+void world_render_with_time(World* world, float time_of_day, Vector3 camera_pos, bool underwater) {
     if (!world) return;
 
     // Enable alpha blending for transparent blocks (leaves, water, etc.)
@@ -493,6 +513,29 @@ void world_render_with_time(World* world, float time_of_day) {
     Vector3 ambient_light = get_ambient_color(time_of_day);
     int ambient_loc = GetShaderLocation(material.shader, "u_ambient_light");
     SetShaderValue(material.shader, ambient_loc, &ambient_light, SHADER_UNIFORM_VEC3);
+
+    // Set fog uniforms
+    float fog_start = world->view_distance * CHUNK_SIZE * 0.6f;
+    float fog_end = world->view_distance * CHUNK_SIZE * 0.95f;
+    Vector3 fog_color = get_fog_color(time_of_day);
+    int underwater_flag = underwater ? 1 : 0;
+
+    int camera_pos_loc = GetShaderLocation(material.shader, "u_camera_pos");
+    int fog_start_loc = GetShaderLocation(material.shader, "u_fog_start");
+    int fog_end_loc = GetShaderLocation(material.shader, "u_fog_end");
+    int fog_color_loc = GetShaderLocation(material.shader, "u_fog_color");
+    int underwater_loc = GetShaderLocation(material.shader, "u_underwater");
+    int time_loc = GetShaderLocation(material.shader, "u_time");
+
+    // Water animation time
+    float shader_time = (float)GetTime();
+    SetShaderValue(material.shader, time_loc, &shader_time, SHADER_UNIFORM_FLOAT);
+
+    SetShaderValue(material.shader, camera_pos_loc, &camera_pos, SHADER_UNIFORM_VEC3);
+    SetShaderValue(material.shader, fog_start_loc, &fog_start, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(material.shader, fog_end_loc, &fog_end, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(material.shader, fog_color_loc, &fog_color, SHADER_UNIFORM_VEC3);
+    SetShaderValue(material.shader, underwater_loc, &underwater_flag, SHADER_UNIFORM_INT);
 
     // Calculate max render distance (in chunks) for culling
     int max_dist = world->view_distance + 1;
@@ -551,10 +594,27 @@ void world_render_with_time(World* world, float time_of_day) {
 
 void world_render(World* world) {
     // Fallback to noon lighting if time not specified
-    world_render_with_time(world, 12.0f);
+    Vector3 default_camera = {0, 64, 0};
+    world_render_with_time(world, 12.0f, default_camera, false);
 }
 
-void world_render_transparent_with_time(World* world, float time_of_day) {
+// Helper struct for sorting transparent chunks
+typedef struct {
+    Chunk* chunk;
+    float dist_sq;
+} TransparentChunkEntry;
+
+// Compare function for qsort (back-to-front: far chunks first)
+static int compare_transparent_chunks(const void* a, const void* b) {
+    const TransparentChunkEntry* ea = (const TransparentChunkEntry*)a;
+    const TransparentChunkEntry* eb = (const TransparentChunkEntry*)b;
+    // Sort far to near (descending distance)
+    if (eb->dist_sq > ea->dist_sq) return 1;
+    if (eb->dist_sq < ea->dist_sq) return -1;
+    return 0;
+}
+
+void world_render_transparent_with_time(World* world, float time_of_day, Vector3 camera_pos, bool underwater) {
     if (!world) return;
 
     Material material = texture_atlas_get_material();
@@ -563,6 +623,29 @@ void world_render_transparent_with_time(World* world, float time_of_day) {
     Vector3 ambient_light = get_ambient_color(time_of_day);
     int ambient_loc = GetShaderLocation(material.shader, "u_ambient_light");
     SetShaderValue(material.shader, ambient_loc, &ambient_light, SHADER_UNIFORM_VEC3);
+
+    // Set fog uniforms (same as opaque pass)
+    float fog_start = world->view_distance * CHUNK_SIZE * 0.6f;
+    float fog_end = world->view_distance * CHUNK_SIZE * 0.95f;
+    Vector3 fog_color = get_fog_color(time_of_day);
+    int underwater_flag = underwater ? 1 : 0;
+
+    int camera_pos_loc = GetShaderLocation(material.shader, "u_camera_pos");
+    int fog_start_loc = GetShaderLocation(material.shader, "u_fog_start");
+    int fog_end_loc = GetShaderLocation(material.shader, "u_fog_end");
+    int fog_color_loc = GetShaderLocation(material.shader, "u_fog_color");
+    int underwater_loc = GetShaderLocation(material.shader, "u_underwater");
+    int time_loc = GetShaderLocation(material.shader, "u_time");
+
+    // Water animation time
+    float shader_time = (float)GetTime();
+    SetShaderValue(material.shader, time_loc, &shader_time, SHADER_UNIFORM_FLOAT);
+
+    SetShaderValue(material.shader, camera_pos_loc, &camera_pos, SHADER_UNIFORM_VEC3);
+    SetShaderValue(material.shader, fog_start_loc, &fog_start, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(material.shader, fog_end_loc, &fog_end, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(material.shader, fog_color_loc, &fog_color, SHADER_UNIFORM_VEC3);
+    SetShaderValue(material.shader, underwater_loc, &underwater_flag, SHADER_UNIFORM_INT);
 
     // Calculate max render distance (in chunks) for culling
     int max_dist = world->view_distance + 1;
@@ -573,7 +656,10 @@ void world_render_transparent_with_time(World* world, float time_of_day) {
     Matrix vp = MatrixMultiply(view, proj);
     Frustum frustum = frustum_extract(vp);
 
-    // Render all loaded chunks' transparent meshes
+    // Collect all visible transparent chunks with their distances
+    static TransparentChunkEntry sorted_chunks[WORLD_MAX_CHUNKS];
+    int chunk_count = 0;
+
     for (int i = 0; i < WORLD_MAX_CHUNKS; i++) {
         ChunkNode* node = world->chunks->buckets[i];
         while (node) {
@@ -588,6 +674,11 @@ void world_render_transparent_with_time(World* world, float time_of_day) {
             }
 
             // Frustum culling: skip chunks not visible to camera
+            Vector3 chunk_center = {
+                (float)(chunk->x * CHUNK_SIZE) + CHUNK_SIZE * 0.5f,
+                CHUNK_HEIGHT * 0.5f,
+                (float)(chunk->z * CHUNK_SIZE) + CHUNK_SIZE * 0.5f
+            };
             Vector3 chunk_min = {
                 (float)(chunk->x * CHUNK_SIZE),
                 0.0f,
@@ -603,18 +694,31 @@ void world_render_transparent_with_time(World* world, float time_of_day) {
                 continue;
             }
 
-            // Render transparent mesh if it exists
+            // Only add if has transparent mesh
             if (chunk->transparent_mesh_generated && chunk->transparent_mesh.vboId != NULL) {
-                Matrix transform = MatrixTranslate(
-                    chunk_min.x,
-                    0.0f,
-                    chunk_min.z
-                );
-
-                DrawMesh(chunk->transparent_mesh, material, transform);
+                float dx_f = chunk_center.x - camera_pos.x;
+                float dz_f = chunk_center.z - camera_pos.z;
+                sorted_chunks[chunk_count].chunk = chunk;
+                sorted_chunks[chunk_count].dist_sq = dx_f * dx_f + dz_f * dz_f;
+                chunk_count++;
             }
 
             node = node->next;
         }
+    }
+
+    // Sort chunks back-to-front (far first)
+    qsort(sorted_chunks, chunk_count, sizeof(TransparentChunkEntry), compare_transparent_chunks);
+
+    // Render sorted chunks
+    for (int i = 0; i < chunk_count; i++) {
+        Chunk* chunk = sorted_chunks[i].chunk;
+        Vector3 chunk_min = {
+            (float)(chunk->x * CHUNK_SIZE),
+            0.0f,
+            (float)(chunk->z * CHUNK_SIZE)
+        };
+        Matrix transform = MatrixTranslate(chunk_min.x, 0.0f, chunk_min.z);
+        DrawMesh(chunk->transparent_mesh, material, transform);
     }
 }

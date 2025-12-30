@@ -14,6 +14,9 @@ static Shader sky_shader;
 static bool initialized = false;
 static int sun_loc = -1;
 static int time_loc = -1;
+static int cam_forward_loc = -1;
+static int cam_right_loc = -1;
+static int cam_up_loc = -1;
 
 void sky_init(void) {
     // Load sky shader
@@ -23,7 +26,9 @@ void sky_init(void) {
         printf("[SKY] Sky shader loaded (ID: %d)\n", sky_shader.id);
         sun_loc = GetShaderLocation(sky_shader, "u_sun_direction");
         time_loc = GetShaderLocation(sky_shader, "u_time_of_day");
-        printf("[SKY] Shader uniforms: sun_loc=%d, time_loc=%d\n", sun_loc, time_loc);
+        cam_forward_loc = GetShaderLocation(sky_shader, "u_cam_forward");
+        cam_right_loc = GetShaderLocation(sky_shader, "u_cam_right");
+        cam_up_loc = GetShaderLocation(sky_shader, "u_cam_up");
     } else {
         printf("[SKY] WARNING: Sky shader failed to load\n");
     }
@@ -32,8 +37,6 @@ void sky_init(void) {
 }
 
 void sky_render(Camera3D camera, float time_of_day) {
-    (void)camera;
-
     if (!initialized || sky_shader.id == 0) return;
 
     // Calculate sun direction from time
@@ -45,9 +48,17 @@ void sky_render(Camera3D camera, float time_of_day) {
         cosf(sun_angle)
     };
 
+    // Calculate camera basis vectors
+    Vector3 forward = Vector3Normalize(Vector3Subtract(camera.target, camera.position));
+    Vector3 right = Vector3Normalize(Vector3CrossProduct(forward, camera.up));
+    Vector3 up = Vector3CrossProduct(right, forward);
+
     // Set shader uniforms
     SetShaderValue(sky_shader, sun_loc, &sun_direction, SHADER_UNIFORM_VEC3);
     SetShaderValue(sky_shader, time_loc, &time_of_day, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(sky_shader, cam_forward_loc, &forward, SHADER_UNIFORM_VEC3);
+    SetShaderValue(sky_shader, cam_right_loc, &right, SHADER_UNIFORM_VEC3);
+    SetShaderValue(sky_shader, cam_up_loc, &up, SHADER_UNIFORM_VEC3);
 
     // Draw fullscreen quad with sky shader
     BeginShaderMode(sky_shader);

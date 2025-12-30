@@ -538,6 +538,47 @@ static void generate_sword_tile(Image* atlas, int tile_x, int tile_y, Color blad
 }
 
 /**
+ * Generate an animated water tile frame
+ * Creates subtle wave patterns that vary per frame
+ */
+static void generate_water_tile(Image* atlas, int tile_x, int tile_y, Color base_color, int frame) {
+    int start_x = tile_x * TILE_SIZE;
+    int start_y = tile_y * TILE_SIZE;
+
+    // Phase offset based on frame (0-3)
+    float phase = (float)frame * 1.57f;  // PI/2 offset per frame
+
+    for (int y = 0; y < TILE_SIZE; y++) {
+        for (int x = 0; x < TILE_SIZE; x++) {
+            Color pixel = base_color;
+
+            // Create wave pattern using multiple sine waves
+            float wave1 = sinf((float)x * 0.5f + phase) * 0.5f + 0.5f;
+            float wave2 = sinf((float)y * 0.4f + phase * 0.7f) * 0.5f + 0.5f;
+            float wave3 = sinf((float)(x + y) * 0.3f + phase * 1.3f) * 0.5f + 0.5f;
+
+            // Combine waves for natural water look
+            float combined = (wave1 + wave2 + wave3) / 3.0f;
+
+            // Variation in brightness (-15 to +15)
+            int brightness = (int)((combined - 0.5f) * 30.0f);
+
+            // Add some extra noise for texture
+            int noise = ((x * 7 + y * 13 + frame * 11) % 10) - 5;
+
+            pixel.r = (unsigned char)clamp_int(pixel.r + brightness + noise, 0, 255);
+            pixel.g = (unsigned char)clamp_int(pixel.g + brightness + noise, 0, 255);
+            pixel.b = (unsigned char)clamp_int(pixel.b + brightness / 2 + noise, 0, 255);
+
+            // Keep alpha for water transparency
+            pixel.a = base_color.a;
+
+            ImageDrawPixel(atlas, start_x + x, start_y + y, pixel);
+        }
+    }
+}
+
+/**
  * Generate a colored tile in the atlas
  */
 static void generate_tile(Image* atlas, int tile_x, int tile_y, Color color, bool add_border) {
@@ -642,8 +683,12 @@ static Image generate_atlas_image(void) {
     // SAND - Row 5 (Warm golden sand)
     generate_tile(&atlas, 0, 5, (Color){240, 220, 130, 255}, true);   // All faces: Golden sand
 
-    // WATER - Row 6 (Bright cyan-blue)
-    generate_tile(&atlas, 0, 6, (Color){50, 150, 255, 180}, false);   // All faces: Bright water
+    // WATER - Row 6 (Bright cyan-blue) - 4 animation frames
+    Color water_color = {50, 150, 255, 180};
+    generate_water_tile(&atlas, 0, 6, water_color, 0);  // Frame 0
+    generate_water_tile(&atlas, 1, 6, water_color, 1);  // Frame 1
+    generate_water_tile(&atlas, 2, 6, water_color, 2);  // Frame 2
+    generate_water_tile(&atlas, 3, 6, water_color, 3);  // Frame 3
 
     // COBBLESTONE - Row 7 (Brown-gray mix, not pure gray)
     generate_tile(&atlas, 0, 7, (Color){130, 120, 110, 255}, true);   // All faces: Brown-gray cobble

@@ -21,6 +21,7 @@
 #include "voxel/entity/sheep.h"
 #include "voxel/entity/pig.h"
 #include "voxel/render/sky.h"
+#include "voxel/render/particle.h"
 #include "voxel/entity/tree.h"
 #include "voxel/network/network.h"
 #include "voxel/ui/minimap.h"
@@ -74,6 +75,8 @@ typedef struct {
     Entity* target_entity;       // Currently targeted entity (or NULL)
     // Chest interaction
     ChestData* open_chest;       // Currently open chest (or NULL)
+    // Water splash tracking
+    bool was_underwater;         // Previous underwater state for splash detection
 } GameState;
 
 static GameState g_state;
@@ -275,6 +278,9 @@ static void game_init(void) {
 
     // Initialize texture atlas
     texture_atlas_init();
+
+    // Initialize particle system (must be after texture atlas)
+    particle_system_init();
 
     // Initialize item system
     item_system_init();
@@ -509,6 +515,23 @@ static void game_update(float dt) {
     // Update swing animation (always, even when menu open for smooth animation)
     player_update_swing(g_state.player, dt);
 
+    // Check for water entry/exit and spawn splash particles
+    {
+        Vector3 player_pos = g_state.player->position;
+        bool is_underwater = world_get_block(g_state.world,
+            (int)floorf(player_pos.x),
+            (int)floorf(player_pos.y + 1.5f),  // Eye height
+            (int)floorf(player_pos.z)).type == BLOCK_WATER;
+
+        if (is_underwater != g_state.was_underwater) {
+            // Water state changed - spawn splash particles
+            Vector3 splash_pos = player_pos;
+            splash_pos.y = floorf(splash_pos.y + 1.5f);  // At water surface
+            particle_spawn_water_splash(splash_pos, 16, !is_underwater);
+            g_state.was_underwater = is_underwater;
+        }
+    }
+
     // Update world (chunk loading/unloading based on player position)
     int player_chunk_x, player_chunk_z;
     world_to_chunk_coords((int)g_state.player->position.x, (int)g_state.player->position.z,
@@ -520,6 +543,9 @@ static void game_update(float dt) {
 
     // Update all entities
     entity_manager_update(g_state.entity_manager, (struct World*)g_state.world, dt);
+
+    // Update particle system
+    particle_system_update(dt);
 
     // Update leaf decay
     leaf_decay_update(g_state.world, dt);
@@ -647,6 +673,10 @@ static void game_update(float dt) {
             // Check if mining complete
             if (g_mining.progress >= 1.0f) {
                 Block block = world_get_block(g_state.world, x, y, z);
+
+                // Spawn block break particles
+                Vector3 block_pos = {(float)x, (float)y, (float)z};
+                particle_spawn_block_break(block_pos, block.type, 12);
 
                 // Check if we can harvest with current tool
                 ItemStack* held = inventory_get_selected_hotbar_item(g_state.player->inventory);
@@ -968,12 +998,26 @@ static void game_update(float dt) {
 /**
  * Render game - renderer-agnostic (works on Raylib + SDL3)
  */
-static void game_draw(void) {
-    // Clear background
-    ClearBackground(BLACK);  // Clear to black first
+/**
+ * Check if camera position is inside a water block
+ */
+static bool is_camera_underwater(Vector3 camera_pos, World* world) {
+    int x = (int)floorf(camera_pos.x);
+    int y = (int)floorf(camera_pos.y);
+    int z = (int)floorf(camera_pos.z);
+    Block block = world_get_block(world, x, y, z);
+    return block.type == BLOCK_WATER;
+}
 
+static void game_draw(void) {
     // 3D rendering with player camera
     Camera3D camera = player_get_camera(g_state.player);
+
+    // Check if camera is underwater for fog effects
+    bool underwater = is_camera_underwater(camera.position, g_state.world);
+
+    // Clear background
+    ClearBackground(BLACK);  // Clear to black first
 
     // Render sky BEFORE 3D scene
     sky_render(camera, g_state.time_of_day);
@@ -984,12 +1028,12 @@ static void game_draw(void) {
     rlDisableBackfaceCulling();
 
     // === PASS 1: Draw all OPAQUE chunks (with depth write ON) ===
-    world_render_with_time(g_state.world, g_state.time_of_day);
+    world_render_with_time(g_state.world, g_state.time_of_day, camera.position, underwater);
 
     // === PASS 2: Draw all TRANSPARENT chunks (with depth write OFF) ===
     // This ensures blocks behind leaves are visible
     rlDisableDepthMask();  // Disable depth write
-    world_render_transparent_with_time(g_state.world, g_state.time_of_day);
+    world_render_transparent_with_time(g_state.world, g_state.time_of_day, camera.position, underwater);
     rlEnableDepthMask();   // Re-enable depth write
 
     // Draw all entities
@@ -1062,6 +1106,11 @@ static void game_draw(void) {
         rlEnd();
         rlSetTexture(0);
     }
+
+    // Render particles (with depth read but no depth write for transparency)
+    rlDisableDepthMask();
+    particle_system_render(camera);
+    rlEnableDepthMask();
 
     EndMode3D();
 

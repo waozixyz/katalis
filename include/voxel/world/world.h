@@ -110,14 +110,16 @@ void world_render(World* world);
 
 /**
  * Render all visible chunks with time-based ambient lighting (opaque blocks only)
+ * camera_pos: Camera position for fog calculations
+ * underwater: Whether camera is underwater (for underwater fog effect)
  */
-void world_render_with_time(World* world, float time_of_day);
+void world_render_with_time(World* world, float time_of_day, Vector3 camera_pos, bool underwater);
 
 /**
  * Render transparent blocks (leaves, water) with time-based ambient lighting
  * Call this AFTER world_render_with_time, with depth write disabled
  */
-void world_render_transparent_with_time(World* world, float time_of_day);
+void world_render_transparent_with_time(World* world, float time_of_day, Vector3 camera_pos, bool underwater);
 
 /**
  * Convert world coordinates to chunk coordinates

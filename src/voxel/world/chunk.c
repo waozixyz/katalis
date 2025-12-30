@@ -169,7 +169,7 @@ void chunk_update_empty_status(Chunk* chunk) {
 // ============================================================================
 
 /**
- * Check if there's a solid block at position (used for face culling)
+ * Check if there's a solid block at position (used for face culling and AO)
  */
 static bool has_solid_block_at(Chunk* chunk, int x, int y, int z) {
     if (!chunk_in_bounds(x, y, z)) {
@@ -178,6 +178,35 @@ static bool has_solid_block_at(Chunk* chunk, int x, int y, int z) {
 
     Block block = chunk_get_block(chunk, x, y, z);
     return block_is_solid(block) && !block_is_transparent(block);
+}
+
+/**
+ * Calculate ambient occlusion for a single vertex.
+ * Checks the 3 blocks adjacent to the vertex corner (2 sides + 1 corner).
+ * Returns a brightness multiplier (0.3 to 1.0).
+ */
+static float calculate_vertex_ao(Chunk* chunk, int bx, int by, int bz,
+                                  int side1_dx, int side1_dy, int side1_dz,
+                                  int side2_dx, int side2_dy, int side2_dz) {
+    // Check if the two side blocks and corner block are solid
+    bool side1 = has_solid_block_at(chunk, bx + side1_dx, by + side1_dy, bz + side1_dz);
+    bool side2 = has_solid_block_at(chunk, bx + side2_dx, by + side2_dy, bz + side2_dz);
+    bool corner = has_solid_block_at(chunk,
+        bx + side1_dx + side2_dx,
+        by + side1_dy + side2_dy,
+        bz + side1_dz + side2_dz);
+
+    // Calculate AO level (0 = full occlusion, 3 = no occlusion)
+    int ao_level;
+    if (side1 && side2) {
+        ao_level = 0;  // Both sides solid = maximum occlusion
+    } else {
+        ao_level = 3 - (side1 + side2 + corner);
+    }
+
+    // Convert to brightness multiplier
+    static const float ao_values[] = {0.4f, 0.6f, 0.8f, 1.0f};
+    return ao_values[ao_level];
 }
 
 /**
@@ -212,11 +241,16 @@ static float calculate_face_brightness(Vector3 normal) {
 }
 
 /**
- * Add a quad face to the mesh buffers
+ * Add a quad face to the mesh buffers with per-vertex ambient occlusion
+ * ao1-ao4 are ambient occlusion values for each vertex (0.0-1.0)
  */
 static void add_quad(float* vertices, float* texcoords, float* normals, unsigned char* colors, int* vertex_count,
                      Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4, Vector3 normal,
-                     BlockType block_type, float width, float height, uint8_t block_light_level) {
+                     BlockType block_type, float width, float height, uint8_t block_light_level,
+                     float ao1, float ao2, float ao3, float ao4) {
+    (void)width;  // Unused but kept for API compatibility
+    (void)height;
+
     int idx = *vertex_count;
 
     // Get face type from normal
@@ -224,9 +258,6 @@ static void add_quad(float* vertices, float* texcoords, float* normals, unsigned
 
     // Get texture coordinates from atlas
     TextureCoords tex = texture_atlas_get_coords(block_type, face);
-
-    // Don't scale UVs - just stretch the texture across the greedy quad
-    // This prevents bleeding into other atlas tiles
 
     // Calculate face brightness based on normal direction
     float face_brightness = calculate_face_brightness(normal);
@@ -238,46 +269,51 @@ static void add_quad(float* vertices, float* texcoords, float* normals, unsigned
     float min_ambient = 0.15f;
     light_factor = min_ambient + light_factor * (1.0f - min_ambient);
 
-    // Final brightness combines face direction and block light level
-    float brightness = face_brightness * light_factor;
-    unsigned char light = (unsigned char)(brightness * 255.0f);
+    // Base brightness combines face direction and block light level
+    float base_brightness = face_brightness * light_factor;
+
+    // Per-vertex brightness with AO applied
+    unsigned char light1 = (unsigned char)(base_brightness * ao1 * 255.0f);
+    unsigned char light2 = (unsigned char)(base_brightness * ao2 * 255.0f);
+    unsigned char light3 = (unsigned char)(base_brightness * ao3 * 255.0f);
+    unsigned char light4 = (unsigned char)(base_brightness * ao4 * 255.0f);
 
     // Triangle 1 (v1, v2, v3)
     vertices[idx * 3 + 0] = v1.x; vertices[idx * 3 + 1] = v1.y; vertices[idx * 3 + 2] = v1.z;
     texcoords[idx * 2 + 0] = tex.u_min; texcoords[idx * 2 + 1] = tex.v_min;
     normals[idx * 3 + 0] = normal.x; normals[idx * 3 + 1] = normal.y; normals[idx * 3 + 2] = normal.z;
-    colors[idx * 4 + 0] = light; colors[idx * 4 + 1] = light; colors[idx * 4 + 2] = light; colors[idx * 4 + 3] = 255;
+    colors[idx * 4 + 0] = light1; colors[idx * 4 + 1] = light1; colors[idx * 4 + 2] = light1; colors[idx * 4 + 3] = 255;
     idx++;
 
     vertices[idx * 3 + 0] = v2.x; vertices[idx * 3 + 1] = v2.y; vertices[idx * 3 + 2] = v2.z;
     texcoords[idx * 2 + 0] = tex.u_max; texcoords[idx * 2 + 1] = tex.v_min;
     normals[idx * 3 + 0] = normal.x; normals[idx * 3 + 1] = normal.y; normals[idx * 3 + 2] = normal.z;
-    colors[idx * 4 + 0] = light; colors[idx * 4 + 1] = light; colors[idx * 4 + 2] = light; colors[idx * 4 + 3] = 255;
+    colors[idx * 4 + 0] = light2; colors[idx * 4 + 1] = light2; colors[idx * 4 + 2] = light2; colors[idx * 4 + 3] = 255;
     idx++;
 
     vertices[idx * 3 + 0] = v3.x; vertices[idx * 3 + 1] = v3.y; vertices[idx * 3 + 2] = v3.z;
     texcoords[idx * 2 + 0] = tex.u_max; texcoords[idx * 2 + 1] = tex.v_max;
     normals[idx * 3 + 0] = normal.x; normals[idx * 3 + 1] = normal.y; normals[idx * 3 + 2] = normal.z;
-    colors[idx * 4 + 0] = light; colors[idx * 4 + 1] = light; colors[idx * 4 + 2] = light; colors[idx * 4 + 3] = 255;
+    colors[idx * 4 + 0] = light3; colors[idx * 4 + 1] = light3; colors[idx * 4 + 2] = light3; colors[idx * 4 + 3] = 255;
     idx++;
 
     // Triangle 2 (v1, v3, v4)
     vertices[idx * 3 + 0] = v1.x; vertices[idx * 3 + 1] = v1.y; vertices[idx * 3 + 2] = v1.z;
     texcoords[idx * 2 + 0] = tex.u_min; texcoords[idx * 2 + 1] = tex.v_min;
     normals[idx * 3 + 0] = normal.x; normals[idx * 3 + 1] = normal.y; normals[idx * 3 + 2] = normal.z;
-    colors[idx * 4 + 0] = light; colors[idx * 4 + 1] = light; colors[idx * 4 + 2] = light; colors[idx * 4 + 3] = 255;
+    colors[idx * 4 + 0] = light1; colors[idx * 4 + 1] = light1; colors[idx * 4 + 2] = light1; colors[idx * 4 + 3] = 255;
     idx++;
 
     vertices[idx * 3 + 0] = v3.x; vertices[idx * 3 + 1] = v3.y; vertices[idx * 3 + 2] = v3.z;
     texcoords[idx * 2 + 0] = tex.u_max; texcoords[idx * 2 + 1] = tex.v_max;
     normals[idx * 3 + 0] = normal.x; normals[idx * 3 + 1] = normal.y; normals[idx * 3 + 2] = normal.z;
-    colors[idx * 4 + 0] = light; colors[idx * 4 + 1] = light; colors[idx * 4 + 2] = light; colors[idx * 4 + 3] = 255;
+    colors[idx * 4 + 0] = light3; colors[idx * 4 + 1] = light3; colors[idx * 4 + 2] = light3; colors[idx * 4 + 3] = 255;
     idx++;
 
     vertices[idx * 3 + 0] = v4.x; vertices[idx * 3 + 1] = v4.y; vertices[idx * 3 + 2] = v4.z;
     texcoords[idx * 2 + 0] = tex.u_min; texcoords[idx * 2 + 1] = tex.v_max;
     normals[idx * 3 + 0] = normal.x; normals[idx * 3 + 1] = normal.y; normals[idx * 3 + 2] = normal.z;
-    colors[idx * 4 + 0] = light; colors[idx * 4 + 1] = light; colors[idx * 4 + 2] = light; colors[idx * 4 + 3] = 255;
+    colors[idx * 4 + 0] = light4; colors[idx * 4 + 1] = light4; colors[idx * 4 + 2] = light4; colors[idx * 4 + 3] = 255;
     idx++;
 
     *vertex_count = idx;
@@ -378,8 +414,13 @@ static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** t
                     Vector3 v3 = {wx + 1, wy + 1, wz + 1};
                     Vector3 v4 = {wx, wy + 1, wz + 1};
                     Vector3 normal = {0, 1, 0};
+                    // Calculate AO for top face vertices (y+1 plane)
+                    float ao1 = calculate_vertex_ao(chunk, x, y+1, z, -1,0,0, 0,0,-1);  // v1: corner (-X, -Z)
+                    float ao2 = calculate_vertex_ao(chunk, x, y+1, z, 1,0,0, 0,0,-1);   // v2: corner (+X, -Z)
+                    float ao3 = calculate_vertex_ao(chunk, x, y+1, z, 1,0,0, 0,0,1);    // v3: corner (+X, +Z)
+                    float ao4 = calculate_vertex_ao(chunk, x, y+1, z, -1,0,0, 0,0,1);   // v4: corner (-X, +Z)
                     add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
-                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light);
+                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light, ao1, ao2, ao3, ao4);
                 }
 
                 // Face: Bottom (-Y) - render if neighbor is air or transparent
@@ -390,8 +431,13 @@ static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** t
                     Vector3 v3 = {wx + 1, wy, wz};
                     Vector3 v4 = {wx, wy, wz};
                     Vector3 normal = {0, -1, 0};
+                    // Calculate AO for bottom face vertices (y-1 plane)
+                    float ao1 = calculate_vertex_ao(chunk, x, y-1, z, -1,0,0, 0,0,1);   // v1: corner (-X, +Z)
+                    float ao2 = calculate_vertex_ao(chunk, x, y-1, z, 1,0,0, 0,0,1);    // v2: corner (+X, +Z)
+                    float ao3 = calculate_vertex_ao(chunk, x, y-1, z, 1,0,0, 0,0,-1);   // v3: corner (+X, -Z)
+                    float ao4 = calculate_vertex_ao(chunk, x, y-1, z, -1,0,0, 0,0,-1);  // v4: corner (-X, -Z)
                     add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
-                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light);
+                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light, ao1, ao2, ao3, ao4);
                 }
 
                 // Face: Front (-Z) - render if neighbor is air or transparent
@@ -402,8 +448,13 @@ static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** t
                     Vector3 v3 = {wx + 1, wy + 1, wz};
                     Vector3 v4 = {wx, wy + 1, wz};
                     Vector3 normal = {0, 0, -1};
+                    // Calculate AO for front face vertices (z-1 plane)
+                    float ao1 = calculate_vertex_ao(chunk, x, y, z-1, -1,0,0, 0,-1,0);  // v1: corner (-X, -Y)
+                    float ao2 = calculate_vertex_ao(chunk, x, y, z-1, 1,0,0, 0,-1,0);   // v2: corner (+X, -Y)
+                    float ao3 = calculate_vertex_ao(chunk, x, y, z-1, 1,0,0, 0,1,0);    // v3: corner (+X, +Y)
+                    float ao4 = calculate_vertex_ao(chunk, x, y, z-1, -1,0,0, 0,1,0);   // v4: corner (-X, +Y)
                     add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
-                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light);
+                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light, ao1, ao2, ao3, ao4);
                 }
 
                 // Face: Back (+Z) - render if neighbor is air or transparent
@@ -414,8 +465,13 @@ static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** t
                     Vector3 v3 = {wx, wy + 1, wz + 1};
                     Vector3 v4 = {wx + 1, wy + 1, wz + 1};
                     Vector3 normal = {0, 0, 1};
+                    // Calculate AO for back face vertices (z+1 plane)
+                    float ao1 = calculate_vertex_ao(chunk, x, y, z+1, 1,0,0, 0,-1,0);   // v1: corner (+X, -Y)
+                    float ao2 = calculate_vertex_ao(chunk, x, y, z+1, -1,0,0, 0,-1,0);  // v2: corner (-X, -Y)
+                    float ao3 = calculate_vertex_ao(chunk, x, y, z+1, -1,0,0, 0,1,0);   // v3: corner (-X, +Y)
+                    float ao4 = calculate_vertex_ao(chunk, x, y, z+1, 1,0,0, 0,1,0);    // v4: corner (+X, +Y)
                     add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
-                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light);
+                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light, ao1, ao2, ao3, ao4);
                 }
 
                 // Face: Left (-X) - render if neighbor is air or transparent
@@ -426,8 +482,13 @@ static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** t
                     Vector3 v3 = {wx, wy + 1, wz};
                     Vector3 v4 = {wx, wy + 1, wz + 1};
                     Vector3 normal = {-1, 0, 0};
+                    // Calculate AO for left face vertices (x-1 plane)
+                    float ao1 = calculate_vertex_ao(chunk, x-1, y, z, 0,0,1, 0,-1,0);   // v1: corner (+Z, -Y)
+                    float ao2 = calculate_vertex_ao(chunk, x-1, y, z, 0,0,-1, 0,-1,0);  // v2: corner (-Z, -Y)
+                    float ao3 = calculate_vertex_ao(chunk, x-1, y, z, 0,0,-1, 0,1,0);   // v3: corner (-Z, +Y)
+                    float ao4 = calculate_vertex_ao(chunk, x-1, y, z, 0,0,1, 0,1,0);    // v4: corner (+Z, +Y)
                     add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
-                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light);
+                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light, ao1, ao2, ao3, ao4);
                 }
 
                 // Face: Right (+X) - render if neighbor is air or transparent
@@ -438,8 +499,13 @@ static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** t
                     Vector3 v3 = {wx + 1, wy + 1, wz + 1};
                     Vector3 v4 = {wx + 1, wy + 1, wz};
                     Vector3 normal = {1, 0, 0};
+                    // Calculate AO for right face vertices (x+1 plane)
+                    float ao1 = calculate_vertex_ao(chunk, x+1, y, z, 0,0,-1, 0,-1,0);  // v1: corner (-Z, -Y)
+                    float ao2 = calculate_vertex_ao(chunk, x+1, y, z, 0,0,1, 0,-1,0);   // v2: corner (+Z, -Y)
+                    float ao3 = calculate_vertex_ao(chunk, x+1, y, z, 0,0,1, 0,1,0);    // v3: corner (+Z, +Y)
+                    float ao4 = calculate_vertex_ao(chunk, x+1, y, z, 0,0,-1, 0,1,0);   // v4: corner (-Z, +Y)
                     add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
-                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light);
+                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light, ao1, ao2, ao3, ao4);
                 }
             }
         }
