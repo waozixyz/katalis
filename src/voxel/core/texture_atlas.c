@@ -633,7 +633,7 @@ static Image generate_atlas_image(void) {
 
     // WOOD - Row 3 (Warm oak wood)
     generate_tile(&atlas, 0, 3, (Color){120, 80, 50, 255}, true);     // Sides: Dark bark
-    generate_tile(&atlas, 1, 3, (Color){200, 150, 100, 255}, true);   // Top/Bottom: Light wood rings
+    generate_tile(&atlas, 1, 3, (Color){150, 110, 70, 255}, true);    // Top/Bottom: Wood rings (darker to match block)
     generate_planks_tile(&atlas, 3, 3, (Color){180, 130, 80, 255});   // Planks: Processed wood boards
 
     // LEAVES - Row 4 (Bright foliage green with transparency holes - Luanti style)

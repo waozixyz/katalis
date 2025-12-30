@@ -74,6 +74,11 @@ Player* player_create(Vector3 start_position) {
     player->arm_swing_angle = 0.0f;
     player->leg_swing_angle = 0.0f;
 
+    // Swing animation (for first-person hitting)
+    player->swing_time = 0.0f;
+    player->swing_duration = 0.25f;  // 250ms swing
+    player->is_swinging = false;
+
     // Lighting (default to full brightness)
     player->ambient_light = (Vector3){1.0f, 1.0f, 1.0f};
 
@@ -699,4 +704,65 @@ void player_render_model(Player* player) {
     right_pupil_pos.x += forward.x * 0.04f;
     right_pupil_pos.z += forward.z * 0.04f;
     DrawSphere(right_pupil_pos, 0.035f, eye_black);
+}
+
+// ============================================================================
+// SWING ANIMATION
+// ============================================================================
+
+void player_start_swing(Player* player) {
+    if (!player) return;
+
+    // Only start new swing if not already swinging (prevent spam)
+    if (!player->is_swinging) {
+        player->is_swinging = true;
+        player->swing_time = 0.0f;
+    }
+}
+
+float player_update_swing(Player* player, float dt) {
+    if (!player || !player->is_swinging) return 0.0f;
+
+    // Progress swing animation
+    player->swing_time += dt;
+
+    // Check if swing is complete
+    if (player->swing_time >= player->swing_duration) {
+        player->is_swinging = false;
+        player->swing_time = 0.0f;
+        return 0.0f;
+    }
+
+    return player_get_swing_angle(player);
+}
+
+float player_get_swing_angle(Player* player) {
+    if (!player || !player->is_swinging) return 0.0f;
+
+    float t = player->swing_time / player->swing_duration;  // 0.0 to 1.0
+
+    // Natural swing motion curve:
+    // 1. Wind-up: Quick rotation backward (0-20%)
+    // 2. Strike: Fast forward rotation (20-60%)
+    // 3. Follow-through: Slow return to rest (60-100%)
+
+    float swing_angle;
+
+    if (t < 0.2f) {
+        // Wind-up: rotate back
+        float wind_t = t / 0.2f;
+        swing_angle = -20.0f * wind_t;
+    } else if (t < 0.5f) {
+        // Strike: rotate forward fast
+        float strike_t = (t - 0.2f) / 0.3f;
+        swing_angle = -20.0f + 70.0f * strike_t;  // -20 to +50
+    } else {
+        // Follow-through: return to rest smoothly
+        float return_t = (t - 0.5f) / 0.5f;
+        // Use ease-out for smooth deceleration
+        float ease = 1.0f - (1.0f - return_t) * (1.0f - return_t);
+        swing_angle = 50.0f * (1.0f - ease);  // +50 to 0
+    }
+
+    return swing_angle;
 }

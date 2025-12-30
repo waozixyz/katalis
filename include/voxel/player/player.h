@@ -60,6 +60,11 @@ typedef struct Player {
     float arm_swing_angle;      // Current arm rotation angle (degrees)
     float leg_swing_angle;      // Current leg rotation angle (degrees)
 
+    // First-person swing animation (for hitting/mining)
+    float swing_time;           // Current swing progress (0 = idle, >0 = swinging)
+    float swing_duration;       // Total swing time (default 0.25 seconds)
+    bool is_swinging;           // Currently in swing animation
+
     // Lighting
     Vector3 ambient_light;      // Current ambient light color (for model rendering)
 
@@ -121,5 +126,21 @@ bool player_collides_with_position(Player* player, Vector3 block_pos);
  * Render the player model (for third-person view)
  */
 void player_render_model(Player* player);
+
+/**
+ * Start a swing animation (for hitting/mining)
+ */
+void player_start_swing(Player* player);
+
+/**
+ * Update swing animation - call every frame
+ * Returns current swing angle in degrees
+ */
+float player_update_swing(Player* player, float dt);
+
+/**
+ * Get current swing angle for rendering
+ */
+float player_get_swing_angle(Player* player);
 
 #endif // VOXEL_PLAYER_H

@@ -10,6 +10,9 @@
 #include <raylib.h>
 #include "voxel/inventory/inventory.h"
 
+// Forward declaration
+typedef struct Player Player;
+
 // ============================================================================
 // PUBLIC API
 // ============================================================================
@@ -77,10 +80,16 @@ void inventory_ui_handle_guide_key(int key);
 bool inventory_ui_is_search_active(void);
 
 /**
- * Draw held item in first-person view (bottom-right corner)
- * Shows the currently selected hotbar item as a large sprite
- * bob_offset: vertical offset for walk animation
+ * Draw held item in first-person view (3D, Luanti-style)
+ * Must be called INSIDE BeginMode3D() block
+ *
+ * Renders:
+ * - 3D block cubes for block items
+ * - 3D tool models for tools
+ * - 3D fist/arm when no item selected
+ *
+ * Items at rest are mostly off-screen, swing into view on attack
  */
-void inventory_ui_draw_held_item(Inventory* inv, Texture2D atlas, float bob_offset);
+void inventory_ui_draw_held_item_3d(Player* player, Camera3D camera, Texture2D atlas);
 
 #endif // VOXEL_INVENTORY_UI_H

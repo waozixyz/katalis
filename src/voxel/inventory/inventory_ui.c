@@ -5,11 +5,16 @@
 #include "voxel/inventory/inventory_ui.h"
 #include "voxel/inventory/crafting.h"
 #include "voxel/core/item.h"
+#include "voxel/core/texture_atlas.h"
 #include "voxel/inventory/inventory_input.h"
 #include "voxel/world/chest.h"
+#include "voxel/player/player.h"
 #include <raylib.h>
+#include <rlgl.h>
+#include <raymath.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 // ============================================================================
 // CONSTANTS
@@ -22,11 +27,6 @@
 
 // Item icon size (centered in slot)
 #define ITEM_ICON_SIZE 32
-
-// Texture atlas layout
-#define ATLAS_SIZE 256
-#define TILE_SIZE 16
-#define TILES_PER_ROW 16
 
 // Crafting guide sidebar constants (Luanti-style)
 #define GUIDE_X 440
@@ -1055,88 +1055,307 @@ bool inventory_ui_is_search_active(void) {
 }
 
 // ============================================================================
-// HELD ITEM DISPLAY (First-Person View)
+// HELD ITEM DISPLAY (First-Person View, 3D Luanti-Style)
 // ============================================================================
 
-// Hand texture position in atlas
-#define HAND_TILE_X 8
-#define HAND_TILE_Y 0
+// Colors for 3D rendering
+static const Color SKIN_COLOR = {220, 180, 140, 255};
+static const Color SKIN_DARK = {180, 140, 100, 255};
+static const Color SLEEVE_COLOR = {70, 110, 170, 255};
+static const Color SLEEVE_DARK = {50, 80, 130, 255};
+static const Color WOOD_COLOR = {139, 90, 43, 255};
+static const Color WOOD_DARK = {100, 65, 30, 255};
+static const Color STONE_COLOR = {140, 140, 140, 255};
+static const Color STONE_DARK = {100, 100, 100, 255};
 
 /**
- * Draw held item in first-person view (bottom-right corner)
- * Shows the currently selected hotbar item as a large sprite with hand
+ * Calculate swing animation parameters for 3D
+ * Returns swing angle and forward offset
  */
-void inventory_ui_draw_held_item(Inventory* inv, Texture2D atlas, float bob_offset) {
-    if (!inv) return;
+static void calculate_3d_swing(float swing_progress, float* out_angle, float* out_forward, float* out_up) {
+    if (swing_progress <= 0.0f) {
+        // Rest position
+        *out_angle = 0.0f;
+        *out_forward = 0.0f;
+        *out_up = 0.0f;
+        return;
+    }
 
-    int screen_width = GetScreenWidth();
-    int screen_height = GetScreenHeight();
+    float t = swing_progress;
 
-    // Configuration
-    int hand_size = 220;    // Hand/arm size (larger for better visibility)
-    int icon_size = 90;     // Item icon size
+    if (t < 0.15f) {
+        // Wind-up: pull back slightly
+        float p = t / 0.15f;
+        *out_angle = -15.0f * p;
+        *out_forward = -0.05f * p;
+        *out_up = -0.02f * p;
+    }
+    else if (t < 0.5f) {
+        // Strike: fast forward arc
+        float p = (t - 0.15f) / 0.35f;
+        *out_angle = -15.0f + 85.0f * p;  // -15 to +70
+        *out_forward = -0.05f + 0.35f * p;
+        *out_up = -0.02f + 0.15f * p;
+    }
+    else {
+        // Follow-through: smooth return
+        float p = (t - 0.5f) / 0.5f;
+        float ease = 1.0f - (1.0f - p) * (1.0f - p);
+        *out_angle = 70.0f * (1.0f - ease);
+        *out_forward = 0.3f * (1.0f - ease);
+        *out_up = 0.13f * (1.0f - ease);
+    }
+}
 
-    // Hand source rectangle from atlas
-    Rectangle hand_source = {
-        (float)(HAND_TILE_X * TILE_SIZE),
-        (float)(HAND_TILE_Y * TILE_SIZE),
-        (float)TILE_SIZE,
-        (float)TILE_SIZE
-    };
+/**
+ * Draw a textured cube using texture atlas
+ */
+static void draw_textured_block(BlockType block_type, float size, Texture2D atlas) {
+    float half = size / 2.0f;
 
-    // Position hand so the bottom-right of the texture (sleeve) is at bottom-right corner
-    // The sleeve occupies roughly the bottom-right quadrant of the texture
-    // We want NO gap - sleeve should touch screen edges
-    float hand_x = screen_width - hand_size * 0.55f;   // Center of arm near right edge
-    float hand_y = screen_height - hand_size * 0.65f + bob_offset;  // Sleeve bottom at screen bottom
+    // Get UV coords for each face from texture atlas
+    TextureCoords top_coords = texture_atlas_get_coords(block_type, 0);    // Top
+    TextureCoords bottom_coords = texture_atlas_get_coords(block_type, 1); // Bottom
+    TextureCoords side_coords = texture_atlas_get_coords(block_type, 2);   // Sides
 
-    Rectangle hand_dest = {
-        hand_x,
-        hand_y,
-        (float)hand_size,
-        (float)hand_size
-    };
+    rlSetTexture(atlas.id);
+    rlBegin(RL_QUADS);
+    rlColor4ub(255, 255, 255, 255);
 
-    // No rotation origin offset - draw from top-left of dest rect
-    Vector2 hand_origin = {0, 0};
+    // TOP face (+Y) - brightest
+    rlColor4ub(255, 255, 255, 255);
+    rlTexCoord2f(top_coords.u_min, top_coords.v_min); rlVertex3f(-half, half, -half);
+    rlTexCoord2f(top_coords.u_max, top_coords.v_min); rlVertex3f(half, half, -half);
+    rlTexCoord2f(top_coords.u_max, top_coords.v_max); rlVertex3f(half, half, half);
+    rlTexCoord2f(top_coords.u_min, top_coords.v_max); rlVertex3f(-half, half, half);
 
-    // Draw hand (slight rotation for natural angle)
-    DrawTexturePro(atlas, hand_source, hand_dest, hand_origin, -15.0f, WHITE);
+    // BOTTOM face (-Y)
+    rlColor4ub(180, 180, 180, 255);
+    rlTexCoord2f(bottom_coords.u_min, bottom_coords.v_min); rlVertex3f(-half, -half, half);
+    rlTexCoord2f(bottom_coords.u_max, bottom_coords.v_min); rlVertex3f(half, -half, half);
+    rlTexCoord2f(bottom_coords.u_max, bottom_coords.v_max); rlVertex3f(half, -half, -half);
+    rlTexCoord2f(bottom_coords.u_min, bottom_coords.v_max); rlVertex3f(-half, -half, -half);
+
+    // FRONT face (+Z)
+    rlColor4ub(220, 220, 220, 255);
+    rlTexCoord2f(side_coords.u_min, side_coords.v_min); rlVertex3f(-half, half, half);
+    rlTexCoord2f(side_coords.u_max, side_coords.v_min); rlVertex3f(half, half, half);
+    rlTexCoord2f(side_coords.u_max, side_coords.v_max); rlVertex3f(half, -half, half);
+    rlTexCoord2f(side_coords.u_min, side_coords.v_max); rlVertex3f(-half, -half, half);
+
+    // BACK face (-Z)
+    rlColor4ub(200, 200, 200, 255);
+    rlTexCoord2f(side_coords.u_min, side_coords.v_min); rlVertex3f(half, half, -half);
+    rlTexCoord2f(side_coords.u_max, side_coords.v_min); rlVertex3f(-half, half, -half);
+    rlTexCoord2f(side_coords.u_max, side_coords.v_max); rlVertex3f(-half, -half, -half);
+    rlTexCoord2f(side_coords.u_min, side_coords.v_max); rlVertex3f(half, -half, -half);
+
+    // RIGHT face (+X)
+    rlColor4ub(230, 230, 230, 255);
+    rlTexCoord2f(side_coords.u_min, side_coords.v_min); rlVertex3f(half, half, half);
+    rlTexCoord2f(side_coords.u_max, side_coords.v_min); rlVertex3f(half, half, -half);
+    rlTexCoord2f(side_coords.u_max, side_coords.v_max); rlVertex3f(half, -half, -half);
+    rlTexCoord2f(side_coords.u_min, side_coords.v_max); rlVertex3f(half, -half, half);
+
+    // LEFT face (-X)
+    rlColor4ub(190, 190, 190, 255);
+    rlTexCoord2f(side_coords.u_min, side_coords.v_min); rlVertex3f(-half, half, -half);
+    rlTexCoord2f(side_coords.u_max, side_coords.v_min); rlVertex3f(-half, half, half);
+    rlTexCoord2f(side_coords.u_max, side_coords.v_max); rlVertex3f(-half, -half, half);
+    rlTexCoord2f(side_coords.u_min, side_coords.v_max); rlVertex3f(-half, -half, -half);
+
+    rlEnd();
+    rlSetTexture(0);
+}
+
+/**
+ * Draw a 3D pickaxe model
+ */
+static void draw_pickaxe_3d(bool is_stone) {
+    Color head_color = is_stone ? STONE_COLOR : WOOD_COLOR;
+    Color head_dark = is_stone ? STONE_DARK : WOOD_DARK;
+
+    // Handle (vertical, thin)
+    DrawCube((Vector3){0, -0.15f, 0}, 0.04f, 0.35f, 0.04f, WOOD_COLOR);
+    DrawCube((Vector3){0.02f, -0.15f, 0}, 0.01f, 0.35f, 0.04f, WOOD_DARK);
+
+    // Pickaxe head (horizontal bar at top)
+    DrawCube((Vector3){0, 0.08f, 0}, 0.25f, 0.05f, 0.06f, head_color);
+    DrawCube((Vector3){0, 0.1f, 0}, 0.25f, 0.02f, 0.06f, head_dark);
+
+    // Pointed ends
+    DrawCube((Vector3){-0.14f, 0.06f, 0}, 0.04f, 0.08f, 0.04f, head_color);
+    DrawCube((Vector3){0.14f, 0.06f, 0}, 0.04f, 0.08f, 0.04f, head_color);
+}
+
+/**
+ * Draw a 3D shovel model
+ */
+static void draw_shovel_3d(bool is_stone) {
+    Color blade_color = is_stone ? STONE_COLOR : WOOD_COLOR;
+    Color blade_dark = is_stone ? STONE_DARK : WOOD_DARK;
+
+    // Handle (long, vertical)
+    DrawCube((Vector3){0, -0.1f, 0}, 0.04f, 0.4f, 0.04f, WOOD_COLOR);
+    DrawCube((Vector3){0.02f, -0.1f, 0}, 0.01f, 0.4f, 0.04f, WOOD_DARK);
+
+    // Blade (rectangle at top)
+    DrawCube((Vector3){0, 0.15f, 0}, 0.1f, 0.12f, 0.02f, blade_color);
+    DrawCube((Vector3){0, 0.19f, 0}, 0.1f, 0.04f, 0.02f, blade_dark);
+}
+
+/**
+ * Draw a 3D axe model
+ */
+static void draw_axe_3d(bool is_stone) {
+    Color head_color = is_stone ? STONE_COLOR : WOOD_COLOR;
+    Color head_dark = is_stone ? STONE_DARK : WOOD_DARK;
+
+    // Handle (vertical)
+    DrawCube((Vector3){0, -0.15f, 0}, 0.04f, 0.35f, 0.04f, WOOD_COLOR);
+    DrawCube((Vector3){0.02f, -0.15f, 0}, 0.01f, 0.35f, 0.04f, WOOD_DARK);
+
+    // Axe head (wedge - approximated with cubes)
+    DrawCube((Vector3){0.06f, 0.06f, 0}, 0.1f, 0.12f, 0.04f, head_color);
+    DrawCube((Vector3){0.1f, 0.06f, 0}, 0.04f, 0.1f, 0.03f, head_dark);
+}
+
+/**
+ * Draw 3D fist/arm when no item selected
+ */
+static void draw_fist_3d(float swing_angle, float forward_offset, float up_offset) {
+    // The arm extends from bottom-right, fist punches forward during swing
+
+    rlPushMatrix();
+
+    // Apply swing rotation (around X axis - punching motion)
+    rlRotatef(swing_angle * 0.7f, 1, 0, 0);
+
+    // Translate for swing motion
+    rlTranslatef(0, up_offset * 0.5f, forward_offset);
+
+    // SLEEVE (blue, long, extends downward)
+    DrawCube((Vector3){0.05f, -0.35f, 0}, 0.12f, 0.3f, 0.08f, SLEEVE_COLOR);
+    DrawCube((Vector3){0.1f, -0.35f, 0}, 0.02f, 0.3f, 0.08f, SLEEVE_DARK);
+
+    // FOREARM (skin, above sleeve)
+    DrawCube((Vector3){0.05f, -0.15f, 0}, 0.1f, 0.12f, 0.07f, SKIN_COLOR);
+    DrawCube((Vector3){0.09f, -0.15f, 0}, 0.02f, 0.12f, 0.07f, SKIN_DARK);
+
+    // FIST (skin cube)
+    DrawCube((Vector3){0.05f, -0.02f, 0.02f}, 0.1f, 0.1f, 0.1f, SKIN_COLOR);
+    DrawCube((Vector3){0.09f, -0.02f, 0.02f}, 0.02f, 0.1f, 0.1f, SKIN_DARK);
+
+    rlPopMatrix();
+}
+
+/**
+ * Draw held item in first-person view (3D, Luanti-style)
+ * Must be called INSIDE BeginMode3D() block
+ */
+void inventory_ui_draw_held_item_3d(Player* player, Camera3D camera, Texture2D atlas) {
+    if (!player || !player->inventory) return;
+    if (player->view_mode != VIEW_MODE_FIRST_PERSON) return;
+
+    // Get swing animation progress
+    float swing_progress = 0.0f;
+    if (player->is_swinging && player->swing_duration > 0) {
+        swing_progress = player->swing_time / player->swing_duration;
+        if (swing_progress > 1.0f) swing_progress = 1.0f;
+    }
+
+    // Calculate animation parameters
+    float swing_angle, forward_offset, up_offset;
+    calculate_3d_swing(swing_progress, &swing_angle, &forward_offset, &up_offset);
+
+    // Bob only when walking
+    float vel_magnitude = sqrtf(player->velocity.x * player->velocity.x +
+                                player->velocity.z * player->velocity.z);
+    float bob = 0.0f;
+    if (vel_magnitude > 0.5f) {
+        bob = sinf(player->walk_animation_time * 2.0f) * 0.02f;
+    }
 
     // Get currently selected hotbar item
-    ItemStack* held = inventory_get_selected_hotbar_item(inv);
-    if (!held || held->type == ITEM_NONE) return;
+    ItemStack* held = inventory_get_selected_hotbar_item(player->inventory);
+    bool has_item = held && held->type != ITEM_NONE;
 
-    const ItemProperties* props = item_get_properties(held->type);
+    // Screen-space offsets (fixed position on screen)
+    // Note: In camera space, -X is RIGHT side of screen
+    float swing_left = swing_progress > 0 ? 0.1f * sinf(swing_progress * 3.14159f) : 0.0f;
+    float offset_x = -0.5f + swing_left;       // Right side of screen (negative X)
+    float offset_y = -0.4f + up_offset + bob;  // Below center
+    float offset_z = 1.2f + forward_offset;    // Forward (further away to show full item)
 
-    // Item source rectangle from atlas (16x16 tile)
-    Rectangle item_source = {
-        (float)(props->atlas_tile_x * TILE_SIZE),
-        (float)(props->atlas_tile_y * TILE_SIZE),
-        (float)TILE_SIZE,
-        (float)TILE_SIZE
-    };
+    // HUD camera - fixed position, never rotates with player
+    // Depth buffer is cleared before this call, so we're always on top
+    Camera3D hud_cam = {0};
+    hud_cam.position = (Vector3){0, 0, 0};
+    hud_cam.target = (Vector3){0, 0, 1};
+    hud_cam.up = (Vector3){0, 1, 0};
+    hud_cam.fovy = 50.0f;  // Narrower FOV to see item better
+    hud_cam.projection = CAMERA_PERSPECTIVE;
 
-    // Item position - in the grip area (upper portion of hand, between thumb and fingers)
-    // Grip is at approximately y=0-4, x=4-10 in the 16x16 texture
-    // Normalized to 0-1: grip_x ~= 0.45, grip_y ~= 0.15
-    float grip_x = 0.35f;   // Slightly left of center (between thumb and fingers)
-    float grip_y = 0.12f;   // Upper portion (where fingers grip)
+    BeginMode3D(hud_cam);
 
-    // Calculate screen position of grip, accounting for rotation
-    float item_center_x = hand_x + hand_size * grip_x;
-    float item_center_y = hand_y + hand_size * grip_y + bob_offset * 0.5f;
+    // Disable backface culling so we see all sides of the held item
+    rlDisableBackfaceCulling();
 
-    Rectangle item_dest = {
-        item_center_x - icon_size / 2.0f,
-        item_center_y - icon_size / 2.0f,
-        (float)icon_size,
-        (float)icon_size
-    };
+    // Position item in front of HUD camera (fixed screen position)
+    rlPushMatrix();
+    rlTranslatef(offset_x, offset_y, offset_z);
 
-    // Item origin for rotation (center of item)
-    Vector2 item_origin = {icon_size / 2.0f, icon_size / 2.0f};
+    // Apply swing rotation (only during swing animation)
+    if (swing_progress > 0.0f) {
+        rlRotatef(swing_angle, 1, 0, 0);
+    } else {
+        // Tilt item at rest
+        rlRotatef(-60.0f, 1, 0, 0);  // Tilted down
+        rlRotatef(20.0f, 0, 0, 1);   // Tilted right
+    }
 
-    // Draw item rotated to match hand angle
-    DrawTexturePro(atlas, item_source, item_dest, item_origin, -15.0f, WHITE);
+    if (!has_item) {
+        // Draw fist/arm
+        draw_fist_3d(swing_angle, forward_offset, up_offset);
+    } else {
+        const ItemProperties* props = item_get_properties(held->type);
+
+        if (props->is_tool) {
+            // Draw 3D tool
+            switch (held->type) {
+                case ITEM_WOODEN_PICKAXE:
+                    draw_pickaxe_3d(false);
+                    break;
+                case ITEM_STONE_PICKAXE:
+                    draw_pickaxe_3d(true);
+                    break;
+                case ITEM_WOODEN_SHOVEL:
+                    draw_shovel_3d(false);
+                    break;
+                case ITEM_STONE_SHOVEL:
+                    draw_shovel_3d(true);
+                    break;
+                case ITEM_WOODEN_AXE:
+                    draw_axe_3d(false);
+                    break;
+                case ITEM_STONE_AXE:
+                    draw_axe_3d(true);
+                    break;
+                default:
+                    // Unknown tool - draw generic cube
+                    DrawCube((Vector3){0, 0, 0}, 0.15f, 0.15f, 0.15f, WOOD_COLOR);
+                    break;
+            }
+        } else if (props->is_placeable) {
+            // Draw 3D textured block (bigger size for visibility)
+            draw_textured_block(props->places_as, 0.35f, atlas);
+        } else {
+            // Other items (stick, meat, etc) - draw as small cube with item color
+            DrawCube((Vector3){0, 0, 0}, 0.15f, 0.15f, 0.15f, WOOD_COLOR);
+        }
+    }
+
+    rlPopMatrix();
+    rlEnableBackfaceCulling();  // Restore culling
+    EndMode3D();
 }

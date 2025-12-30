@@ -29,6 +29,7 @@
 #include <raylib.h>
 #include <raymath.h>
 #include <rlgl.h>
+#include <GL/gl.h>  // For glClear(GL_DEPTH_BUFFER_BIT)
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -339,10 +340,15 @@ static void game_init(void) {
     printf("[GAME] Player spawned at (%.1f, %.1f, %.1f)\n",
            spawn_position.x, spawn_position.y, spawn_position.z);
 
-    // Give player starting items for testing
-    inventory_add_item(g_state.player->inventory, ITEM_WOOD_LOG, 16);
-    inventory_add_item(g_state.player->inventory, ITEM_DIRT, 64);
-    inventory_add_item(g_state.player->inventory, ITEM_COBBLESTONE, 32);
+    // Give player starting items for testing - stone tools in hotbar slots 0-2
+    Inventory* inv = g_state.player->inventory;
+    inv->hotbar[0] = (ItemStack){ITEM_STONE_PICKAXE, 1, 132, 132};
+    inv->hotbar[1] = (ItemStack){ITEM_STONE_SHOVEL, 1, 132, 132};
+    inv->hotbar[2] = (ItemStack){ITEM_STONE_AXE, 1, 132, 132};
+    // Blocks in slots 3-5
+    inv->hotbar[3] = (ItemStack){ITEM_WOOD_LOG, 16, 0, 0};
+    inv->hotbar[4] = (ItemStack){ITEM_DIRT, 64, 0, 0};
+    inv->hotbar[5] = (ItemStack){ITEM_COBBLESTONE, 32, 0, 0};
     printf("[GAME] Added starting items to inventory\n");
 
     // Initialize target block state
@@ -500,6 +506,9 @@ static void game_update(float dt) {
         player_update_physics(g_state.player, g_state.world, dt);
     }
 
+    // Update swing animation (always, even when menu open for smooth animation)
+    player_update_swing(g_state.player, dt);
+
     // Update world (chunk loading/unloading based on player position)
     int player_chunk_x, player_chunk_z;
     world_to_chunk_coords((int)g_state.player->position.x, (int)g_state.player->position.z,
@@ -543,6 +552,9 @@ static void game_update(float dt) {
     // Attack entity on left click (instant, priority over mining)
     if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && !g_state.player->inventory->is_open && !pause_menu_is_open(g_state.pause_menu)) {
         if (g_state.target_entity && g_state.target_entity->type == ENTITY_TYPE_SHEEP) {
+            // Swing animation for attack
+            player_start_swing(g_state.player);
+
             // Damage the sheep
             bool died = sheep_damage(g_state.target_entity, 1);
 
@@ -559,6 +571,9 @@ static void game_update(float dt) {
             }
         }
         else if (g_state.target_entity && g_state.target_entity->type == ENTITY_TYPE_PIG) {
+            // Swing animation for attack
+            player_start_swing(g_state.player);
+
             // Damage the pig
             bool died = pig_damage(g_state.target_entity, 1);
 
@@ -573,6 +588,10 @@ static void game_update(float dt) {
                 entity_destroy(g_state.target_entity);
                 g_state.target_entity = NULL;
             }
+        }
+        else if (!g_state.target_entity && !g_state.has_target_block) {
+            // Punch with empty hand (no target) - still swing
+            player_start_swing(g_state.player);
         }
     }
 
@@ -602,6 +621,9 @@ static void game_update(float dt) {
             g_mining.progress = 0.0f;
             g_mining.required_time = item_calculate_dig_time(block.type, tool);
             g_mining.crack_stage = 0;
+
+            // Swing animation when starting to mine
+            player_start_swing(g_state.player);
         }
 
         // Check if block is unbreakable (bedrock)
@@ -1037,6 +1059,17 @@ static void game_draw(void) {
 
     EndMode3D();
 
+    // === HUD LAYER: Clear depth buffer so HUD is ALWAYS on top ===
+    glClear(GL_DEPTH_BUFFER_BIT);
+
+    // Draw held item in first-person view (3D HUD layer)
+    if (!g_state.player->inventory->is_open &&
+        !g_state.open_chest &&
+        !pause_menu_is_open(g_state.pause_menu)) {
+        Texture2D atlas = texture_atlas_get_texture();
+        inventory_ui_draw_held_item_3d(g_state.player, camera, atlas);
+    }
+
     // Draw nametags above remote players (2D overlay)
     network_draw_nametags(g_state.network, camera);
 
@@ -1107,16 +1140,6 @@ static void game_draw(void) {
     // Draw hotbar (always visible)
     Texture2D atlas = texture_atlas_get_texture();
     inventory_ui_draw_hotbar(g_state.player->inventory, atlas);
-
-    // Draw held item in first-person view (after hotbar, before other UI)
-    if (g_state.player->view_mode == VIEW_MODE_FIRST_PERSON &&
-        !g_state.player->inventory->is_open &&
-        !g_state.open_chest &&
-        !pause_menu_is_open(g_state.pause_menu)) {
-        // Calculate bob from player walk animation
-        float bob = sinf(g_state.player->walk_animation_time * 2.0f) * 4.0f;
-        inventory_ui_draw_held_item(g_state.player->inventory, atlas, bob);
-    }
 
     // Draw minimap (top-right corner, shows remote players too)
     minimap_draw(g_state.minimap, g_state.player, g_state.network);
