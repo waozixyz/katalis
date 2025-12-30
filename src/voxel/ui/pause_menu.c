@@ -42,10 +42,6 @@ static void generate_random_name(char* buffer, size_t size) {
 // CONSTANTS
 // ============================================================================
 
-// Screen dimensions (must match window size)
-#define SCREEN_WIDTH 800
-#define SCREEN_HEIGHT 600
-
 // Button dimensions
 #define BUTTON_WIDTH 200
 #define BUTTON_HEIGHT 50
@@ -688,8 +684,8 @@ int pause_menu_handle_input(PauseMenu* menu, int mouse_x, int mouse_y) {
         return 0;
     }
 
-    int panel_x = (SCREEN_WIDTH - PANEL_WIDTH) / 2;
-    int panel_y = (SCREEN_HEIGHT - PANEL_HEIGHT) / 2;
+    int panel_x = (GetScreenWidth() - PANEL_WIDTH) / 2;
+    int panel_y = (GetScreenHeight() - PANEL_HEIGHT) / 2;
 
     switch (menu->state) {
         case MENU_STATE_MAIN:
@@ -714,11 +710,14 @@ void pause_menu_draw(PauseMenu* menu) {
         return;
     }
 
-    // Draw semi-transparent overlay
-    DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_OVERLAY);
+    int screen_width = GetScreenWidth();
+    int screen_height = GetScreenHeight();
 
-    int panel_x = (SCREEN_WIDTH - PANEL_WIDTH) / 2;
-    int panel_y = (SCREEN_HEIGHT - PANEL_HEIGHT) / 2;
+    // Draw semi-transparent overlay
+    DrawRectangle(0, 0, screen_width, screen_height, COLOR_OVERLAY);
+
+    int panel_x = (screen_width - PANEL_WIDTH) / 2;
+    int panel_y = (screen_height - PANEL_HEIGHT) / 2;
 
     // Draw panel background
     DrawRectangle(panel_x, panel_y, PANEL_WIDTH, PANEL_HEIGHT, COLOR_PANEL);

@@ -101,4 +101,26 @@ const CraftingRecipe* crafting_get_recipe(int index);
  */
 bool crafting_can_craft_recipe(Inventory* inv, const CraftingRecipe* recipe);
 
+/**
+ * Find a recipe that produces a specific output item
+ * Used by crafting guide to show recipe when item is clicked
+ * Returns NULL if no recipe produces this item
+ */
+const CraftingRecipe* crafting_find_recipe_for_output(ItemType output);
+
+/**
+ * Count how many times a recipe can be crafted from all inventory sources
+ * Includes hotbar, main inventory, and crafting grid
+ * Returns 0 if ingredients are insufficient
+ */
+int crafting_count_available_crafts(Inventory* inv, const CraftingRecipe* recipe);
+
+/**
+ * Auto-place ingredients from inventory into crafting grid
+ * Clears grid first, then places items from inventory sources
+ * count: number of times to place recipe ingredients (1, 10, or max if -1)
+ * Returns true if any ingredients were placed
+ */
+bool crafting_auto_place_ingredients(Inventory* inv, const CraftingRecipe* recipe, int count);
+
 #endif // VOXEL_CRAFTING_H

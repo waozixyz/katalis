@@ -195,7 +195,7 @@ void minimap_update(Minimap* minimap, World* world, Player* player) {
 void minimap_draw(Minimap* minimap, Player* player, NetworkContext* network) {
     if (!minimap || !player) return;
 
-    int screen_width = 800;  // Match game window size
+    int screen_width = GetScreenWidth();
     int x = screen_width - minimap->size - MINIMAP_MARGIN;
     int y = MINIMAP_MARGIN;
 

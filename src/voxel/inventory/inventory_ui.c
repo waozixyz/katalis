@@ -9,6 +9,7 @@
 #include "voxel/world/chest.h"
 #include <raylib.h>
 #include <stdio.h>
+#include <string.h>
 
 // ============================================================================
 // CONSTANTS
@@ -27,19 +28,33 @@
 #define TILE_SIZE 16
 #define TILES_PER_ROW 16
 
-// Crafting guide sidebar constants
+// Crafting guide sidebar constants (Luanti-style)
 #define GUIDE_X 440
 #define GUIDE_Y 100
-#define GUIDE_WIDTH 180
-#define GUIDE_HEIGHT 400
-#define RECIPE_ENTRY_HEIGHT 24
-#define RECIPE_ICON_SIZE 16
+#define GUIDE_WIDTH 220
+#define GUIDE_HEIGHT 420
+
+// Item browser grid
+#define BROWSER_ITEM_SIZE 28
+#define BROWSER_COLS 6
+#define BROWSER_ROWS 5
+#define ITEMS_PER_PAGE (BROWSER_COLS * BROWSER_ROWS)  // 30 items
+
+// Recipe preview
+#define PREVIEW_SLOT_SIZE 24
+#define PREVIEW_GAP 2
 
 // ============================================================================
 // CRAFTING GUIDE STATE
 // ============================================================================
 
-static int recipe_scroll_offset = 0;
+static int guide_current_page = 0;
+static ItemType guide_selected_item = ITEM_NONE;
+static char guide_search_text[64] = "";
+static bool guide_search_active = false;
+static ItemType guide_filtered_items[ITEM_COUNT];
+static int guide_filtered_count = 0;
+static bool guide_initialized = false;
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -109,105 +124,294 @@ static void draw_mini_item_icon(ItemType type, int x, int y, int size, Texture2D
 }
 
 /**
- * Draw a single recipe entry in the crafting guide
+ * Case-insensitive substring search
  */
-static void draw_recipe_entry(const CraftingRecipe* recipe, int x, int y,
-                               Inventory* inv, Texture2D atlas) {
-    if (!recipe) return;
+static bool str_contains_ci(const char* haystack, const char* needle) {
+    if (!haystack || !needle || needle[0] == '\0') return true;
 
-    // Collect unique ingredients (up to 3 for display)
-    ItemType ingredients[3] = {ITEM_NONE, ITEM_NONE, ITEM_NONE};
-    int ingredient_count = 0;
+    size_t needle_len = strlen(needle);
+    size_t haystack_len = strlen(haystack);
 
-    for (int i = 0; i < 9 && ingredient_count < 3; i++) {
-        if (recipe->inputs[i] != ITEM_NONE) {
-            // Check if already in list
-            bool found = false;
-            for (int j = 0; j < ingredient_count; j++) {
-                if (ingredients[j] == recipe->inputs[i]) {
-                    found = true;
-                    break;
-                }
+    if (needle_len > haystack_len) return false;
+
+    for (size_t i = 0; i <= haystack_len - needle_len; i++) {
+        bool match = true;
+        for (size_t j = 0; j < needle_len; j++) {
+            char h = haystack[i + j];
+            char n = needle[j];
+            // Simple lowercase conversion for ASCII
+            if (h >= 'A' && h <= 'Z') h += 32;
+            if (n >= 'A' && n <= 'Z') n += 32;
+            if (h != n) {
+                match = false;
+                break;
             }
-            if (!found) {
-                ingredients[ingredient_count++] = recipe->inputs[i];
-            }
+        }
+        if (match) return true;
+    }
+    return false;
+}
+
+/**
+ * Update filtered items list based on search text
+ */
+static void guide_update_filter(void) {
+    guide_filtered_count = 0;
+
+    for (int i = 1; i < ITEM_COUNT; i++) {  // Skip ITEM_NONE
+        const char* name = item_get_name(i);
+        if (str_contains_ci(name, guide_search_text)) {
+            guide_filtered_items[guide_filtered_count++] = (ItemType)i;
         }
     }
 
-    // Check if craftable (has all ingredients in inventory)
-    bool can_craft = crafting_can_craft_recipe(inv, recipe);
-    Color tint = can_craft ? WHITE : (Color){100, 100, 100, 180};
-    Color text_color = can_craft ? LIGHTGRAY : (Color){80, 80, 80, 180};
+    // Reset to first page when filter changes
+    guide_current_page = 0;
+}
 
-    // Draw ingredient icons
-    int icon_x = x;
-    for (int i = 0; i < ingredient_count; i++) {
-        draw_mini_item_icon(ingredients[i], icon_x, y + 4, RECIPE_ICON_SIZE, atlas, tint);
-        icon_x += RECIPE_ICON_SIZE + 2;
-    }
-
-    // Draw arrow
-    DrawText("->", icon_x + 2, y + 6, 10, text_color);
-    icon_x += 20;
-
-    // Draw output icon
-    draw_mini_item_icon(recipe->output, icon_x, y + 4, RECIPE_ICON_SIZE, atlas, tint);
-
-    // Draw output count if > 1
-    if (recipe->output_count > 1) {
-        DrawText(TextFormat("x%d", recipe->output_count),
-                 icon_x + RECIPE_ICON_SIZE + 2, y + 7, 10, text_color);
+/**
+ * Initialize the crafting guide (call once)
+ */
+static void guide_init_if_needed(void) {
+    if (!guide_initialized) {
+        guide_update_filter();
+        guide_initialized = true;
     }
 }
 
 /**
- * Draw the crafting guide sidebar
+ * Get total pages for current filter
+ */
+static int guide_get_total_pages(void) {
+    return (guide_filtered_count + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE;
+}
+
+/**
+ * Draw the search box
+ */
+static void draw_search_box(int x, int y, int width) {
+    // Background
+    Color bg = guide_search_active ? (Color){60, 60, 80, 255} : (Color){50, 50, 50, 255};
+    DrawRectangle(x, y, width, 20, bg);
+    DrawRectangleLines(x, y, width, 20, (Color){100, 100, 100, 255});
+
+    // Search text or placeholder
+    if (guide_search_text[0] != '\0') {
+        DrawText(guide_search_text, x + 4, y + 4, 12, WHITE);
+    } else {
+        DrawText("Search...", x + 4, y + 4, 12, GRAY);
+    }
+
+    // Cursor if active
+    if (guide_search_active) {
+        int text_width = MeasureText(guide_search_text, 12);
+        DrawRectangle(x + 4 + text_width, y + 3, 1, 14, WHITE);
+    }
+}
+
+/**
+ * Draw the item browser grid
+ */
+static void draw_item_browser(int x, int y, Texture2D atlas, Inventory* inv) {
+    int start_idx = guide_current_page * ITEMS_PER_PAGE;
+
+    for (int row = 0; row < BROWSER_ROWS; row++) {
+        for (int col = 0; col < BROWSER_COLS; col++) {
+            int idx = start_idx + row * BROWSER_COLS + col;
+            int slot_x = x + col * (BROWSER_ITEM_SIZE + 2);
+            int slot_y = y + row * (BROWSER_ITEM_SIZE + 2);
+
+            // Draw slot background
+            Color bg = (Color){50, 50, 50, 200};
+            if (idx < guide_filtered_count) {
+                ItemType item = guide_filtered_items[idx];
+                if (item == guide_selected_item) {
+                    bg = (Color){80, 80, 120, 255};  // Selected highlight
+                }
+            }
+            DrawRectangle(slot_x, slot_y, BROWSER_ITEM_SIZE, BROWSER_ITEM_SIZE, bg);
+            DrawRectangleLines(slot_x, slot_y, BROWSER_ITEM_SIZE, BROWSER_ITEM_SIZE,
+                               (Color){80, 80, 80, 255});
+
+            // Draw item icon if valid
+            if (idx < guide_filtered_count) {
+                ItemType item = guide_filtered_items[idx];
+
+                // Check if item has a recipe (tint if not craftable)
+                const CraftingRecipe* recipe = crafting_find_recipe_for_output(item);
+                bool can_craft = recipe && crafting_can_craft_recipe(inv, recipe);
+                Color tint = can_craft ? WHITE : (Color){150, 150, 150, 200};
+
+                // No recipe = darker
+                if (!recipe) tint = (Color){100, 100, 100, 150};
+
+                int icon_x = slot_x + (BROWSER_ITEM_SIZE - 24) / 2;
+                int icon_y = slot_y + (BROWSER_ITEM_SIZE - 24) / 2;
+                draw_mini_item_icon(item, icon_x, icon_y, 24, atlas, tint);
+            }
+        }
+    }
+}
+
+/**
+ * Draw pagination controls
+ */
+static void draw_pagination(int x, int y) {
+    int total_pages = guide_get_total_pages();
+    if (total_pages <= 0) total_pages = 1;
+
+    // Previous button
+    Color prev_color = (guide_current_page > 0) ? WHITE : DARKGRAY;
+    DrawText("<", x, y, 16, prev_color);
+
+    // Page indicator
+    const char* page_text = TextFormat("%d/%d", guide_current_page + 1, total_pages);
+    int text_width = MeasureText(page_text, 12);
+    DrawText(page_text, x + 60 - text_width / 2, y + 2, 12, LIGHTGRAY);
+
+    // Next button
+    Color next_color = (guide_current_page < total_pages - 1) ? WHITE : DARKGRAY;
+    DrawText(">", x + 110, y, 16, next_color);
+}
+
+/**
+ * Draw the recipe preview (3x3 grid showing exact pattern)
+ */
+static void draw_recipe_preview(int x, int y, Texture2D atlas, Inventory* inv) {
+    const CraftingRecipe* recipe = crafting_find_recipe_for_output(guide_selected_item);
+
+    if (!recipe) {
+        DrawText("No recipe", x + 20, y + 30, 12, GRAY);
+        return;
+    }
+
+    // Draw recipe name
+    const char* item_name = item_get_name(recipe->output);
+    DrawText(item_name, x, y, 12, WHITE);
+
+    int grid_y = y + 18;
+
+    // Draw 3x3 input grid
+    for (int row = 0; row < 3; row++) {
+        for (int col = 0; col < 3; col++) {
+            int slot_x = x + col * (PREVIEW_SLOT_SIZE + PREVIEW_GAP);
+            int slot_y = grid_y + row * (PREVIEW_SLOT_SIZE + PREVIEW_GAP);
+            int idx = row * 3 + col;
+
+            // Draw slot
+            DrawRectangle(slot_x, slot_y, PREVIEW_SLOT_SIZE, PREVIEW_SLOT_SIZE,
+                          (Color){60, 60, 60, 200});
+            DrawRectangleLines(slot_x, slot_y, PREVIEW_SLOT_SIZE, PREVIEW_SLOT_SIZE,
+                               (Color){90, 90, 90, 255});
+
+            // Draw ingredient icon
+            if (recipe->inputs[idx] != ITEM_NONE) {
+                int icon_x = slot_x + (PREVIEW_SLOT_SIZE - 20) / 2;
+                int icon_y = slot_y + (PREVIEW_SLOT_SIZE - 20) / 2;
+                draw_mini_item_icon(recipe->inputs[idx], icon_x, icon_y, 20, atlas, WHITE);
+            }
+        }
+    }
+
+    // Draw arrow
+    int arrow_x = x + 3 * (PREVIEW_SLOT_SIZE + PREVIEW_GAP) + 4;
+    int arrow_y = grid_y + PREVIEW_SLOT_SIZE;
+    DrawText("=>", arrow_x, arrow_y, 14, WHITE);
+
+    // Draw output slot
+    int out_x = arrow_x + 25;
+    int out_y = grid_y + PREVIEW_SLOT_SIZE - PREVIEW_SLOT_SIZE / 2;
+    DrawRectangle(out_x, out_y, PREVIEW_SLOT_SIZE, PREVIEW_SLOT_SIZE, (Color){60, 80, 60, 200});
+    DrawRectangleLines(out_x, out_y, PREVIEW_SLOT_SIZE, PREVIEW_SLOT_SIZE, (Color){100, 150, 100, 255});
+
+    int icon_x = out_x + (PREVIEW_SLOT_SIZE - 20) / 2;
+    int icon_y = out_y + (PREVIEW_SLOT_SIZE - 20) / 2;
+    draw_mini_item_icon(recipe->output, icon_x, icon_y, 20, atlas, WHITE);
+
+    // Draw output count
+    if (recipe->output_count > 1) {
+        DrawText(TextFormat("x%d", recipe->output_count), out_x + PREVIEW_SLOT_SIZE + 2, out_y + 6, 10, WHITE);
+    }
+
+    // Draw available crafts count
+    int available = crafting_count_available_crafts(inv, recipe);
+    DrawText(TextFormat("Can craft: %d", available), x, grid_y + 3 * (PREVIEW_SLOT_SIZE + PREVIEW_GAP) + 4, 10,
+             available > 0 ? GREEN : RED);
+}
+
+/**
+ * Draw the auto-craft buttons
+ */
+static void draw_craft_buttons(int x, int y, Inventory* inv) {
+    const CraftingRecipe* recipe = crafting_find_recipe_for_output(guide_selected_item);
+    bool can_craft = recipe && crafting_count_available_crafts(inv, recipe) > 0;
+
+    Color btn_color = can_craft ? (Color){60, 100, 60, 255} : (Color){60, 60, 60, 200};
+    Color text_color = can_craft ? WHITE : GRAY;
+
+    // Button dimensions
+    int btn_w = 45;
+    int btn_h = 22;
+    int gap = 5;
+
+    // Craft 1 button
+    DrawRectangle(x, y, btn_w, btn_h, btn_color);
+    DrawRectangleLines(x, y, btn_w, btn_h, (Color){100, 100, 100, 255});
+    DrawText("1", x + btn_w/2 - 3, y + 4, 14, text_color);
+
+    // Craft 10 button
+    DrawRectangle(x + btn_w + gap, y, btn_w, btn_h, btn_color);
+    DrawRectangleLines(x + btn_w + gap, y, btn_w, btn_h, (Color){100, 100, 100, 255});
+    DrawText("10", x + btn_w + gap + btn_w/2 - 8, y + 4, 14, text_color);
+
+    // Craft All button
+    DrawRectangle(x + 2*(btn_w + gap), y, btn_w + 10, btn_h, btn_color);
+    DrawRectangleLines(x + 2*(btn_w + gap), y, btn_w + 10, btn_h, (Color){100, 100, 100, 255});
+    DrawText("All", x + 2*(btn_w + gap) + 12, y + 4, 14, text_color);
+}
+
+/**
+ * Draw the Luanti-style crafting guide sidebar
  */
 static void draw_crafting_guide(Inventory* inv, Texture2D atlas) {
+    guide_init_if_needed();
+
     // Draw sidebar panel background
     DrawRectangle(GUIDE_X, GUIDE_Y, GUIDE_WIDTH, GUIDE_HEIGHT, (Color){40, 40, 40, 240});
     DrawRectangleLines(GUIDE_X, GUIDE_Y, GUIDE_WIDTH, GUIDE_HEIGHT, (Color){150, 150, 150, 255});
 
-    // Draw "Recipes" title
-    DrawText("Recipes", GUIDE_X + 10, GUIDE_Y + 10, 18, WHITE);
+    // Draw "Crafting Guide" title
+    DrawText("Crafting Guide", GUIDE_X + 10, GUIDE_Y + 8, 14, WHITE);
 
-    // Divider line under title
-    DrawLine(GUIDE_X + 10, GUIDE_Y + 32, GUIDE_X + GUIDE_WIDTH - 10, GUIDE_Y + 32,
+    // Search box
+    draw_search_box(GUIDE_X + 10, GUIDE_Y + 28, GUIDE_WIDTH - 20);
+
+    // Divider
+    DrawLine(GUIDE_X + 10, GUIDE_Y + 52, GUIDE_X + GUIDE_WIDTH - 10, GUIDE_Y + 52,
              (Color){100, 100, 100, 255});
 
-    // Get recipe list info
-    int recipe_count = crafting_get_recipe_count();
-    int visible_count = (GUIDE_HEIGHT - 50) / RECIPE_ENTRY_HEIGHT;
-    int start_y = GUIDE_Y + 40;
+    // Item browser grid
+    draw_item_browser(GUIDE_X + 10, GUIDE_Y + 58, atlas, inv);
 
-    // Clamp scroll offset
-    int max_scroll = recipe_count - visible_count;
-    if (max_scroll < 0) max_scroll = 0;
-    if (recipe_scroll_offset > max_scroll) recipe_scroll_offset = max_scroll;
-    if (recipe_scroll_offset < 0) recipe_scroll_offset = 0;
+    // Pagination
+    int browser_height = BROWSER_ROWS * (BROWSER_ITEM_SIZE + 2);
+    draw_pagination(GUIDE_X + 45, GUIDE_Y + 60 + browser_height + 5);
 
-    // Draw recipe entries
-    for (int i = 0; i < visible_count && i + recipe_scroll_offset < recipe_count; i++) {
-        int recipe_idx = i + recipe_scroll_offset;
-        const CraftingRecipe* recipe = crafting_get_recipe(recipe_idx);
+    // Divider before recipe preview
+    int preview_y = GUIDE_Y + 60 + browser_height + 28;
+    DrawLine(GUIDE_X + 10, preview_y - 3, GUIDE_X + GUIDE_WIDTH - 10, preview_y - 3,
+             (Color){100, 100, 100, 255});
 
-        if (recipe) {
-            draw_recipe_entry(recipe, GUIDE_X + 8, start_y + i * RECIPE_ENTRY_HEIGHT,
-                              inv, atlas);
-        }
+    // Recipe preview (only if an item is selected)
+    if (guide_selected_item != ITEM_NONE) {
+        draw_recipe_preview(GUIDE_X + 10, preview_y, atlas, inv);
+
+        // Craft buttons
+        draw_craft_buttons(GUIDE_X + 10, GUIDE_Y + GUIDE_HEIGHT - 32, inv);
+    } else {
+        DrawText("Click an item above", GUIDE_X + 20, preview_y + 20, 11, GRAY);
+        DrawText("to see its recipe", GUIDE_X + 25, preview_y + 35, 11, GRAY);
     }
-
-    // Draw scroll indicators if needed
-    if (recipe_scroll_offset > 0) {
-        DrawText("^", GUIDE_X + GUIDE_WIDTH - 18, GUIDE_Y + 38, 14, GRAY);
-    }
-    if (recipe_scroll_offset + visible_count < recipe_count) {
-        DrawText("v", GUIDE_X + GUIDE_WIDTH - 18, GUIDE_Y + GUIDE_HEIGHT - 18, 14, GRAY);
-    }
-
-    // Show hint at bottom
-    DrawText("Scroll to see more", GUIDE_X + 10, GUIDE_Y + GUIDE_HEIGHT - 18, 10, DARKGRAY);
 }
 
 // ============================================================================
@@ -244,10 +448,11 @@ void inventory_ui_draw_hotbar(Inventory* inv, Texture2D atlas) {
     if (!inv) return;
 
     // Calculate hotbar position (centered at bottom of screen)
-    int screen_width = 800;
+    int screen_width = GetScreenWidth();
+    int screen_height = GetScreenHeight();
     int total_width = (HOTBAR_SLOT_SIZE * HOTBAR_SIZE) + (HOTBAR_GAP * (HOTBAR_SIZE - 1));
     int start_x = (screen_width - total_width) / 2;
-    int start_y = 600 - HOTBAR_PADDING_BOTTOM;
+    int start_y = screen_height - HOTBAR_PADDING_BOTTOM;
 
     // Draw all 9 hotbar slots
     for (int i = 0; i < HOTBAR_SIZE; i++) {
@@ -306,9 +511,11 @@ void inventory_ui_draw_full_screen(Inventory* inv, Texture2D atlas) {
 
     const int SLOT_SIZE = 40;
     const int SLOT_GAP = 2;
+    int screen_width = GetScreenWidth();
+    int screen_height = GetScreenHeight();
 
     // Draw semi-transparent background overlay
-    DrawRectangle(0, 0, 800, 600, (Color){0, 0, 0, 150});
+    DrawRectangle(0, 0, screen_width, screen_height, (Color){0, 0, 0, 150});
 
     // Draw inventory panel (adjusted to make room for crafting guide)
     int panel_x = 50;
@@ -468,10 +675,12 @@ void inventory_ui_draw_tooltip(Inventory* inv, int mouse_x, int mouse_y) {
     int tooltip_y = mouse_y + 12;
 
     // Keep tooltip on screen
-    if (tooltip_x + text_width + padding * 2 > 800) {
+    int screen_width = GetScreenWidth();
+    int screen_height = GetScreenHeight();
+    if (tooltip_x + text_width + padding * 2 > screen_width) {
         tooltip_x = mouse_x - text_width - padding * 2 - 12;
     }
-    if (tooltip_y + font_size + padding * 2 > 600) {
+    if (tooltip_y + font_size + padding * 2 > screen_height) {
         tooltip_y = mouse_y - font_size - padding * 2 - 12;
     }
 
@@ -502,7 +711,7 @@ void inventory_ui_draw_chest(ChestData* chest, Inventory* inv, Texture2D atlas) 
     const int SLOT_GAP = CHEST_SLOT_GAP;
 
     // Draw semi-transparent background overlay
-    DrawRectangle(0, 0, 800, 600, (Color){0, 0, 0, 150});
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){0, 0, 0, 150});
 
     // Calculate panel dimensions
     int panel_x = CHEST_PANEL_X;
@@ -688,19 +897,159 @@ void inventory_ui_handle_chest_click(ChestData* chest, Inventory* inv, int mouse
 }
 
 // ============================================================================
-// CRAFTING GUIDE SCROLL HANDLING
+// CRAFTING GUIDE INTERACTION HANDLING
 // ============================================================================
 
 void inventory_ui_handle_scroll(int scroll_delta) {
-    int recipe_count = crafting_get_recipe_count();
-    int visible_count = (GUIDE_HEIGHT - 50) / RECIPE_ENTRY_HEIGHT;
-    int max_scroll = recipe_count - visible_count;
-    if (max_scroll < 0) max_scroll = 0;
+    // No longer used for recipe list - now using pagination
+    (void)scroll_delta;
+}
 
-    // Scroll up = positive delta, scroll down = negative delta
-    recipe_scroll_offset -= scroll_delta;
+/**
+ * Handle click on crafting guide sidebar
+ * Returns true if click was handled
+ */
+bool inventory_ui_handle_guide_click(Inventory* inv, int mouse_x, int mouse_y) {
+    if (!inv) return false;
 
-    // Clamp to valid range
-    if (recipe_scroll_offset < 0) recipe_scroll_offset = 0;
-    if (recipe_scroll_offset > max_scroll) recipe_scroll_offset = max_scroll;
+    // Check if click is in guide area
+    if (mouse_x < GUIDE_X || mouse_x > GUIDE_X + GUIDE_WIDTH ||
+        mouse_y < GUIDE_Y || mouse_y > GUIDE_Y + GUIDE_HEIGHT) {
+        return false;
+    }
+
+    // Check search box click
+    int search_x = GUIDE_X + 10;
+    int search_y = GUIDE_Y + 28;
+    if (mouse_x >= search_x && mouse_x < search_x + GUIDE_WIDTH - 20 &&
+        mouse_y >= search_y && mouse_y < search_y + 20) {
+        guide_search_active = true;
+        return true;
+    } else {
+        guide_search_active = false;
+    }
+
+    // Check item browser clicks
+    int browser_x = GUIDE_X + 10;
+    int browser_y = GUIDE_Y + 58;
+    int browser_width = BROWSER_COLS * (BROWSER_ITEM_SIZE + 2);
+    int browser_height = BROWSER_ROWS * (BROWSER_ITEM_SIZE + 2);
+
+    if (mouse_x >= browser_x && mouse_x < browser_x + browser_width &&
+        mouse_y >= browser_y && mouse_y < browser_y + browser_height) {
+        // Calculate which item was clicked
+        int col = (mouse_x - browser_x) / (BROWSER_ITEM_SIZE + 2);
+        int row = (mouse_y - browser_y) / (BROWSER_ITEM_SIZE + 2);
+        int idx = guide_current_page * ITEMS_PER_PAGE + row * BROWSER_COLS + col;
+
+        if (idx < guide_filtered_count) {
+            guide_selected_item = guide_filtered_items[idx];
+            printf("[GUIDE] Selected item: %s\n", item_get_name(guide_selected_item));
+        }
+        return true;
+    }
+
+    // Check pagination clicks
+    int pagination_y = GUIDE_Y + 60 + browser_height + 5;
+    int pagination_x = GUIDE_X + 45;
+
+    // Previous button
+    if (mouse_x >= pagination_x && mouse_x < pagination_x + 20 &&
+        mouse_y >= pagination_y && mouse_y < pagination_y + 20) {
+        if (guide_current_page > 0) {
+            guide_current_page--;
+        }
+        return true;
+    }
+
+    // Next button
+    if (mouse_x >= pagination_x + 110 && mouse_x < pagination_x + 130 &&
+        mouse_y >= pagination_y && mouse_y < pagination_y + 20) {
+        int total_pages = guide_get_total_pages();
+        if (guide_current_page < total_pages - 1) {
+            guide_current_page++;
+        }
+        return true;
+    }
+
+    // Check craft button clicks
+    if (guide_selected_item != ITEM_NONE) {
+        int btn_y = GUIDE_Y + GUIDE_HEIGHT - 32;
+        int btn_x = GUIDE_X + 10;
+        int btn_w = 45;
+        int btn_h = 22;
+        int gap = 5;
+
+        // Craft 1 button
+        if (mouse_x >= btn_x && mouse_x < btn_x + btn_w &&
+            mouse_y >= btn_y && mouse_y < btn_y + btn_h) {
+            const CraftingRecipe* recipe = crafting_find_recipe_for_output(guide_selected_item);
+            if (recipe) {
+                crafting_auto_place_ingredients(inv, recipe, 1);
+            }
+            return true;
+        }
+
+        // Craft 10 button
+        btn_x += btn_w + gap;
+        if (mouse_x >= btn_x && mouse_x < btn_x + btn_w &&
+            mouse_y >= btn_y && mouse_y < btn_y + btn_h) {
+            const CraftingRecipe* recipe = crafting_find_recipe_for_output(guide_selected_item);
+            if (recipe) {
+                crafting_auto_place_ingredients(inv, recipe, 10);
+            }
+            return true;
+        }
+
+        // Craft All button
+        btn_x += btn_w + gap;
+        if (mouse_x >= btn_x && mouse_x < btn_x + btn_w + 10 &&
+            mouse_y >= btn_y && mouse_y < btn_y + btn_h) {
+            const CraftingRecipe* recipe = crafting_find_recipe_for_output(guide_selected_item);
+            if (recipe) {
+                crafting_auto_place_ingredients(inv, recipe, -1);  // -1 = all
+            }
+            return true;
+        }
+    }
+
+    return true;  // Click was in guide area but didn't hit anything specific
+}
+
+/**
+ * Handle keyboard input for crafting guide (search)
+ */
+void inventory_ui_handle_guide_key(int key) {
+    if (!guide_search_active) return;
+
+    if (key == KEY_ESCAPE) {
+        guide_search_active = false;
+        return;
+    }
+
+    if (key == KEY_BACKSPACE) {
+        size_t len = strlen(guide_search_text);
+        if (len > 0) {
+            guide_search_text[len - 1] = '\0';
+            guide_update_filter();
+        }
+        return;
+    }
+
+    // Add printable characters
+    if (key >= 32 && key < 127) {
+        size_t len = strlen(guide_search_text);
+        if (len < sizeof(guide_search_text) - 1) {
+            guide_search_text[len] = (char)key;
+            guide_search_text[len + 1] = '\0';
+            guide_update_filter();
+        }
+    }
+}
+
+/**
+ * Check if search input is active
+ */
+bool inventory_ui_is_search_active(void) {
+    return guide_search_active;
 }

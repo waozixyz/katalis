@@ -459,6 +459,42 @@ static void generate_tile(Image* atlas, int tile_x, int tile_y, Color color, boo
 }
 
 /**
+ * Generate a wood planks tile with horizontal grain pattern
+ */
+static void generate_planks_tile(Image* atlas, int tile_x, int tile_y, Color base_color) {
+    int start_x = tile_x * TILE_SIZE;
+    int start_y = tile_y * TILE_SIZE;
+
+    for (int y = 0; y < TILE_SIZE; y++) {
+        for (int x = 0; x < TILE_SIZE; x++) {
+            Color pixel = base_color;
+
+            // Horizontal plank divider lines (every 5 pixels)
+            if (y % 5 == 0) {
+                pixel.r = (unsigned char)(base_color.r * 0.6f);
+                pixel.g = (unsigned char)(base_color.g * 0.6f);
+                pixel.b = (unsigned char)(base_color.b * 0.6f);
+            } else {
+                // Horizontal wood grain noise
+                int grain = ((x * 3 + y) % 12) - 6;
+                pixel.r = (unsigned char)clamp_int(pixel.r + grain, 0, 255);
+                pixel.g = (unsigned char)clamp_int(pixel.g + grain, 0, 255);
+                pixel.b = (unsigned char)clamp_int(pixel.b + grain / 2, 0, 255);
+            }
+
+            // Border
+            if (x == 0 || y == 0 || x == TILE_SIZE - 1 || y == TILE_SIZE - 1) {
+                pixel.r = (unsigned char)(base_color.r * 0.5f);
+                pixel.g = (unsigned char)(base_color.g * 0.5f);
+                pixel.b = (unsigned char)(base_color.b * 0.5f);
+            }
+
+            ImageDrawPixel(atlas, start_x + x, start_y + y, pixel);
+        }
+    }
+}
+
+/**
  * Generate procedural texture atlas
  */
 static Image generate_atlas_image(void) {
@@ -485,6 +521,7 @@ static Image generate_atlas_image(void) {
     // WOOD - Row 3 (Warm oak wood)
     generate_tile(&atlas, 0, 3, (Color){120, 80, 50, 255}, true);     // Sides: Dark bark
     generate_tile(&atlas, 1, 3, (Color){200, 150, 100, 255}, true);   // Top/Bottom: Light wood rings
+    generate_planks_tile(&atlas, 3, 3, (Color){180, 130, 80, 255});   // Planks: Processed wood boards
 
     // LEAVES - Row 4 (Bright foliage green with transparency holes - Luanti style)
     generate_leaf_tile(&atlas, 0, 4, (Color){60, 180, 75, 255});     // All faces: Semi-transparent leaves

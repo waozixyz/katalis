@@ -51,11 +51,11 @@ void crafting_init(void) {
         },
         ITEM_WOOD_PLANKS, 4);
 
-    // Recipe 2: 2 Wood Planks → 4 Sticks (shaped, vertical)
-    add_recipe(RECIPE_SHAPED,
+    // Recipe 2: 1 Wood Plank → 4 Sticks (shapeless, Luanti style)
+    add_recipe(RECIPE_SHAPELESS,
         (ItemType[9]){
-            ITEM_NONE, ITEM_WOOD_PLANKS, ITEM_NONE,
-            ITEM_NONE, ITEM_WOOD_PLANKS, ITEM_NONE,
+            ITEM_WOOD_PLANKS, ITEM_NONE, ITEM_NONE,
+            ITEM_NONE, ITEM_NONE, ITEM_NONE,
             ITEM_NONE, ITEM_NONE, ITEM_NONE
         },
         ITEM_STICK, 4);
@@ -146,14 +146,65 @@ void crafting_init(void) {
 // ============================================================================
 
 /**
- * Check if a shaped recipe matches the grid exactly
+ * Get bounding box of non-empty items in a 3x3 grid
+ * Returns min_row, max_row, min_col, max_col
  */
-static bool match_shaped_recipe(const CraftingRecipe* recipe, const ItemType grid[9]) {
-    for (int i = 0; i < 9; i++) {
-        if (recipe->inputs[i] != grid[i]) {
-            return false;
+static void get_pattern_bounds(const ItemType items[9], int* min_row, int* max_row, int* min_col, int* max_col) {
+    *min_row = 3; *max_row = -1;
+    *min_col = 3; *max_col = -1;
+
+    for (int row = 0; row < 3; row++) {
+        for (int col = 0; col < 3; col++) {
+            int idx = row * 3 + col;
+            if (items[idx] != ITEM_NONE) {
+                if (row < *min_row) *min_row = row;
+                if (row > *max_row) *max_row = row;
+                if (col < *min_col) *min_col = col;
+                if (col > *max_col) *max_col = col;
+            }
         }
     }
+}
+
+/**
+ * Check if a shaped recipe matches the grid with position-shifting
+ * The pattern can be placed anywhere in the grid as long as it fits
+ */
+static bool match_shaped_recipe(const CraftingRecipe* recipe, const ItemType grid[9]) {
+    // Get bounds of recipe pattern
+    int r_min_row, r_max_row, r_min_col, r_max_col;
+    get_pattern_bounds(recipe->inputs, &r_min_row, &r_max_row, &r_min_col, &r_max_col);
+
+    // Get bounds of grid items
+    int g_min_row, g_max_row, g_min_col, g_max_col;
+    get_pattern_bounds(grid, &g_min_row, &g_max_row, &g_min_col, &g_max_col);
+
+    // Check if both are empty
+    if (r_max_row < 0 && g_max_row < 0) return true;
+    if (r_max_row < 0 || g_max_row < 0) return false;
+
+    // Calculate pattern dimensions
+    int r_height = r_max_row - r_min_row + 1;
+    int r_width = r_max_col - r_min_col + 1;
+    int g_height = g_max_row - g_min_row + 1;
+    int g_width = g_max_col - g_min_col + 1;
+
+    // Dimensions must match
+    if (r_height != g_height || r_width != g_width) {
+        return false;
+    }
+
+    // Compare pattern at the normalized positions
+    for (int row = 0; row < r_height; row++) {
+        for (int col = 0; col < r_width; col++) {
+            int r_idx = (r_min_row + row) * 3 + (r_min_col + col);
+            int g_idx = (g_min_row + row) * 3 + (g_min_col + col);
+            if (recipe->inputs[r_idx] != grid[g_idx]) {
+                return false;
+            }
+        }
+    }
+
     return true;
 }
 
@@ -399,7 +450,7 @@ bool crafting_can_craft_recipe(Inventory* inv, const CraftingRecipe* recipe) {
         }
     }
 
-    // Count available items in inventory (hotbar + main inventory)
+    // Count available items in inventory (hotbar + main inventory + crafting grid)
     int available[ITEM_COUNT] = {0};
     for (int i = 0; i < HOTBAR_SIZE; i++) {
         if (inv->hotbar[i].type != ITEM_NONE) {
@@ -411,6 +462,16 @@ bool crafting_can_craft_recipe(Inventory* inv, const CraftingRecipe* recipe) {
             available[inv->main_inventory[i].type] += inv->main_inventory[i].count;
         }
     }
+    // Also count items in crafting grid (user may have moved items there)
+    for (int i = 0; i < 9; i++) {
+        if (inv->crafting_grid[i].type != ITEM_NONE) {
+            available[inv->crafting_grid[i].type] += inv->crafting_grid[i].count;
+        }
+    }
+    // Also count held item (cursor item being dragged)
+    if (inv->is_holding_item && inv->held_item.type != ITEM_NONE) {
+        available[inv->held_item.type] += inv->held_item.count;
+    }
 
     // Check if all required ingredients are available
     for (int i = 0; i < ITEM_COUNT; i++) {
@@ -419,5 +480,168 @@ bool crafting_can_craft_recipe(Inventory* inv, const CraftingRecipe* recipe) {
         }
     }
 
+    return true;
+}
+
+const CraftingRecipe* crafting_find_recipe_for_output(ItemType output) {
+    if (output == ITEM_NONE) return NULL;
+
+    for (int i = 0; i < g_recipe_count; i++) {
+        if (g_recipes[i].output == output) {
+            return &g_recipes[i];
+        }
+    }
+    return NULL;
+}
+
+int crafting_count_available_crafts(Inventory* inv, const CraftingRecipe* recipe) {
+    if (!inv || !recipe) return 0;
+
+    // Count required ingredients
+    int required[ITEM_COUNT] = {0};
+    for (int i = 0; i < 9; i++) {
+        if (recipe->inputs[i] != ITEM_NONE) {
+            required[recipe->inputs[i]]++;
+        }
+    }
+
+    // Count available items from all sources
+    int available[ITEM_COUNT] = {0};
+    for (int i = 0; i < HOTBAR_SIZE; i++) {
+        if (inv->hotbar[i].type != ITEM_NONE) {
+            available[inv->hotbar[i].type] += inv->hotbar[i].count;
+        }
+    }
+    for (int i = 0; i < MAIN_INVENTORY_SIZE; i++) {
+        if (inv->main_inventory[i].type != ITEM_NONE) {
+            available[inv->main_inventory[i].type] += inv->main_inventory[i].count;
+        }
+    }
+    for (int i = 0; i < 9; i++) {
+        if (inv->crafting_grid[i].type != ITEM_NONE) {
+            available[inv->crafting_grid[i].type] += inv->crafting_grid[i].count;
+        }
+    }
+
+    // Find the minimum number of crafts possible
+    int max_crafts = 999;
+    for (int type = 0; type < ITEM_COUNT; type++) {
+        if (required[type] > 0) {
+            int possible = available[type] / required[type];
+            if (possible < max_crafts) {
+                max_crafts = possible;
+            }
+        }
+    }
+
+    return max_crafts == 999 ? 0 : max_crafts;
+}
+
+/**
+ * Helper: Take items from inventory sources
+ * Returns the number of items actually taken
+ */
+static int take_items_from_inventory(Inventory* inv, ItemType type, int count) {
+    int taken = 0;
+
+    // Take from crafting grid first (items already there)
+    for (int i = 0; i < 9 && taken < count; i++) {
+        if (inv->crafting_grid[i].type == type) {
+            int to_take = count - taken;
+            if (to_take > inv->crafting_grid[i].count) {
+                to_take = inv->crafting_grid[i].count;
+            }
+            inv->crafting_grid[i].count -= to_take;
+            if (inv->crafting_grid[i].count == 0) {
+                inv->crafting_grid[i].type = ITEM_NONE;
+            }
+            taken += to_take;
+        }
+    }
+
+    // Take from hotbar
+    for (int i = 0; i < HOTBAR_SIZE && taken < count; i++) {
+        if (inv->hotbar[i].type == type) {
+            int to_take = count - taken;
+            if (to_take > inv->hotbar[i].count) {
+                to_take = inv->hotbar[i].count;
+            }
+            inv->hotbar[i].count -= to_take;
+            if (inv->hotbar[i].count == 0) {
+                inv->hotbar[i].type = ITEM_NONE;
+            }
+            taken += to_take;
+        }
+    }
+
+    // Take from main inventory
+    for (int i = 0; i < MAIN_INVENTORY_SIZE && taken < count; i++) {
+        if (inv->main_inventory[i].type == type) {
+            int to_take = count - taken;
+            if (to_take > inv->main_inventory[i].count) {
+                to_take = inv->main_inventory[i].count;
+            }
+            inv->main_inventory[i].count -= to_take;
+            if (inv->main_inventory[i].count == 0) {
+                inv->main_inventory[i].type = ITEM_NONE;
+            }
+            taken += to_take;
+        }
+    }
+
+    return taken;
+}
+
+bool crafting_auto_place_ingredients(Inventory* inv, const CraftingRecipe* recipe, int count) {
+    if (!inv || !recipe) return false;
+
+    // Calculate max crafts if count is -1 (all)
+    int max_available = crafting_count_available_crafts(inv, recipe);
+    if (max_available == 0) return false;
+
+    int actual_count = count;
+    if (count < 0 || count > max_available) {
+        actual_count = max_available;
+    }
+
+    // Clear crafting grid first
+    for (int i = 0; i < 9; i++) {
+        if (inv->crafting_grid[i].type != ITEM_NONE) {
+            // Return items to inventory
+            inventory_add_item(inv, inv->crafting_grid[i].type, inv->crafting_grid[i].count);
+            inv->crafting_grid[i].type = ITEM_NONE;
+            inv->crafting_grid[i].count = 0;
+        }
+    }
+
+    // Count how many of each ingredient we need
+    int needed[ITEM_COUNT] = {0};
+    for (int i = 0; i < 9; i++) {
+        if (recipe->inputs[i] != ITEM_NONE) {
+            needed[recipe->inputs[i]] += actual_count;
+        }
+    }
+
+    // Take ingredients from inventory
+    for (int type = 0; type < ITEM_COUNT; type++) {
+        if (needed[type] > 0) {
+            take_items_from_inventory(inv, type, needed[type]);
+        }
+    }
+
+    // Place ingredients in crafting grid according to recipe pattern
+    for (int i = 0; i < 9; i++) {
+        if (recipe->inputs[i] != ITEM_NONE) {
+            inv->crafting_grid[i].type = recipe->inputs[i];
+            inv->crafting_grid[i].count = actual_count;
+            inv->crafting_grid[i].durability = 0;
+            inv->crafting_grid[i].max_durability = 0;
+        }
+    }
+
+    // Update output
+    crafting_update_output(inv);
+
+    printf("[CRAFTING] Auto-placed %d x recipe ingredients\n", actual_count);
     return true;
 }

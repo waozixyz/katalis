@@ -1012,8 +1012,8 @@ static void game_draw(void) {
     network_draw_nametags(g_state.network, camera);
 
     // Draw crosshair in center of screen
-    int screen_width = 800;   // From window size
-    int screen_height = 600;
+    int screen_width = GetScreenWidth();
+    int screen_height = GetScreenHeight();
     int center_x = screen_width / 2;
     int center_y = screen_height / 2;
     int crosshair_size = 10;

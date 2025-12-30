@@ -58,4 +58,22 @@ void inventory_ui_handle_chest_click(ChestData* chest, Inventory* inv, int mouse
  */
 void inventory_ui_handle_scroll(int scroll_delta);
 
+/**
+ * Handle click on crafting guide sidebar
+ * Returns true if click was handled by the guide
+ */
+bool inventory_ui_handle_guide_click(Inventory* inv, int mouse_x, int mouse_y);
+
+/**
+ * Handle keyboard input for crafting guide search
+ * Call with key codes when search is active
+ */
+void inventory_ui_handle_guide_key(int key);
+
+/**
+ * Check if search input is currently active
+ * Use to prevent other key bindings when typing in search
+ */
+bool inventory_ui_is_search_active(void);
+
 #endif // VOXEL_INVENTORY_UI_H

@@ -427,27 +427,60 @@ void inventory_input_handle_shift_click(Inventory* inv, int mouse_x, int mouse_y
         return;
     }
 
-    // Quick transfer logic:
-    // - Hotbar → Main Inventory
-    // - Main Inventory → Hotbar
-    // - Crafting Grid → Try hotbar first, then main inventory
+    // Quick transfer logic (Luanti style):
+    // - Hotbar → Crafting Grid (find empty slot)
+    // - Main Inventory → Crafting Grid (find empty slot)
+    // - Crafting Grid → Hotbar first, then main inventory
 
     ItemType item_type = clicked_slot->type;
     uint8_t count = clicked_slot->count;
+    const ItemProperties* props = item_get_properties(item_type);
 
-    if (section == SECTION_HOTBAR) {
-        // Try to add to main inventory
-        if (inventory_add_item(inv, item_type, count)) {
+    if (section == SECTION_HOTBAR || section == SECTION_MAIN_INVENTORY) {
+        // Transfer to crafting grid (Luanti-style)
+        uint8_t remaining = count;
+
+        // Phase 1: Stack with existing same-type items in crafting grid
+        for (int i = 0; i < 9 && remaining > 0; i++) {
+            if (inv->crafting_grid[i].type == item_type) {
+                uint8_t space = props->max_stack_size - inv->crafting_grid[i].count;
+                uint8_t transfer = (remaining <= space) ? remaining : space;
+                inv->crafting_grid[i].count += transfer;
+                remaining -= transfer;
+            }
+        }
+
+        // Phase 2: Create new stacks in empty crafting grid slots
+        for (int i = 0; i < 9 && remaining > 0; i++) {
+            if (inv->crafting_grid[i].type == ITEM_NONE) {
+                uint8_t transfer = (remaining <= props->max_stack_size)
+                    ? remaining : props->max_stack_size;
+                inv->crafting_grid[i].type = item_type;
+                inv->crafting_grid[i].count = transfer;
+                inv->crafting_grid[i].durability = clicked_slot->durability;
+                inv->crafting_grid[i].max_durability = clicked_slot->max_durability;
+                remaining -= transfer;
+            }
+        }
+
+        // Update clicked slot
+        if (remaining == 0) {
             clicked_slot->type = ITEM_NONE;
             clicked_slot->count = 0;
             clicked_slot->durability = 0;
             clicked_slot->max_durability = 0;
-            printf("[INPUT] Quick transfer: Hotbar → Main Inventory\n");
+            printf("[INPUT] Quick transfer: %s → Crafting Grid\n",
+                   section == SECTION_HOTBAR ? "Hotbar" : "Inventory");
+        } else {
+            clicked_slot->count = remaining;
+            printf("[INPUT] Quick transfer partial: %d items remaining\n", remaining);
         }
-    } else if (section == SECTION_MAIN_INVENTORY || section == SECTION_CRAFTING_GRID) {
-        // Try to add to hotbar first, then main inventory
-        // We'll manually try to add to hotbar slots
-        const ItemProperties* props = item_get_properties(item_type);
+
+        // Update crafting output
+        crafting_update_output(inv);
+
+    } else if (section == SECTION_CRAFTING_GRID) {
+        // Transfer from crafting grid to hotbar first, then main inventory
         uint8_t remaining = count;
 
         // Phase 1: Stack with existing items in hotbar
@@ -464,13 +497,34 @@ void inventory_input_handle_shift_click(Inventory* inv, int mouse_x, int mouse_y
         for (int i = 0; i < 9 && remaining > 0; i++) {
             if (inv->hotbar[i].type == ITEM_NONE) {
                 uint8_t transfer = (remaining <= props->max_stack_size)
-                    ? remaining
-                    : props->max_stack_size;
-
+                    ? remaining : props->max_stack_size;
                 inv->hotbar[i].type = item_type;
                 inv->hotbar[i].count = transfer;
                 inv->hotbar[i].durability = clicked_slot->durability;
                 inv->hotbar[i].max_durability = clicked_slot->max_durability;
+                remaining -= transfer;
+            }
+        }
+
+        // Phase 3: Stack with existing items in main inventory
+        for (int i = 0; i < 27 && remaining > 0; i++) {
+            if (inv->main_inventory[i].type == item_type) {
+                uint8_t space = props->max_stack_size - inv->main_inventory[i].count;
+                uint8_t transfer = (remaining <= space) ? remaining : space;
+                inv->main_inventory[i].count += transfer;
+                remaining -= transfer;
+            }
+        }
+
+        // Phase 4: Create new stacks in empty main inventory slots
+        for (int i = 0; i < 27 && remaining > 0; i++) {
+            if (inv->main_inventory[i].type == ITEM_NONE) {
+                uint8_t transfer = (remaining <= props->max_stack_size)
+                    ? remaining : props->max_stack_size;
+                inv->main_inventory[i].type = item_type;
+                inv->main_inventory[i].count = transfer;
+                inv->main_inventory[i].durability = clicked_slot->durability;
+                inv->main_inventory[i].max_durability = clicked_slot->max_durability;
                 remaining -= transfer;
             }
         }
@@ -481,10 +535,13 @@ void inventory_input_handle_shift_click(Inventory* inv, int mouse_x, int mouse_y
             clicked_slot->count = 0;
             clicked_slot->durability = 0;
             clicked_slot->max_durability = 0;
-            printf("[INPUT] Quick transfer: Inventory → Hotbar\n");
+            printf("[INPUT] Quick transfer: Crafting Grid → Inventory\n");
         } else {
             clicked_slot->count = remaining;
             printf("[INPUT] Quick transfer partial: %d items remaining\n", remaining);
         }
+
+        // Update crafting output
+        crafting_update_output(inv);
     }
 }
