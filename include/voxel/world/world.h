@@ -109,9 +109,15 @@ void world_update(World* world, int center_chunk_x, int center_chunk_z);
 void world_render(World* world);
 
 /**
- * Render all visible chunks with time-based ambient lighting
+ * Render all visible chunks with time-based ambient lighting (opaque blocks only)
  */
 void world_render_with_time(World* world, float time_of_day);
+
+/**
+ * Render transparent blocks (leaves, water) with time-based ambient lighting
+ * Call this AFTER world_render_with_time, with depth write disabled
+ */
+void world_render_transparent_with_time(World* world, float time_of_day);
 
 /**
  * Convert world coordinates to chunk coordinates

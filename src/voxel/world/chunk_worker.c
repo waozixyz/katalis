@@ -253,54 +253,84 @@ CompletedChunk* chunk_worker_poll_completed(ChunkWorker* worker) {
 void chunk_worker_upload_mesh(Chunk* chunk, StagedMesh* mesh) {
     if (!chunk || !mesh || !mesh->valid) return;
 
-    // Unload old mesh if it exists
+    // === Upload OPAQUE mesh ===
     if (chunk->mesh_generated && chunk->mesh.vboId != NULL) {
         UnloadMesh(chunk->mesh);
         chunk->mesh_generated = false;
         memset(&chunk->mesh, 0, sizeof(Mesh));
     }
 
-    if (mesh->vertex_count == 0) {
-        chunk->state = CHUNK_STATE_COMPLETE;
-        return;
+    if (mesh->vertex_count > 0) {
+        chunk->mesh.vertexCount = mesh->vertex_count;
+        chunk->mesh.triangleCount = mesh->vertex_count / 3;
+        chunk->mesh.vertices = mesh->vertices;
+        chunk->mesh.texcoords = mesh->texcoords;
+        chunk->mesh.normals = mesh->normals;
+        chunk->mesh.colors = mesh->colors;
+        UploadMesh(&chunk->mesh, false);
+        chunk->mesh_generated = true;
+
+        // Don't free buffers - they're now owned by the mesh
+        mesh->vertices = NULL;
+        mesh->texcoords = NULL;
+        mesh->normals = NULL;
+        mesh->colors = NULL;
     }
 
-    // Create Raylib mesh
-    chunk->mesh.vertexCount = mesh->vertex_count;
-    chunk->mesh.triangleCount = mesh->vertex_count / 3;
-    chunk->mesh.vertices = mesh->vertices;
-    chunk->mesh.texcoords = mesh->texcoords;
-    chunk->mesh.normals = mesh->normals;
-    chunk->mesh.colors = mesh->colors;
+    // === Upload TRANSPARENT mesh ===
+    if (chunk->transparent_mesh_generated && chunk->transparent_mesh.vboId != NULL) {
+        UnloadMesh(chunk->transparent_mesh);
+        chunk->transparent_mesh_generated = false;
+        memset(&chunk->transparent_mesh, 0, sizeof(Mesh));
+    }
 
-    // Upload to GPU
-    UploadMesh(&chunk->mesh, false);
+    if (mesh->trans_vertex_count > 0) {
+        chunk->transparent_mesh.vertexCount = mesh->trans_vertex_count;
+        chunk->transparent_mesh.triangleCount = mesh->trans_vertex_count / 3;
+        chunk->transparent_mesh.vertices = mesh->trans_vertices;
+        chunk->transparent_mesh.texcoords = mesh->trans_texcoords;
+        chunk->transparent_mesh.normals = mesh->trans_normals;
+        chunk->transparent_mesh.colors = mesh->trans_colors;
+        UploadMesh(&chunk->transparent_mesh, false);
+        chunk->transparent_mesh_generated = true;
 
-    chunk->mesh_generated = true;
+        // Don't free buffers - they're now owned by the mesh
+        mesh->trans_vertices = NULL;
+        mesh->trans_texcoords = NULL;
+        mesh->trans_normals = NULL;
+        mesh->trans_colors = NULL;
+    }
+
     chunk->needs_remesh = false;
     chunk->state = CHUNK_STATE_COMPLETE;
-
-    // Don't free buffers - they're now owned by the mesh
-    mesh->vertices = NULL;
-    mesh->texcoords = NULL;
-    mesh->normals = NULL;
-    mesh->colors = NULL;
     mesh->valid = false;
 }
 
 void staged_mesh_free(StagedMesh* mesh) {
     if (!mesh) return;
 
+    // Free opaque mesh buffers
     if (mesh->vertices) free(mesh->vertices);
     if (mesh->texcoords) free(mesh->texcoords);
     if (mesh->normals) free(mesh->normals);
     if (mesh->colors) free(mesh->colors);
+
+    // Free transparent mesh buffers
+    if (mesh->trans_vertices) free(mesh->trans_vertices);
+    if (mesh->trans_texcoords) free(mesh->trans_texcoords);
+    if (mesh->trans_normals) free(mesh->trans_normals);
+    if (mesh->trans_colors) free(mesh->trans_colors);
 
     mesh->vertices = NULL;
     mesh->texcoords = NULL;
     mesh->normals = NULL;
     mesh->colors = NULL;
     mesh->vertex_count = 0;
+    mesh->trans_vertices = NULL;
+    mesh->trans_texcoords = NULL;
+    mesh->trans_normals = NULL;
+    mesh->trans_colors = NULL;
+    mesh->trans_vertex_count = 0;
     mesh->valid = false;
 }
 

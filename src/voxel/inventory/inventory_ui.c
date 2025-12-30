@@ -29,7 +29,7 @@
 #define ITEM_ICON_SIZE 32
 
 // Crafting guide sidebar constants (Luanti-style)
-#define GUIDE_X 440
+#define GUIDE_X 520
 #define GUIDE_Y 100
 #define GUIDE_WIDTH 220
 #define GUIDE_HEIGHT 420
@@ -520,7 +520,7 @@ void inventory_ui_draw_full_screen(Inventory* inv, Texture2D atlas) {
     // Draw inventory panel (adjusted to make room for crafting guide)
     int panel_x = 50;
     int panel_y = 100;
-    int panel_w = 380;
+    int panel_w = 460;  // Wide enough for 9 columns
     int panel_h = 400;
 
     DrawRectangle(panel_x, panel_y, panel_w, panel_h, (Color){40, 40, 40, 240});
@@ -1309,9 +1309,9 @@ void inventory_ui_draw_held_item_3d(Player* player, Camera3D camera, Texture2D a
     if (swing_progress > 0.0f) {
         rlRotatef(swing_angle, 1, 0, 0);
     } else {
-        // Tilt item at rest
-        rlRotatef(-60.0f, 1, 0, 0);  // Tilted down
-        rlRotatef(20.0f, 0, 0, 1);   // Tilted right
+        // Tilt item at rest (more upright)
+        rlRotatef(0.0f, 1, 0, 0);  // Tilted down (less steep)
+        rlRotatef(15.0f, 0, 0, 1);   // Tilted right
     }
 
     if (!has_item) {

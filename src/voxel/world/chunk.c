@@ -44,6 +44,7 @@ Chunk* chunk_create(int x, int z) {
     chunk->needs_remesh = true;
     chunk->is_empty = true;
     chunk->mesh_generated = false;
+    chunk->transparent_mesh_generated = false;
     chunk->has_spawned = false;
     chunk->solid_block_count = 0;
     chunk->state = CHUNK_STATE_EMPTY;
@@ -51,8 +52,9 @@ Chunk* chunk_create(int x, int z) {
     // Initialize all blocks to air
     memset(chunk->blocks, 0, sizeof(chunk->blocks));
 
-    // Initialize mesh to zero
+    // Initialize meshes to zero
     memset(&chunk->mesh, 0, sizeof(Mesh));
+    memset(&chunk->transparent_mesh, 0, sizeof(Mesh));
 
     return chunk;
 }
@@ -63,9 +65,14 @@ Chunk* chunk_create(int x, int z) {
 void chunk_destroy(Chunk* chunk) {
     if (!chunk) return;
 
-    // Unload mesh from GPU if it was generated
+    // Unload opaque mesh from GPU if it was generated
     if (chunk->mesh_generated && chunk->mesh.vboId != NULL) {
         UnloadMesh(chunk->mesh);
+    }
+
+    // Unload transparent mesh from GPU if it was generated
+    if (chunk->transparent_mesh_generated && chunk->transparent_mesh.vboId != NULL) {
+        UnloadMesh(chunk->transparent_mesh);
     }
 
     free(chunk);
@@ -330,7 +337,8 @@ static uint8_t get_block_light(Chunk* chunk, int x, int y, int z) {
  * Does not merge adjacent faces, rendering each block separately
  */
 static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** texcoords,
-                                       float** normals, unsigned char** colors, int* vertex_count) {
+                                       float** normals, unsigned char** colors, int* vertex_count,
+                                       bool transparent_pass) {
     *vertex_count = 0;
 
     // Iterate through all blocks in the chunk
@@ -342,6 +350,12 @@ static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** t
                 // Skip air blocks
                 if (!block_is_solid(block)) {
                     continue;
+                }
+
+                // Two-pass rendering: separate opaque and transparent blocks
+                bool is_transparent = block_is_transparent(block);
+                if (transparent_pass != is_transparent) {
+                    continue;  // Skip blocks not matching this pass
                 }
 
                 // Local position of this block within the chunk
@@ -438,13 +452,18 @@ static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** t
 void chunk_generate_mesh(Chunk* chunk) {
     if (!chunk) return;
 
-
-    // Unload old mesh if it exists
+    // Unload old opaque mesh if it exists
     if (chunk->mesh_generated && chunk->mesh.vboId != NULL) {
         UnloadMesh(chunk->mesh);
         chunk->mesh_generated = false;
-        // Clear the mesh struct to avoid GPU ID conflicts
         memset(&chunk->mesh, 0, sizeof(Mesh));
+    }
+
+    // Unload old transparent mesh if it exists
+    if (chunk->transparent_mesh_generated && chunk->transparent_mesh.vboId != NULL) {
+        UnloadMesh(chunk->transparent_mesh);
+        chunk->transparent_mesh_generated = false;
+        memset(&chunk->transparent_mesh, 0, sizeof(Mesh));
     }
 
     // Skip empty chunks
@@ -455,35 +474,57 @@ void chunk_generate_mesh(Chunk* chunk) {
     // Allocate maximum possible buffer size (worst case: all blocks visible on all 6 sides)
     int max_blocks = CHUNK_SIZE * CHUNK_HEIGHT * CHUNK_SIZE;
     int max_vertices = max_blocks * 6 * 6;  // 6 faces * 6 vertices per face
+
+    // === PASS 1: Generate OPAQUE mesh ===
     float* vertices = (float*)malloc(max_vertices * 3 * sizeof(float));
     float* texcoords = (float*)malloc(max_vertices * 2 * sizeof(float));
     float* normals = (float*)malloc(max_vertices * 3 * sizeof(float));
     unsigned char* colors = (unsigned char*)malloc(max_vertices * 4 * sizeof(unsigned char));
-
     int vertex_count = 0;
 
-    // Use simple meshing algorithm (each block face is independent)
-    chunk_generate_mesh_simple(chunk, &vertices, &texcoords, &normals, &colors, &vertex_count);
+    chunk_generate_mesh_simple(chunk, &vertices, &texcoords, &normals, &colors, &vertex_count, false);
 
-    if (vertex_count == 0) {
+    if (vertex_count > 0) {
+        chunk->mesh.vertexCount = vertex_count;
+        chunk->mesh.triangleCount = vertex_count / 3;
+        chunk->mesh.vertices = vertices;
+        chunk->mesh.texcoords = texcoords;
+        chunk->mesh.normals = normals;
+        chunk->mesh.colors = colors;
+        UploadMesh(&chunk->mesh, false);
+        chunk->mesh_generated = true;
+    } else {
         free(vertices);
         free(texcoords);
         free(normals);
         free(colors);
-        return;
     }
 
-    // Create Raylib mesh
-    chunk->mesh.vertexCount = vertex_count;
-    chunk->mesh.triangleCount = vertex_count / 3;
-    chunk->mesh.vertices = vertices;
-    chunk->mesh.texcoords = texcoords;
-    chunk->mesh.normals = normals;
-    chunk->mesh.colors = colors;
+    // === PASS 2: Generate TRANSPARENT mesh ===
+    float* trans_vertices = (float*)malloc(max_vertices * 3 * sizeof(float));
+    float* trans_texcoords = (float*)malloc(max_vertices * 2 * sizeof(float));
+    float* trans_normals = (float*)malloc(max_vertices * 3 * sizeof(float));
+    unsigned char* trans_colors = (unsigned char*)malloc(max_vertices * 4 * sizeof(unsigned char));
+    int trans_vertex_count = 0;
 
-    // Upload to GPU
-    UploadMesh(&chunk->mesh, false);
-    chunk->mesh_generated = true;
+    chunk_generate_mesh_simple(chunk, &trans_vertices, &trans_texcoords, &trans_normals, &trans_colors, &trans_vertex_count, true);
+
+    if (trans_vertex_count > 0) {
+        chunk->transparent_mesh.vertexCount = trans_vertex_count;
+        chunk->transparent_mesh.triangleCount = trans_vertex_count / 3;
+        chunk->transparent_mesh.vertices = trans_vertices;
+        chunk->transparent_mesh.texcoords = trans_texcoords;
+        chunk->transparent_mesh.normals = trans_normals;
+        chunk->transparent_mesh.colors = trans_colors;
+        UploadMesh(&chunk->transparent_mesh, false);
+        chunk->transparent_mesh_generated = true;
+    } else {
+        free(trans_vertices);
+        free(trans_texcoords);
+        free(trans_normals);
+        free(trans_colors);
+    }
+
     chunk->needs_remesh = false;
 }
 
@@ -511,6 +552,11 @@ void chunk_generate_mesh_staged(Chunk* chunk, StagedMesh* out) {
     out->normals = NULL;
     out->colors = NULL;
     out->vertex_count = 0;
+    out->trans_vertices = NULL;
+    out->trans_texcoords = NULL;
+    out->trans_normals = NULL;
+    out->trans_colors = NULL;
+    out->trans_vertex_count = 0;
     out->valid = false;
 
     // Skip empty chunks
@@ -522,6 +568,8 @@ void chunk_generate_mesh_staged(Chunk* chunk, StagedMesh* out) {
     // Allocate maximum possible buffer size
     int max_blocks = CHUNK_SIZE * CHUNK_HEIGHT * CHUNK_SIZE;
     int max_vertices = max_blocks * 6 * 6;  // 6 faces * 6 vertices per face
+
+    // === PASS 1: Generate OPAQUE mesh ===
     float* vertices = (float*)malloc(max_vertices * 3 * sizeof(float));
     float* texcoords = (float*)malloc(max_vertices * 2 * sizeof(float));
     float* normals = (float*)malloc(max_vertices * 3 * sizeof(float));
@@ -536,24 +584,51 @@ void chunk_generate_mesh_staged(Chunk* chunk, StagedMesh* out) {
     }
 
     int vertex_count = 0;
+    chunk_generate_mesh_simple(chunk, &vertices, &texcoords, &normals, &colors, &vertex_count, false);
 
-    // Use simple meshing algorithm
-    chunk_generate_mesh_simple(chunk, &vertices, &texcoords, &normals, &colors, &vertex_count);
-
-    if (vertex_count == 0) {
+    if (vertex_count > 0) {
+        out->vertices = vertices;
+        out->texcoords = texcoords;
+        out->normals = normals;
+        out->colors = colors;
+        out->vertex_count = vertex_count;
+    } else {
         free(vertices);
         free(texcoords);
         free(normals);
         free(colors);
-        out->valid = true;  // Valid but empty
+    }
+
+    // === PASS 2: Generate TRANSPARENT mesh ===
+    float* trans_vertices = (float*)malloc(max_vertices * 3 * sizeof(float));
+    float* trans_texcoords = (float*)malloc(max_vertices * 2 * sizeof(float));
+    float* trans_normals = (float*)malloc(max_vertices * 3 * sizeof(float));
+    unsigned char* trans_colors = (unsigned char*)malloc(max_vertices * 4 * sizeof(unsigned char));
+
+    if (!trans_vertices || !trans_texcoords || !trans_normals || !trans_colors) {
+        if (trans_vertices) free(trans_vertices);
+        if (trans_texcoords) free(trans_texcoords);
+        if (trans_normals) free(trans_normals);
+        if (trans_colors) free(trans_colors);
+        out->valid = true;  // Opaque mesh may still be valid
         return;
     }
 
-    // Store in output (don't upload to GPU - that happens on main thread)
-    out->vertices = vertices;
-    out->texcoords = texcoords;
-    out->normals = normals;
-    out->colors = colors;
-    out->vertex_count = vertex_count;
+    int trans_vertex_count = 0;
+    chunk_generate_mesh_simple(chunk, &trans_vertices, &trans_texcoords, &trans_normals, &trans_colors, &trans_vertex_count, true);
+
+    if (trans_vertex_count > 0) {
+        out->trans_vertices = trans_vertices;
+        out->trans_texcoords = trans_texcoords;
+        out->trans_normals = trans_normals;
+        out->trans_colors = trans_colors;
+        out->trans_vertex_count = trans_vertex_count;
+    } else {
+        free(trans_vertices);
+        free(trans_texcoords);
+        free(trans_normals);
+        free(trans_colors);
+    }
+
     out->valid = true;
 }

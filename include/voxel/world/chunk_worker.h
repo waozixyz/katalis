@@ -30,11 +30,18 @@
  * Staged mesh data - generated on worker thread, uploaded on main thread
  */
 typedef struct {
+    // Opaque mesh
     float* vertices;
     float* texcoords;
     float* normals;
     unsigned char* colors;
     int vertex_count;
+    // Transparent mesh (leaves, water, etc.)
+    float* trans_vertices;
+    float* trans_texcoords;
+    float* trans_normals;
+    unsigned char* trans_colors;
+    int trans_vertex_count;
     bool valid;
 } StagedMesh;
 

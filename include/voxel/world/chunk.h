@@ -37,10 +37,12 @@ typedef enum {
 typedef struct {
     int x, z;                                                  // Chunk position in world
     Block blocks[CHUNK_SIZE][CHUNK_HEIGHT][CHUNK_SIZE];      // Block data (XYZ)
-    Mesh mesh;                                                 // Raylib mesh for rendering
+    Mesh mesh;                                                 // Raylib mesh for opaque blocks
+    Mesh transparent_mesh;                                     // Raylib mesh for transparent blocks (leaves, water)
     bool needs_remesh;                                         // Dirty flag
     bool is_empty;                                             // Optimization: all air
     bool mesh_generated;                                       // Has mesh been created?
+    bool transparent_mesh_generated;                           // Has transparent mesh been created?
     bool has_spawned;                                          // Animals already spawned for this chunk
     int solid_block_count;                                     // Count of non-air blocks (O(1) empty check)
     ChunkState state;                                          // Generation state for threading

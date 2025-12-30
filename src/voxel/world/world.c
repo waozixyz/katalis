@@ -553,3 +553,68 @@ void world_render(World* world) {
     // Fallback to noon lighting if time not specified
     world_render_with_time(world, 12.0f);
 }
+
+void world_render_transparent_with_time(World* world, float time_of_day) {
+    if (!world) return;
+
+    Material material = texture_atlas_get_material();
+
+    // Calculate and set ambient light
+    Vector3 ambient_light = get_ambient_color(time_of_day);
+    int ambient_loc = GetShaderLocation(material.shader, "u_ambient_light");
+    SetShaderValue(material.shader, ambient_loc, &ambient_light, SHADER_UNIFORM_VEC3);
+
+    // Calculate max render distance (in chunks) for culling
+    int max_dist = world->view_distance + 1;
+
+    // Extract frustum from current view-projection matrix
+    Matrix view = rlGetMatrixModelview();
+    Matrix proj = rlGetMatrixProjection();
+    Matrix vp = MatrixMultiply(view, proj);
+    Frustum frustum = frustum_extract(vp);
+
+    // Render all loaded chunks' transparent meshes
+    for (int i = 0; i < WORLD_MAX_CHUNKS; i++) {
+        ChunkNode* node = world->chunks->buckets[i];
+        while (node) {
+            Chunk* chunk = node->chunk;
+
+            // Distance-based culling: skip chunks beyond view distance
+            int dx = chunk->x - world->center_chunk_x;
+            int dz = chunk->z - world->center_chunk_z;
+            if (dx * dx + dz * dz > max_dist * max_dist) {
+                node = node->next;
+                continue;
+            }
+
+            // Frustum culling: skip chunks not visible to camera
+            Vector3 chunk_min = {
+                (float)(chunk->x * CHUNK_SIZE),
+                0.0f,
+                (float)(chunk->z * CHUNK_SIZE)
+            };
+            Vector3 chunk_max = {
+                chunk_min.x + CHUNK_SIZE,
+                CHUNK_HEIGHT,
+                chunk_min.z + CHUNK_SIZE
+            };
+            if (!frustum_contains_aabb(&frustum, chunk_min, chunk_max)) {
+                node = node->next;
+                continue;
+            }
+
+            // Render transparent mesh if it exists
+            if (chunk->transparent_mesh_generated && chunk->transparent_mesh.vboId != NULL) {
+                Matrix transform = MatrixTranslate(
+                    chunk_min.x,
+                    0.0f,
+                    chunk_min.z
+                );
+
+                DrawMesh(chunk->transparent_mesh, material, transform);
+            }
+
+            node = node->next;
+        }
+    }
+}

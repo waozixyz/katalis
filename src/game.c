@@ -983,8 +983,14 @@ static void game_draw(void) {
     // Disable backface culling so all block faces render
     rlDisableBackfaceCulling();
 
-    // Draw all chunks in the world with time-based lighting
+    // === PASS 1: Draw all OPAQUE chunks (with depth write ON) ===
     world_render_with_time(g_state.world, g_state.time_of_day);
+
+    // === PASS 2: Draw all TRANSPARENT chunks (with depth write OFF) ===
+    // This ensures blocks behind leaves are visible
+    rlDisableDepthMask();  // Disable depth write
+    world_render_transparent_with_time(g_state.world, g_state.time_of_day);
+    rlEnableDepthMask();   // Re-enable depth write
 
     // Draw all entities
     entity_manager_render(g_state.entity_manager);
