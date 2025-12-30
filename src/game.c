@@ -407,7 +407,9 @@ static void game_update(float dt) {
     bool menu_blocking_input = pause_menu_is_open(g_state.pause_menu) || !window_focused;
 
     // Toggle inventory with E key (only when pause menu closed and window focused)
-    if (!menu_blocking_input && IsKeyPressed(KEY_E)) {
+    // Don't toggle if crafting guide search is active (let user type)
+    bool search_active = g_state.player->inventory->is_open && inventory_ui_is_search_active();
+    if (!menu_blocking_input && IsKeyPressed(KEY_E) && !search_active) {
         g_state.player->inventory->is_open = !g_state.player->inventory->is_open;
 
         // Show cursor when inventory is open, hide when closed
@@ -794,13 +796,36 @@ static void game_update(float dt) {
         int mouse_x = (int)mouse_pos.x;
         int mouse_y = (int)mouse_pos.y;
 
+        // Handle crafting guide keyboard input when search is active
+        if (inventory_ui_is_search_active()) {
+            // Process all queued character inputs
+            int char_key = GetCharPressed();
+            while (char_key > 0) {
+                if (char_key >= 32 && char_key <= 126) {  // Printable ASCII
+                    inventory_ui_handle_guide_key(char_key);
+                }
+                char_key = GetCharPressed();
+            }
+            // Handle backspace
+            if (IsKeyPressed(KEY_BACKSPACE) || IsKeyPressedRepeat(KEY_BACKSPACE)) {
+                inventory_ui_handle_guide_key(KEY_BACKSPACE);
+            }
+            // Handle escape to deactivate search
+            if (IsKeyPressed(KEY_ESCAPE)) {
+                inventory_ui_handle_guide_key(KEY_ESCAPE);
+            }
+        }
+
         // Shift+Left-click: Quick transfer
         if (IsKeyDown(KEY_LEFT_SHIFT) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
             inventory_input_handle_shift_click(g_state.player->inventory, mouse_x, mouse_y);
         }
-        // Left-click: Pick up/swap items
+        // Left-click: First check crafting guide, then inventory slots
         else if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-            inventory_input_handle_left_click(g_state.player->inventory, mouse_x, mouse_y);
+            // Try guide click first - if it handles the click, don't process inventory
+            if (!inventory_ui_handle_guide_click(g_state.player->inventory, mouse_x, mouse_y)) {
+                inventory_input_handle_left_click(g_state.player->inventory, mouse_x, mouse_y);
+            }
         }
         // Right-click: Pick up/place half stack
         else if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON)) {
@@ -896,9 +921,13 @@ static void game_update(float dt) {
         }
     }
 
-    // ESC key hierarchy: inventory > pause menu > open pause menu (only when window focused)
+    // ESC key hierarchy: search > inventory > pause menu > open pause menu (only when window focused)
+    // Note: search_active was set earlier when checking E key
     if (window_focused && IsKeyPressed(KEY_ESCAPE)) {
-        if (g_state.player->inventory->is_open) {
+        if (search_active) {
+            // Priority 0: Close search (already handled above, just don't do anything else)
+            // The search deactivation is handled in the inventory input section
+        } else if (g_state.player->inventory->is_open) {
             // Priority 1: Close inventory
             g_state.player->inventory->is_open = false;
             DisableCursor();
