@@ -10,6 +10,7 @@
 #include "voxel/core/texture_atlas.h"
 #include "voxel/world/terrain.h"
 #include "voxel/render/light.h"
+#include "voxel/render/chunk_batcher.h"
 #include "voxel/entity/entity.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,86 +20,73 @@
 #include <rlgl.h>
 
 // ============================================================================
-// FRUSTUM CULLING
+// CACHED SHADER UNIFORM LOCATIONS
 // ============================================================================
 
-typedef struct {
-    Vector4 planes[6];  // left, right, bottom, top, near, far
-} Frustum;
+static struct {
+    int ambient;
+    int camera_pos;
+    int fog_start;
+    int fog_end;
+    int fog_color;
+    int underwater;
+    int time;
+    bool initialized;
+} g_shader_locs = {0};
 
 /**
- * Extract frustum planes from view-projection matrix
+ * Initialize shader uniform location cache (call once after shader is loaded)
  */
-static Frustum frustum_extract(Matrix vp) {
-    Frustum f;
+static void init_shader_loc_cache(Shader shader) {
+    if (g_shader_locs.initialized) return;
 
-    // Left plane
-    f.planes[0] = (Vector4){
-        vp.m3 + vp.m0, vp.m7 + vp.m4, vp.m11 + vp.m8, vp.m15 + vp.m12
-    };
+    g_shader_locs.ambient = GetShaderLocation(shader, "u_ambient_light");
+    g_shader_locs.camera_pos = GetShaderLocation(shader, "u_camera_pos");
+    g_shader_locs.fog_start = GetShaderLocation(shader, "u_fog_start");
+    g_shader_locs.fog_end = GetShaderLocation(shader, "u_fog_end");
+    g_shader_locs.fog_color = GetShaderLocation(shader, "u_fog_color");
+    g_shader_locs.underwater = GetShaderLocation(shader, "u_underwater");
+    g_shader_locs.time = GetShaderLocation(shader, "u_time");
+    g_shader_locs.initialized = true;
+}
 
-    // Right plane
-    f.planes[1] = (Vector4){
-        vp.m3 - vp.m0, vp.m7 - vp.m4, vp.m11 - vp.m8, vp.m15 - vp.m12
-    };
+// Note: Frustum culling functions were moved to chunk_batcher.c
+// The batcher now handles batch-level culling
 
-    // Bottom plane
-    f.planes[2] = (Vector4){
-        vp.m3 + vp.m1, vp.m7 + vp.m5, vp.m11 + vp.m9, vp.m15 + vp.m13
-    };
+// ============================================================================
+// DIRTY CHUNK LIST HELPERS
+// ============================================================================
 
-    // Top plane
-    f.planes[3] = (Vector4){
-        vp.m3 - vp.m1, vp.m7 - vp.m5, vp.m11 - vp.m9, vp.m15 - vp.m13
-    };
+/**
+ * Add a chunk to the dirty list if not already in it
+ */
+static void world_add_to_dirty_list(World* world, Chunk* chunk) {
+    if (!world || !chunk || chunk->in_dirty_list) return;
 
-    // Near plane
-    f.planes[4] = (Vector4){
-        vp.m3 + vp.m2, vp.m7 + vp.m6, vp.m11 + vp.m10, vp.m15 + vp.m14
-    };
-
-    // Far plane
-    f.planes[5] = (Vector4){
-        vp.m3 - vp.m2, vp.m7 - vp.m6, vp.m11 - vp.m10, vp.m15 - vp.m14
-    };
-
-    // Normalize all planes
-    for (int i = 0; i < 6; i++) {
-        float len = sqrtf(f.planes[i].x * f.planes[i].x +
-                         f.planes[i].y * f.planes[i].y +
-                         f.planes[i].z * f.planes[i].z);
-        if (len > 0.0001f) {
-            f.planes[i].x /= len;
-            f.planes[i].y /= len;
-            f.planes[i].z /= len;
-            f.planes[i].w /= len;
-        }
-    }
-
-    return f;
+    chunk->dirty_next = world->dirty_head;
+    world->dirty_head = chunk;
+    chunk->in_dirty_list = true;
+    world->dirty_count++;
 }
 
 /**
- * Check if AABB is inside or intersects frustum
+ * Remove a chunk from the dirty list (called after remesh)
  */
-static bool frustum_contains_aabb(const Frustum* f, Vector3 min, Vector3 max) {
-    for (int i = 0; i < 6; i++) {
-        Vector4 p = f->planes[i];
+static void world_remove_from_dirty_list(World* world, Chunk* chunk) {
+    if (!world || !chunk || !chunk->in_dirty_list) return;
 
-        // Find the positive vertex (furthest along plane normal)
-        Vector3 positive = {
-            (p.x >= 0) ? max.x : min.x,
-            (p.y >= 0) ? max.y : min.y,
-            (p.z >= 0) ? max.z : min.z
-        };
-
-        // If positive vertex is outside, entire AABB is outside
-        if (p.x * positive.x + p.y * positive.y + p.z * positive.z + p.w < 0) {
-            return false;
+    // Find and remove from list
+    Chunk** pp = &world->dirty_head;
+    while (*pp) {
+        if (*pp == chunk) {
+            *pp = chunk->dirty_next;
+            chunk->dirty_next = NULL;
+            chunk->in_dirty_list = false;
+            world->dirty_count--;
+            return;
         }
+        pp = (Chunk**)&((*pp)->dirty_next);
     }
-
-    return true;
 }
 
 // ============================================================================
@@ -178,32 +166,6 @@ static Chunk* chunk_hashmap_get(ChunkHashMap* map, int chunk_x, int chunk_z) {
     return NULL;
 }
 
-/**
- * Remove chunk from hash map
- */
-static void chunk_hashmap_remove(ChunkHashMap* map, int chunk_x, int chunk_z) {
-    uint32_t hash = hash_chunk_coords(chunk_x, chunk_z);
-    ChunkNode* node = map->buckets[hash];
-    ChunkNode* prev = NULL;
-
-    while (node) {
-        if (node->chunk_x == chunk_x && node->chunk_z == chunk_z) {
-            if (prev) {
-                prev->next = node->next;
-            } else {
-                map->buckets[hash] = node->next;
-            }
-
-            chunk_destroy(node->chunk);
-            free(node);
-            map->chunk_count--;
-            return;
-        }
-        prev = node;
-        node = node->next;
-    }
-}
-
 // ============================================================================
 // COORDINATE CONVERSION
 // ============================================================================
@@ -235,6 +197,7 @@ World* world_create(TerrainParams terrain_params) {
     World* world = (World*)malloc(sizeof(World));
     world->chunks = chunk_hashmap_create();
     world->worker = chunk_worker_create();
+    world->batcher = chunk_batcher_create();
     world->center_chunk_x = 0;
     world->center_chunk_z = 0;
     world->view_distance = WORLD_VIEW_DISTANCE;
@@ -245,6 +208,10 @@ World* world_create(TerrainParams terrain_params) {
     world->water_queue = water_queue_create();
     world->game_tick = 0;
     world->chest_registry = chest_registry_create();
+    world->dirty_head = NULL;
+    world->dirty_count = 0;
+    world->batch_rebuilds_per_frame = 16;  // Default from BATCH_REBUILDS_PER_FRAME
+    world->max_uploads_per_frame = MAX_UPLOADS_PER_FRAME;
 
     // Initialize spawn system
     spawn_system_init();
@@ -259,6 +226,11 @@ void world_destroy(World* world) {
     // Stop worker threads first
     if (world->worker) {
         chunk_worker_destroy(world->worker);
+    }
+
+    // Destroy batcher before chunks (has references to chunks)
+    if (world->batcher) {
+        chunk_batcher_destroy(world->batcher);
     }
 
     // Destroy water system
@@ -316,12 +288,20 @@ void world_set_block(World* world, int x, int y, int z, Block block) {
     Chunk* chunk = world_get_or_create_chunk(world, chunk_x, chunk_z);
     chunk_set_block(chunk, local_x, local_y, local_z, block);
 
+    // Add chunk to dirty list for remeshing
+    world_add_to_dirty_list(world, chunk);
+
     // Recalculate lighting for this chunk when a block changes
     light_calculate_chunk(chunk);
 
     // Notify water system of block change
     if (world->water_queue) {
         water_on_block_change(world->water_queue, world, x, y, z);
+    }
+
+    // Invalidate batch containing this chunk
+    if (world->batcher) {
+        chunk_batcher_invalidate(world->batcher, chunk_x, chunk_z);
     }
 }
 
@@ -347,14 +327,20 @@ void world_update(World* world, int center_chunk_x, int center_chunk_z) {
         last_center_z = center_chunk_z;
     }
 
-    // Poll for completed chunks from worker threads (up to MAX_UPLOADS_PER_FRAME per frame)
+    // Poll for completed chunks from worker threads (configurable via settings)
+    int max_uploads = world->max_uploads_per_frame > 0 ? world->max_uploads_per_frame : MAX_UPLOADS_PER_FRAME;
     int uploaded = 0;
-    for (int i = 0; i < MAX_UPLOADS_PER_FRAME; i++) {
+    for (int i = 0; i < max_uploads; i++) {
         CompletedChunk* completed = chunk_worker_poll_completed(world->worker);
         if (!completed) break;
 
         // Upload mesh to GPU (must be on main thread)
         chunk_worker_upload_mesh(completed->chunk, &completed->mesh);
+
+        // Register chunk with batcher for batched rendering
+        if (world->batcher) {
+            chunk_batcher_register_chunk(world->batcher, completed->chunk);
+        }
 
         // Spawn animals for newly completed chunks (biome-aware herds)
         if (world->entity_manager && !completed->chunk->has_spawned) {
@@ -380,8 +366,10 @@ void world_update(World* world, int center_chunk_x, int center_chunk_z) {
             }
 
             // Enqueue for async generation if still empty (handles queue-full retry)
+            // Priority is based on distance from center_chunk position
             if (chunk->state == CHUNK_STATE_EMPTY) {
-                chunk_worker_enqueue(world->worker, chunk, world->terrain_params);
+                chunk_worker_enqueue(world->worker, chunk, world->terrain_params,
+                                     center_chunk_x, center_chunk_z);
             }
         }
     }
@@ -390,18 +378,27 @@ void world_update(World* world, int center_chunk_x, int center_chunk_z) {
         first_update = false;
     }
 
-    // Process pending mesh regenerations (for chunks that need remesh after block changes)
-    // These are processed synchronously for now to ensure immediate feedback
-    for (int i = 0; i < WORLD_MAX_CHUNKS; i++) {
-        ChunkNode* node = world->chunks->buckets[i];
-        while (node) {
-            Chunk* chunk = node->chunk;
-            // Only remesh if chunk is complete and needs it
-            if (chunk->state == CHUNK_STATE_COMPLETE && chunk->needs_remesh) {
-                chunk_generate_mesh(chunk);
+    // Process pending mesh regenerations using dirty list (O(dirty) instead of O(all_chunks))
+    // This eliminates the lag spike when placing/breaking blocks
+    Chunk* chunk = world->dirty_head;
+    while (chunk) {
+        Chunk* next = (Chunk*)chunk->dirty_next;  // Save next before removing from list
+        // Only remesh if chunk is complete and needs it
+        if (chunk->state == CHUNK_STATE_COMPLETE && chunk->needs_remesh) {
+            chunk_generate_mesh(chunk);
+            // Invalidate batch when chunk mesh changes
+            if (world->batcher) {
+                chunk_batcher_invalidate(world->batcher, chunk->x, chunk->z);
             }
-            node = node->next;
+            // Remove from dirty list after successful remesh
+            world_remove_from_dirty_list(world, chunk);
         }
+        chunk = next;
+    }
+
+    // Update batched meshes (rebuild dirty batches)
+    if (world->batcher) {
+        chunk_batcher_update(world->batcher, world->batch_rebuilds_per_frame);
     }
 }
 
@@ -421,17 +418,17 @@ static float smooth_step(float t) {
  * Uses smooth S-curve transitions for gradual lighting changes
  */
 static float calculate_ambient_brightness(float time) {
-    if (time < 5.0f) return 0.25f;          // Night (0-5am): Dark but visible
+    if (time < 5.0f) return 0.15f;          // Night (0-5am): Darker
     if (time < 8.0f) {                       // Dawn (5-8am): 3 hour smooth transition
         float t = (time - 5.0f) / 3.0f;      // 0.0 to 1.0
-        return 0.25f + smooth_step(t) * 0.75f;
+        return 0.15f + smooth_step(t) * 0.85f;
     }
     if (time < 17.0f) return 1.0f;           // Day (8am-5pm): Full bright
     if (time < 20.0f) {                      // Dusk (5-8pm): 3 hour smooth transition
         float t = (time - 17.0f) / 3.0f;     // 0.0 to 1.0
-        return 1.0f - smooth_step(t) * 0.75f;
+        return 1.0f - smooth_step(t) * 0.85f;
     }
-    return 0.25f;                            // Night (8pm-12am): Dark but visible
+    return 0.15f;                            // Night (8pm-12am): Darker
 }
 
 /**
@@ -477,6 +474,40 @@ void world_set_entity_manager(World* world, EntityManager* manager) {
     world->entity_manager = manager;
 }
 
+int world_get_view_distance(World* world) {
+    if (!world) return WORLD_VIEW_DISTANCE;
+    return world->view_distance;
+}
+
+void world_set_view_distance(World* world, int distance) {
+    if (!world) return;
+
+    // Clamp to reasonable range (2-32 chunks)
+    if (distance < 2) distance = 2;
+    if (distance > 32) distance = 32;
+
+    if (distance != world->view_distance) {
+        world->view_distance = distance;
+        printf("[WORLD] View distance set to %d chunks\n", distance);
+    }
+}
+
+void world_set_batch_rebuilds(World* world, int max_rebuilds) {
+    if (!world) return;
+    // Clamp to reasonable range (4-64)
+    if (max_rebuilds < 4) max_rebuilds = 4;
+    if (max_rebuilds > 64) max_rebuilds = 64;
+    world->batch_rebuilds_per_frame = max_rebuilds;
+}
+
+void world_set_max_uploads(World* world, int max_uploads) {
+    if (!world) return;
+    // Clamp to reasonable range (8-128)
+    if (max_uploads < 8) max_uploads = 8;
+    if (max_uploads > 128) max_uploads = 128;
+    world->max_uploads_per_frame = max_uploads;
+}
+
 // ============================================================================
 // RENDERING
 // ============================================================================
@@ -485,20 +516,58 @@ void world_set_entity_manager(World* world, EntityManager* manager) {
  * Get fog color that blends with sky at horizon
  */
 static Vector3 get_fog_color(float time_of_day) {
-    // Fog should match the sky horizon color for seamless blending
+    // Fog color is affected by ambient brightness to prevent distant blocks looking brighter
+    float brightness = calculate_ambient_brightness(time_of_day);
+
+    // Base fog colors for different times
+    Vector3 base_fog;
     if (time_of_day >= 5.0f && time_of_day < 9.0f) {
         // Dawn: warm orange horizon
-        return (Vector3){0.9f, 0.7f, 0.5f};
+        base_fog = (Vector3){0.9f, 0.7f, 0.5f};
     } else if (time_of_day >= 16.0f && time_of_day < 20.0f) {
         // Dusk: warm red/orange horizon
-        return (Vector3){0.8f, 0.5f, 0.4f};
+        base_fog = (Vector3){0.8f, 0.5f, 0.4f};
     } else if (time_of_day < 5.0f || time_of_day >= 20.0f) {
         // Night: dark blue
-        return (Vector3){0.05f, 0.08f, 0.15f};
+        base_fog = (Vector3){0.05f, 0.08f, 0.15f};
     } else {
         // Day: light blue sky
-        return (Vector3){0.6f, 0.75f, 0.95f};
+        base_fog = (Vector3){0.6f, 0.75f, 0.95f};
     }
+
+    // Scale fog color by ambient brightness so distant blocks don't appear brighter
+    return (Vector3){
+        base_fog.x * brightness,
+        base_fog.y * brightness,
+        base_fog.z * brightness
+    };
+}
+
+/**
+ * Apply common shader uniforms for world rendering
+ * Used by both opaque and transparent passes
+ */
+static void apply_world_shader_uniforms(Material material, World* world,
+                                         float time_of_day, Vector3 camera_pos, bool underwater) {
+    // Ambient light based on time of day
+    Vector3 ambient_light = get_ambient_color(time_of_day);
+    SetShaderValue(material.shader, g_shader_locs.ambient, &ambient_light, SHADER_UNIFORM_VEC3);
+
+    // Fog settings - start further out for better visibility
+    float fog_start = world->view_distance * CHUNK_SIZE * 0.8f;
+    float fog_end = world->view_distance * CHUNK_SIZE * 1.2f;
+    Vector3 fog_color = get_fog_color(time_of_day);
+    int underwater_flag = underwater ? 1 : 0;
+
+    // Water animation time
+    float shader_time = (float)GetTime();
+    SetShaderValue(material.shader, g_shader_locs.time, &shader_time, SHADER_UNIFORM_FLOAT);
+
+    SetShaderValue(material.shader, g_shader_locs.camera_pos, &camera_pos, SHADER_UNIFORM_VEC3);
+    SetShaderValue(material.shader, g_shader_locs.fog_start, &fog_start, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(material.shader, g_shader_locs.fog_end, &fog_end, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(material.shader, g_shader_locs.fog_color, &fog_color, SHADER_UNIFORM_VEC3);
+    SetShaderValue(material.shader, g_shader_locs.underwater, &underwater_flag, SHADER_UNIFORM_INT);
 }
 
 void world_render_with_time(World* world, float time_of_day, Vector3 camera_pos, bool underwater) {
@@ -509,86 +578,15 @@ void world_render_with_time(World* world, float time_of_day, Vector3 camera_pos,
 
     Material material = texture_atlas_get_material();
 
-    // Calculate and set ambient light
-    Vector3 ambient_light = get_ambient_color(time_of_day);
-    int ambient_loc = GetShaderLocation(material.shader, "u_ambient_light");
-    SetShaderValue(material.shader, ambient_loc, &ambient_light, SHADER_UNIFORM_VEC3);
+    // Initialize shader location cache on first call
+    init_shader_loc_cache(material.shader);
 
-    // Set fog uniforms
-    float fog_start = world->view_distance * CHUNK_SIZE * 0.6f;
-    float fog_end = world->view_distance * CHUNK_SIZE * 0.95f;
-    Vector3 fog_color = get_fog_color(time_of_day);
-    int underwater_flag = underwater ? 1 : 0;
+    // Apply common shader uniforms
+    apply_world_shader_uniforms(material, world, time_of_day, camera_pos, underwater);
 
-    int camera_pos_loc = GetShaderLocation(material.shader, "u_camera_pos");
-    int fog_start_loc = GetShaderLocation(material.shader, "u_fog_start");
-    int fog_end_loc = GetShaderLocation(material.shader, "u_fog_end");
-    int fog_color_loc = GetShaderLocation(material.shader, "u_fog_color");
-    int underwater_loc = GetShaderLocation(material.shader, "u_underwater");
-    int time_loc = GetShaderLocation(material.shader, "u_time");
-
-    // Water animation time
-    float shader_time = (float)GetTime();
-    SetShaderValue(material.shader, time_loc, &shader_time, SHADER_UNIFORM_FLOAT);
-
-    SetShaderValue(material.shader, camera_pos_loc, &camera_pos, SHADER_UNIFORM_VEC3);
-    SetShaderValue(material.shader, fog_start_loc, &fog_start, SHADER_UNIFORM_FLOAT);
-    SetShaderValue(material.shader, fog_end_loc, &fog_end, SHADER_UNIFORM_FLOAT);
-    SetShaderValue(material.shader, fog_color_loc, &fog_color, SHADER_UNIFORM_VEC3);
-    SetShaderValue(material.shader, underwater_loc, &underwater_flag, SHADER_UNIFORM_INT);
-
-    // Calculate max render distance (in chunks) for culling
-    int max_dist = world->view_distance + 1;
-
-    // Extract frustum from current view-projection matrix
-    Matrix view = rlGetMatrixModelview();
-    Matrix proj = rlGetMatrixProjection();
-    Matrix vp = MatrixMultiply(view, proj);
-    Frustum frustum = frustum_extract(vp);
-
-    // Render all loaded chunks (mesh generation moved to world_update)
-    for (int i = 0; i < WORLD_MAX_CHUNKS; i++) {
-        ChunkNode* node = world->chunks->buckets[i];
-        while (node) {
-            Chunk* chunk = node->chunk;
-
-            // Distance-based culling: skip chunks beyond view distance
-            int dx = chunk->x - world->center_chunk_x;
-            int dz = chunk->z - world->center_chunk_z;
-            if (dx * dx + dz * dz > max_dist * max_dist) {
-                node = node->next;
-                continue;
-            }
-
-            // Frustum culling: skip chunks not visible to camera
-            Vector3 chunk_min = {
-                (float)(chunk->x * CHUNK_SIZE),
-                0.0f,
-                (float)(chunk->z * CHUNK_SIZE)
-            };
-            Vector3 chunk_max = {
-                chunk_min.x + CHUNK_SIZE,
-                CHUNK_HEIGHT,
-                chunk_min.z + CHUNK_SIZE
-            };
-            if (!frustum_contains_aabb(&frustum, chunk_min, chunk_max)) {
-                node = node->next;
-                continue;
-            }
-
-            // Render chunk if it has a mesh
-            if (chunk->mesh_generated && chunk->mesh.vboId != NULL) {
-                Matrix transform = MatrixTranslate(
-                    chunk_min.x,
-                    0.0f,
-                    chunk_min.z
-                );
-
-                DrawMesh(chunk->mesh, material, transform);
-            }
-
-            node = node->next;
-        }
+    // Use batched rendering for reduced draw calls
+    if (world->batcher) {
+        chunk_batcher_render_opaque(world->batcher, world, material, camera_pos);
     }
 }
 
@@ -598,127 +596,19 @@ void world_render(World* world) {
     world_render_with_time(world, 12.0f, default_camera, false);
 }
 
-// Helper struct for sorting transparent chunks
-typedef struct {
-    Chunk* chunk;
-    float dist_sq;
-} TransparentChunkEntry;
-
-// Compare function for qsort (back-to-front: far chunks first)
-static int compare_transparent_chunks(const void* a, const void* b) {
-    const TransparentChunkEntry* ea = (const TransparentChunkEntry*)a;
-    const TransparentChunkEntry* eb = (const TransparentChunkEntry*)b;
-    // Sort far to near (descending distance)
-    if (eb->dist_sq > ea->dist_sq) return 1;
-    if (eb->dist_sq < ea->dist_sq) return -1;
-    return 0;
-}
-
 void world_render_transparent_with_time(World* world, float time_of_day, Vector3 camera_pos, bool underwater) {
     if (!world) return;
 
     Material material = texture_atlas_get_material();
 
-    // Calculate and set ambient light
-    Vector3 ambient_light = get_ambient_color(time_of_day);
-    int ambient_loc = GetShaderLocation(material.shader, "u_ambient_light");
-    SetShaderValue(material.shader, ambient_loc, &ambient_light, SHADER_UNIFORM_VEC3);
+    // Initialize shader location cache on first call (may already be initialized by opaque pass)
+    init_shader_loc_cache(material.shader);
 
-    // Set fog uniforms (same as opaque pass)
-    float fog_start = world->view_distance * CHUNK_SIZE * 0.6f;
-    float fog_end = world->view_distance * CHUNK_SIZE * 0.95f;
-    Vector3 fog_color = get_fog_color(time_of_day);
-    int underwater_flag = underwater ? 1 : 0;
+    // Apply common shader uniforms
+    apply_world_shader_uniforms(material, world, time_of_day, camera_pos, underwater);
 
-    int camera_pos_loc = GetShaderLocation(material.shader, "u_camera_pos");
-    int fog_start_loc = GetShaderLocation(material.shader, "u_fog_start");
-    int fog_end_loc = GetShaderLocation(material.shader, "u_fog_end");
-    int fog_color_loc = GetShaderLocation(material.shader, "u_fog_color");
-    int underwater_loc = GetShaderLocation(material.shader, "u_underwater");
-    int time_loc = GetShaderLocation(material.shader, "u_time");
-
-    // Water animation time
-    float shader_time = (float)GetTime();
-    SetShaderValue(material.shader, time_loc, &shader_time, SHADER_UNIFORM_FLOAT);
-
-    SetShaderValue(material.shader, camera_pos_loc, &camera_pos, SHADER_UNIFORM_VEC3);
-    SetShaderValue(material.shader, fog_start_loc, &fog_start, SHADER_UNIFORM_FLOAT);
-    SetShaderValue(material.shader, fog_end_loc, &fog_end, SHADER_UNIFORM_FLOAT);
-    SetShaderValue(material.shader, fog_color_loc, &fog_color, SHADER_UNIFORM_VEC3);
-    SetShaderValue(material.shader, underwater_loc, &underwater_flag, SHADER_UNIFORM_INT);
-
-    // Calculate max render distance (in chunks) for culling
-    int max_dist = world->view_distance + 1;
-
-    // Extract frustum from current view-projection matrix
-    Matrix view = rlGetMatrixModelview();
-    Matrix proj = rlGetMatrixProjection();
-    Matrix vp = MatrixMultiply(view, proj);
-    Frustum frustum = frustum_extract(vp);
-
-    // Collect all visible transparent chunks with their distances
-    static TransparentChunkEntry sorted_chunks[WORLD_MAX_CHUNKS];
-    int chunk_count = 0;
-
-    for (int i = 0; i < WORLD_MAX_CHUNKS; i++) {
-        ChunkNode* node = world->chunks->buckets[i];
-        while (node) {
-            Chunk* chunk = node->chunk;
-
-            // Distance-based culling: skip chunks beyond view distance
-            int dx = chunk->x - world->center_chunk_x;
-            int dz = chunk->z - world->center_chunk_z;
-            if (dx * dx + dz * dz > max_dist * max_dist) {
-                node = node->next;
-                continue;
-            }
-
-            // Frustum culling: skip chunks not visible to camera
-            Vector3 chunk_center = {
-                (float)(chunk->x * CHUNK_SIZE) + CHUNK_SIZE * 0.5f,
-                CHUNK_HEIGHT * 0.5f,
-                (float)(chunk->z * CHUNK_SIZE) + CHUNK_SIZE * 0.5f
-            };
-            Vector3 chunk_min = {
-                (float)(chunk->x * CHUNK_SIZE),
-                0.0f,
-                (float)(chunk->z * CHUNK_SIZE)
-            };
-            Vector3 chunk_max = {
-                chunk_min.x + CHUNK_SIZE,
-                CHUNK_HEIGHT,
-                chunk_min.z + CHUNK_SIZE
-            };
-            if (!frustum_contains_aabb(&frustum, chunk_min, chunk_max)) {
-                node = node->next;
-                continue;
-            }
-
-            // Only add if has transparent mesh
-            if (chunk->transparent_mesh_generated && chunk->transparent_mesh.vboId != NULL) {
-                float dx_f = chunk_center.x - camera_pos.x;
-                float dz_f = chunk_center.z - camera_pos.z;
-                sorted_chunks[chunk_count].chunk = chunk;
-                sorted_chunks[chunk_count].dist_sq = dx_f * dx_f + dz_f * dz_f;
-                chunk_count++;
-            }
-
-            node = node->next;
-        }
-    }
-
-    // Sort chunks back-to-front (far first)
-    qsort(sorted_chunks, chunk_count, sizeof(TransparentChunkEntry), compare_transparent_chunks);
-
-    // Render sorted chunks
-    for (int i = 0; i < chunk_count; i++) {
-        Chunk* chunk = sorted_chunks[i].chunk;
-        Vector3 chunk_min = {
-            (float)(chunk->x * CHUNK_SIZE),
-            0.0f,
-            (float)(chunk->z * CHUNK_SIZE)
-        };
-        Matrix transform = MatrixTranslate(chunk_min.x, 0.0f, chunk_min.z);
-        DrawMesh(chunk->transparent_mesh, material, transform);
+    // Use batched rendering for reduced draw calls (handles back-to-front sorting internally)
+    if (world->batcher) {
+        chunk_batcher_render_transparent(world->batcher, world, material, camera_pos);
     }
 }

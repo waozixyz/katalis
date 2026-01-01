@@ -6,6 +6,7 @@
 
 #include "voxel/entity/pig.h"
 #include "voxel/entity/collision.h"
+#include "voxel/entity/entity_utils.h"
 #include "voxel/world/world.h"
 #include "voxel/player/player.h"
 #include "voxel/core/block.h"
@@ -16,25 +17,6 @@
 #include <raylib.h>
 #include <raymath.h>
 #include <rlgl.h>
-
-// ============================================================================
-// INTERNAL HELPERS
-// ============================================================================
-
-/**
- * Get a random float between min and max
- */
-static float pig_random_range(float min, float max) {
-    return min + ((float)rand() / RAND_MAX) * (max - min);
-}
-
-/**
- * Pick a random horizontal direction
- */
-static Vector3 pig_random_direction(void) {
-    float angle = pig_random_range(0, 2.0f * PI);
-    return (Vector3){cosf(angle), 0, sinf(angle)};
-}
 
 /**
  * Create pig data
@@ -57,18 +39,18 @@ static PigData* pig_create_data(void) {
     data->idle_time = 0.0f;
     data->head_yaw_target = 0.0f;
     data->head_yaw_current = 0.0f;
-    data->head_look_timer = pig_random_range(2.0f, 4.0f);
-    data->blink_timer = pig_random_range(3.0f, 6.0f);
+    data->head_look_timer = entity_random_range(2.0f, 4.0f);
+    data->blink_timer = entity_random_range(3.0f, 6.0f);
     data->blink_progress = 0.0f;
-    data->ear_twitch_timer = pig_random_range(2.0f, 5.0f);
+    data->ear_twitch_timer = entity_random_range(2.0f, 5.0f);
     data->ear_twitch_angle = 0.0f;
 
     // AI state - start wandering
-    data->wander_timer = pig_random_range(PIG_WANDER_TIME_MIN, PIG_WANDER_TIME_MAX);
+    data->wander_timer = entity_random_range(PIG_WANDER_TIME_MIN, PIG_WANDER_TIME_MAX);
     data->idle_timer = 0.0f;
     data->is_idle = false;
     data->is_fleeing = false;
-    data->wander_direction = pig_random_direction();
+    data->wander_direction = entity_random_direction();
 
     // Default lighting (full brightness)
     data->ambient_light = (Vector3){1.0f, 1.0f, 1.0f};
@@ -147,8 +129,8 @@ void pig_update(Entity* entity, struct World* world, float dt) {
         data->idle_timer -= dt;
         if (data->idle_timer <= 0) {
             data->is_idle = false;
-            data->wander_timer = pig_random_range(PIG_WANDER_TIME_MIN, PIG_WANDER_TIME_MAX);
-            data->wander_direction = pig_random_direction();
+            data->wander_timer = entity_random_range(PIG_WANDER_TIME_MIN, PIG_WANDER_TIME_MAX);
+            data->wander_direction = entity_random_direction();
         }
     }
     else {
@@ -157,14 +139,14 @@ void pig_update(Entity* entity, struct World* world, float dt) {
 
         if (data->wander_timer <= 0) {
             // Time to change behavior
-            if (pig_random_range(0, 1) < PIG_IDLE_CHANCE) {
+            if (entity_random_range(0, 1) < PIG_IDLE_CHANCE) {
                 // Start idling
                 data->is_idle = true;
                 data->idle_timer = PIG_IDLE_TIME;
             } else {
                 // Pick new wander direction
-                data->wander_direction = pig_random_direction();
-                data->wander_timer = pig_random_range(PIG_WANDER_TIME_MIN, PIG_WANDER_TIME_MAX);
+                data->wander_direction = entity_random_direction();
+                data->wander_timer = entity_random_range(PIG_WANDER_TIME_MIN, PIG_WANDER_TIME_MAX);
             }
         }
 
@@ -208,7 +190,7 @@ void pig_update(Entity* entity, struct World* world, float dt) {
 
     // Pick new direction when hitting a wall (only if can't jump and not fleeing)
     if (COLLISION_HIT_WALL(collision_flags) && !data->is_fleeing && !should_jump) {
-        data->wander_direction = pig_random_direction();
+        data->wander_direction = entity_random_direction();
     }
 
     // ========================================================================
@@ -225,7 +207,7 @@ void pig_update(Entity* entity, struct World* world, float dt) {
         data->idle_time = 0.0f;  // Reset idle time when moving
     } else {
         // Idle: smoothly return to rest pose
-        data->leg_swing_angle *= 0.85f;
+        data->leg_swing_angle *= ENTITY_ANIMATION_DAMPING;
         data->idle_time += dt;  // Accumulate idle time for breathing
     }
 
@@ -237,8 +219,8 @@ void pig_update(Entity* entity, struct World* world, float dt) {
     if (!data->is_fleeing && horiz_speed < 0.1f) {
         data->head_look_timer -= dt;
         if (data->head_look_timer <= 0) {
-            data->head_yaw_target = pig_random_range(-30.0f, 30.0f);
-            data->head_look_timer = pig_random_range(2.0f, 4.0f);
+            data->head_yaw_target = entity_random_range(-30.0f, 30.0f);
+            data->head_look_timer = entity_random_range(2.0f, 4.0f);
         }
     } else {
         // Reset head to forward when moving or fleeing
@@ -251,7 +233,7 @@ void pig_update(Entity* entity, struct World* world, float dt) {
     data->blink_timer -= dt;
     if (data->blink_timer <= 0) {
         data->blink_progress = 1.0f;  // Start blink
-        data->blink_timer = pig_random_range(3.0f, 6.0f);
+        data->blink_timer = entity_random_range(3.0f, 6.0f);
     }
     if (data->blink_progress > 0) {
         data->blink_progress -= dt * 8.0f;  // Fast blink (~0.125s)
@@ -262,7 +244,7 @@ void pig_update(Entity* entity, struct World* world, float dt) {
     data->ear_twitch_timer -= dt;
     if (data->ear_twitch_timer <= 0) {
         data->ear_twitch_angle = 10.0f;  // Start twitch
-        data->ear_twitch_timer = pig_random_range(2.0f, 5.0f);
+        data->ear_twitch_timer = entity_random_range(2.0f, 5.0f);
     }
     data->ear_twitch_angle *= 0.9f;  // Decay back to 0
 
@@ -284,18 +266,6 @@ void pig_update(Entity* entity, struct World* world, float dt) {
 }
 
 /**
- * Apply ambient lighting to a color
- */
-static Color pig_apply_ambient(Color c, Vector3 ambient) {
-    return (Color){
-        (unsigned char)(c.r * ambient.x),
-        (unsigned char)(c.g * ambient.y),
-        (unsigned char)(c.b * ambient.z),
-        c.a
-    };
-}
-
-/**
  * Render function for pig
  * Draws a blocky Minecraft-style pig
  */
@@ -306,8 +276,8 @@ void pig_render(Entity* entity) {
     Vector3 pos = entity->position;
 
     // Apply ambient lighting to colors
-    Color body_lit = pig_apply_ambient(data->body_color, data->ambient_light);
-    Color snout_lit = pig_apply_ambient(data->snout_color, data->ambient_light);
+    Color body_lit = entity_apply_ambient(data->body_color, data->ambient_light);
+    Color snout_lit = entity_apply_ambient(data->snout_color, data->ambient_light);
 
     // Apply red flash when damaged
     if (data->damage_flash_timer > 0) {
@@ -477,7 +447,7 @@ void pig_render(Entity* entity) {
     rlPopMatrix();
 
     // Nostrils (two small dark spots on snout)
-    Color nostril_color = pig_apply_ambient((Color){100, 60, 60, 255}, data->ambient_light);
+    Color nostril_color = entity_apply_ambient((Color){100, 60, 60, 255}, data->ambient_light);
     float nostril_forward = snout_offset + PIG_SNOUT_LENGTH / 2.0f * 0.9f;
     float nostril_side = 0.03f;
 
@@ -528,8 +498,8 @@ void pig_render(Entity* entity) {
     // ========================================================================
     // EYES with blink animation - follows head rotation
     // ========================================================================
-    Color eye_white = pig_apply_ambient(WHITE, data->ambient_light);
-    Color eye_black = pig_apply_ambient((Color){30, 30, 30, 255}, data->ambient_light);
+    Color eye_white = entity_apply_ambient(WHITE, data->ambient_light);
+    Color eye_black = entity_apply_ambient((Color){30, 30, 30, 255}, data->ambient_light);
 
     float eye_offset_y = 0.03f;
     float eye_offset_side = 0.1f;
@@ -650,7 +620,7 @@ Entity* pig_spawn(EntityManager* manager, Vector3 position) {
     }
 
     // Random initial rotation
-    entity->rotation.y = pig_random_range(0, 360);
+    entity->rotation.y = entity_random_range(0, 360);
 
     // Add to entity manager
     entity_manager_add(manager, entity);

@@ -5,10 +5,12 @@
  */
 
 #include "game.h"
+#include "game_constants.h"
 #include "voxel/core/block.h"
 #include "voxel/world/world.h"
 #include "voxel/world/noise.h"
 #include "voxel/world/terrain.h"
+#include "voxel/world/raycast.h"
 #include "voxel/player/player.h"
 #include "voxel/core/texture_atlas.h"
 #include "voxel/core/item.h"
@@ -26,6 +28,9 @@
 #include "voxel/network/network.h"
 #include "voxel/ui/minimap.h"
 #include "voxel/world/chest.h"
+#include "voxel/render/chunk_batcher.h"
+#include "voxel/core/settings_constants.h"
+#include "voxel/ui/settings_menu.h"
 #include <kryon.h>  // For shutdown API
 #include <raylib.h>
 #include <raymath.h>
@@ -60,11 +65,10 @@ typedef struct {
     BlockFace target_face;
     float flying_message_timer;  // Timer for flying mode notification
     float view_mode_message_timer;  // Timer for view mode notification
+    float view_dist_message_timer;  // Timer for view distance notification
     PauseMenu* pause_menu;       // Pause menu state
     // Day/night system
     float time_of_day;           // 0.0 to 24.0 hours
-    float day_speed;             // Hours per real second (default: 0.5)
-    bool time_paused;            // Debug: pause time
     // Network
     NetworkContext* network;     // LAN multiplayer context
     // Minimap
@@ -77,6 +81,8 @@ typedef struct {
     ChestData* open_chest;       // Currently open chest (or NULL)
     // Water splash tracking
     bool was_underwater;         // Previous underwater state for splash detection
+    // Tunable settings
+    GameSettings settings;       // In-game tunable parameters
 } GameState;
 
 static GameState g_state;
@@ -91,171 +97,6 @@ typedef struct {
 } MiningState;
 
 static MiningState g_mining = {0};
-
-// ============================================================================
-// RAYCASTING FOR BLOCK SELECTION
-// ============================================================================
-
-/**
- * Raycast to find the block the player is looking at
- * Returns true if a block is found within max_distance
- * Uses proper DDA algorithm for voxel traversal
- * Also determines which face was hit
- */
-static bool raycast_block(World* world, Vector3 origin, Vector3 direction, float max_distance,
-                         Vector3* hit_block, BlockFace* hit_face) {
-    // Normalize direction
-    direction = Vector3Normalize(direction);
-
-    // Current voxel position
-    int x = (int)floorf(origin.x);
-    int y = (int)floorf(origin.y);
-    int z = (int)floorf(origin.z);
-
-    // Direction to step in each axis (-1, 0, or 1)
-    int step_x = (direction.x > 0) ? 1 : -1;
-    int step_y = (direction.y > 0) ? 1 : -1;
-    int step_z = (direction.z > 0) ? 1 : -1;
-
-    // Distance to next voxel boundary in each axis
-    float t_delta_x = (direction.x != 0) ? fabsf(1.0f / direction.x) : FLT_MAX;
-    float t_delta_y = (direction.y != 0) ? fabsf(1.0f / direction.y) : FLT_MAX;
-    float t_delta_z = (direction.z != 0) ? fabsf(1.0f / direction.z) : FLT_MAX;
-
-    // Calculate initial t_max values
-    float t_max_x, t_max_y, t_max_z;
-
-    if (direction.x > 0) {
-        t_max_x = ((float)(x + 1) - origin.x) / direction.x;
-    } else if (direction.x < 0) {
-        t_max_x = (origin.x - (float)x) / -direction.x;
-    } else {
-        t_max_x = FLT_MAX;
-    }
-
-    if (direction.y > 0) {
-        t_max_y = ((float)(y + 1) - origin.y) / direction.y;
-    } else if (direction.y < 0) {
-        t_max_y = (origin.y - (float)y) / -direction.y;
-    } else {
-        t_max_y = FLT_MAX;
-    }
-
-    if (direction.z > 0) {
-        t_max_z = ((float)(z + 1) - origin.z) / direction.z;
-    } else if (direction.z < 0) {
-        t_max_z = (origin.z - (float)z) / -direction.z;
-    } else {
-        t_max_z = FLT_MAX;
-    }
-
-    // DDA traversal
-    float t = 0.0f;
-    BlockFace face = FACE_TOP;  // Default
-
-    while (t < max_distance) {
-        // Check current block
-        Block block = world_get_block(world, x, y, z);
-        if (block_is_solid(block)) {
-            hit_block->x = (float)x;
-            hit_block->y = (float)y;
-            hit_block->z = (float)z;
-            if (hit_face) *hit_face = face;
-            return true;
-        }
-
-        // Step to next voxel and track which face we crossed
-        if (t_max_x < t_max_y && t_max_x < t_max_z) {
-            x += step_x;
-            t = t_max_x;
-            t_max_x += t_delta_x;
-            face = (step_x > 0) ? FACE_LEFT : FACE_RIGHT;  // LEFT=-X, RIGHT=+X
-        } else if (t_max_y < t_max_z) {
-            y += step_y;
-            t = t_max_y;
-            t_max_y += t_delta_y;
-            face = (step_y > 0) ? FACE_BOTTOM : FACE_TOP;
-        } else {
-            z += step_z;
-            t = t_max_z;
-            t_max_z += t_delta_z;
-            face = (step_z > 0) ? FACE_BACK : FACE_FRONT;  // BACK=-Z, FRONT=+Z
-        }
-    }
-
-    return false;
-}
-
-// ============================================================================
-// ENTITY RAYCASTING
-// ============================================================================
-
-/**
- * Ray-AABB intersection test
- * Returns true if ray hits box, outputs intersection distance to t_out
- */
-static bool ray_intersects_aabb(Vector3 origin, Vector3 dir, Vector3 box_min, Vector3 box_max, float* t_out) {
-    float tmin = 0.0f, tmax = FLT_MAX;
-
-    // For each axis
-    float* o = (float*)&origin;
-    float* d = (float*)&dir;
-    float* bmin = (float*)&box_min;
-    float* bmax = (float*)&box_max;
-
-    for (int i = 0; i < 3; i++) {
-        if (fabsf(d[i]) < 0.0001f) {
-            // Ray parallel to this axis
-            if (o[i] < bmin[i] || o[i] > bmax[i]) return false;
-        } else {
-            float t1 = (bmin[i] - o[i]) / d[i];
-            float t2 = (bmax[i] - o[i]) / d[i];
-
-            if (t1 > t2) {
-                float tmp = t1;
-                t1 = t2;
-                t2 = tmp;
-            }
-
-            tmin = fmaxf(tmin, t1);
-            tmax = fminf(tmax, t2);
-
-            if (tmin > tmax) return false;
-        }
-    }
-
-    *t_out = tmin;
-    return true;
-}
-
-/**
- * Raycast against all entities to find the closest hit
- * Returns the entity hit or NULL
- */
-static Entity* raycast_entity(EntityManager* manager, Vector3 origin, Vector3 dir, float max_dist) {
-    if (!manager) return NULL;
-
-    Entity* closest = NULL;
-    float closest_t = max_dist;
-
-    Entity* e = manager->entities;
-    while (e) {
-        if (e->active) {
-            // Calculate world-space bounding box
-            Vector3 box_min = Vector3Add(e->position, e->bbox_min);
-            Vector3 box_max = Vector3Add(e->position, e->bbox_max);
-
-            float t;
-            if (ray_intersects_aabb(origin, dir, box_min, box_max, &t) && t < closest_t && t >= 0) {
-                closest_t = t;
-                closest = e;
-            }
-        }
-        e = e->next;
-    }
-
-    return closest;
-}
 
 // ============================================================================
 // LIFECYCLE HOOKS (Internal)
@@ -320,6 +161,11 @@ static void game_init(void) {
             // Mark as complete so world_update() won't re-enqueue to worker
             chunk->state = CHUNK_STATE_COMPLETE;
 
+            // Register with batcher for batched rendering
+            if (g_state.world->batcher) {
+                chunk_batcher_register_chunk(g_state.world->batcher, chunk);
+            }
+
             chunks_generated++;
             if (chunk->is_empty) {
                 chunks_empty++;
@@ -362,6 +208,7 @@ static void game_init(void) {
     g_state.target_block_pos = (Vector3){0, 0, 0};
     g_state.flying_message_timer = 0.0f;
     g_state.view_mode_message_timer = 0.0f;
+    g_state.view_dist_message_timer = 0.0f;
 
     // Enable mouse cursor lock for FPS controls
     DisableCursor();
@@ -375,10 +222,23 @@ static void game_init(void) {
     pause_menu_set_network(g_state.pause_menu, g_state.network);
     printf("[GAME] Network system initialized\n");
 
+    // Initialize game settings with defaults
+    g_state.settings.view_distance = SETTING_VIEW_DIST_DEFAULT;
+    g_state.settings.lod_distance = SETTING_LOD_DIST_DEFAULT;
+    g_state.settings.batch_rebuilds = SETTING_BATCH_REBUILD_DEFAULT;
+    g_state.settings.day_speed = SETTING_DAY_SPEED_DEFAULT;
+    g_state.settings.time_paused = false;
+    g_state.settings.max_uploads_per_frame = SETTING_MAX_UPLOADS_DEFAULT;
+    g_state.settings.show_debug_info = false;
+    g_state.settings.mouse_sensitivity = SETTING_MOUSE_SENSITIVITY_DEFAULT;
+
+    // Create settings menu and link to pause menu
+    SettingsMenu* settings_menu = settings_menu_create(&g_state.settings);
+    pause_menu_set_settings(g_state.pause_menu, settings_menu, g_state.world);
+    printf("[GAME] Settings menu initialized\n");
+
     // Initialize day/night system
-    g_state.time_of_day = 6.0f;      // Start at dawn
-    g_state.day_speed = 0.05f;       // 8 minute full day (slower, more realistic)
-    g_state.time_paused = false;
+    g_state.time_of_day = SETTING_START_TIME_DEFAULT;
     printf("[GAME] Day/night system initialized (starting at %.1f hours)\n", g_state.time_of_day);
 
     // Initialize sky rendering
@@ -456,7 +316,7 @@ static void game_update(float dt) {
     // Toggle flying mode with Shift key (only when pause menu closed)
     if (!menu_blocking_input && (IsKeyPressed(KEY_LEFT_SHIFT) || IsKeyPressed(KEY_RIGHT_SHIFT))) {
         g_state.player->is_flying = !g_state.player->is_flying;
-        g_state.flying_message_timer = 2.0f;  // Show message for 2 seconds
+        g_state.flying_message_timer = MESSAGE_DISPLAY_TIME;
         printf("[GAME] Flying mode %s\n", g_state.player->is_flying ? "ENABLED" : "DISABLED");
     }
 
@@ -467,7 +327,7 @@ static void game_update(float dt) {
 
     // Toggle view mode with V key (show notification) - only when pause menu closed
     if (!menu_blocking_input && IsKeyPressed(KEY_V)) {
-        g_state.view_mode_message_timer = 2.0f;  // Show message for 2 seconds
+        g_state.view_mode_message_timer = MESSAGE_DISPLAY_TIME;
     }
 
     // Update view mode message timer
@@ -476,8 +336,8 @@ static void game_update(float dt) {
     }
 
     // Update time of day
-    if (!g_state.time_paused) {
-        g_state.time_of_day += g_state.day_speed * dt;
+    if (!g_state.settings.time_paused) {
+        g_state.time_of_day += g_state.settings.day_speed * dt;
         if (g_state.time_of_day >= 24.0f) {
             g_state.time_of_day -= 24.0f;
         }
@@ -485,21 +345,38 @@ static void game_update(float dt) {
 
     // Debug: Toggle time pause with T key - only when pause menu closed
     if (!menu_blocking_input && IsKeyPressed(KEY_T)) {
-        g_state.time_paused = !g_state.time_paused;
+        g_state.settings.time_paused = !g_state.settings.time_paused;
         printf("[TIME] %s at %.2f hours\n",
-               g_state.time_paused ? "PAUSED" : "RESUMED",
+               g_state.settings.time_paused ? "PAUSED" : "RESUMED",
                g_state.time_of_day);
     }
 
     // Debug: Speed up/slow down time with +/- keys - only when pause menu closed
     if (!menu_blocking_input && IsKeyPressed(KEY_EQUAL)) {  // + key
-        g_state.day_speed *= 2.0f;
-        printf("[TIME] Speed increased to %.1fx\n", g_state.day_speed);
+        g_state.settings.day_speed *= 2.0f;
+        printf("[TIME] Speed increased to %.1fx\n", g_state.settings.day_speed);
     }
     if (!menu_blocking_input && IsKeyPressed(KEY_MINUS)) {
-        g_state.day_speed /= 2.0f;
-        if (g_state.day_speed < 0.01f) g_state.day_speed = 0.01f;
-        printf("[TIME] Speed decreased to %.1fx\n", g_state.day_speed);
+        g_state.settings.day_speed /= 2.0f;
+        if (g_state.settings.day_speed < 0.01f) g_state.settings.day_speed = 0.01f;
+        printf("[TIME] Speed decreased to %.1fx\n", g_state.settings.day_speed);
+    }
+
+    // View distance controls with [ and ] keys (like Luanti)
+    if (!menu_blocking_input && IsKeyPressed(KEY_RIGHT_BRACKET)) {  // ] key - increase
+        int current = world_get_view_distance(g_state.world);
+        world_set_view_distance(g_state.world, current + 1);
+        g_state.view_dist_message_timer = MESSAGE_DISPLAY_TIME;
+    }
+    if (!menu_blocking_input && IsKeyPressed(KEY_LEFT_BRACKET)) {  // [ key - decrease
+        int current = world_get_view_distance(g_state.world);
+        world_set_view_distance(g_state.world, current - 1);
+        g_state.view_dist_message_timer = MESSAGE_DISPLAY_TIME;
+    }
+
+    // Update view distance message timer
+    if (g_state.view_dist_message_timer > 0.0f) {
+        g_state.view_dist_message_timer -= dt;
     }
 
     // Update player (handles input, movement, collision, and camera)
@@ -562,7 +439,7 @@ static void game_update(float dt) {
         g_state.world,
         camera.position,
         camera_direction,
-        5.0f,  // Max reach distance
+        PLAYER_REACH_DISTANCE,
         &g_state.target_block_pos,
         &g_state.target_face
     );
@@ -572,7 +449,7 @@ static void game_update(float dt) {
         g_state.entity_manager,
         camera.position,
         camera_direction,
-        4.0f  // Entity reach distance
+        ENTITY_REACH_DISTANCE
     );
 
     // Attack entity on left click (instant, priority over mining)
@@ -929,7 +806,7 @@ static void game_update(float dt) {
                 uint16_t port = pause_menu_get_port(g_state.pause_menu);
                 const char* host_name = pause_menu_get_player_name(g_state.pause_menu);
                 if (network_host(g_state.network, port, host_name, g_state.world, g_state.player,
-                                g_state.entity_manager, &g_state.time_of_day, &g_state.day_speed)) {
+                                g_state.entity_manager, &g_state.time_of_day, &g_state.settings.day_speed)) {
                     pause_menu_set_state(g_state.pause_menu, MENU_STATE_HOSTING);
                     pause_menu_set_status(g_state.pause_menu, "Server started!", false);
                     printf("[NETWORK] Hosting as '%s' on port %d\n", host_name, port);
@@ -969,6 +846,13 @@ static void game_update(float dt) {
             case 9:  // Cancel connecting
                 network_disconnect(g_state.network);
                 pause_menu_set_state(g_state.pause_menu, MENU_STATE_JOIN_SETUP);
+                break;
+
+            case 10:  // Settings
+                if (g_state.pause_menu->settings_menu) {
+                    settings_menu_open(g_state.pause_menu->settings_menu);
+                    pause_menu_set_state(g_state.pause_menu, MENU_STATE_SETTINGS);
+                }
                 break;
         }
     }
@@ -1030,17 +914,16 @@ static void game_draw(void) {
     // === PASS 1: Draw all OPAQUE chunks (with depth write ON) ===
     world_render_with_time(g_state.world, g_state.time_of_day, camera.position, underwater);
 
-    // === PASS 2: Draw all TRANSPARENT chunks (with depth write OFF) ===
-    // This ensures blocks behind leaves are visible
+    // === PASS 2: Draw all entities (before transparent blocks) ===
+    // Entities are opaque and need to be in depth buffer before transparent pass
+    entity_manager_render(g_state.entity_manager);
+    player_render_model(g_state.player);
+
+    // === PASS 3: Draw all TRANSPARENT chunks (with depth write OFF) ===
+    // This ensures blocks behind leaves are visible, and entities behind leaves are occluded
     rlDisableDepthMask();  // Disable depth write
     world_render_transparent_with_time(g_state.world, g_state.time_of_day, camera.position, underwater);
     rlEnableDepthMask();   // Re-enable depth write
-
-    // Draw all entities
-    entity_manager_render(g_state.entity_manager);
-
-    // Draw player model (only visible in third-person view)
-    player_render_model(g_state.player);
 
     // Draw wireframe around targeted block
     if (g_state.has_target_block) {
@@ -1192,6 +1075,25 @@ static void game_draw(void) {
         DrawText(message, text_x, text_y, font_size, text_color);
     }
 
+    // Draw view distance message above hotbar
+    if (g_state.view_dist_message_timer > 0.0f) {
+        char view_msg[32];
+        int view_dist = world_get_view_distance(g_state.world);
+        snprintf(view_msg, sizeof(view_msg), "View Distance: %d", view_dist);
+        int font_size = 18;
+        int text_width = MeasureText(view_msg, font_size);
+        int text_x = (screen_width - text_width) / 2;
+        int text_y = screen_height - 100;  // Above hotbar
+
+        // Fade out effect
+        float alpha = g_state.view_dist_message_timer / MESSAGE_DISPLAY_TIME;
+        Color bg_color = (Color){0, 0, 0, (unsigned char)(150 * alpha)};
+        Color text_color = (Color){255, 255, 255, (unsigned char)(255 * alpha)};
+
+        DrawRectangle(text_x - 8, text_y - 4, text_width + 16, font_size + 8, bg_color);
+        DrawText(view_msg, text_x, text_y, font_size, text_color);
+    }
+
     // Draw hotbar (always visible)
     Texture2D atlas = texture_atlas_get_texture();
     inventory_ui_draw_hotbar(g_state.player->inventory, atlas);
@@ -1204,11 +1106,11 @@ static void game_draw(void) {
         int hours = (int)g_state.time_of_day;
         int minutes = (int)((g_state.time_of_day - hours) * 60.0f);
         char time_str[64];
-        sprintf(time_str, "Time: %02d:%02d (%.1fx speed)", hours, minutes, g_state.day_speed);
+        snprintf(time_str, sizeof(time_str), "Time: %02d:%02d (%.1fx speed)", hours, minutes, g_state.settings.day_speed);
         DrawText(time_str, 10, 10, 20, WHITE);
 
         // Show if paused
-        if (g_state.time_paused) {
+        if (g_state.settings.time_paused) {
             DrawText("[PAUSED]", 10, 35, 20, YELLOW);
         }
     }
@@ -1229,7 +1131,7 @@ static void game_draw(void) {
         if (net_mode == NET_MODE_HOST) {
             int player_count = network_get_player_count(g_state.network);
             char host_text[64];
-            sprintf(host_text, "Hosting (%d players)", player_count);
+            snprintf(host_text, sizeof(host_text), "Hosting (%d players)", player_count);
             status_text = host_text;
             DrawCircle(status_x + 8, status_y + 10, 6, dot_color);
             DrawText(status_text, status_x + 20, status_y, 16, WHITE);
@@ -1333,6 +1235,12 @@ static void game_shutdown(void) {
     if (g_state.entity_manager) {
         entity_manager_destroy(g_state.entity_manager);
         g_state.entity_manager = NULL;
+    }
+
+    // Destroy settings menu (stored in pause_menu)
+    if (g_state.pause_menu && g_state.pause_menu->settings_menu) {
+        settings_menu_destroy(g_state.pause_menu->settings_menu);
+        g_state.pause_menu->settings_menu = NULL;
     }
 
     // Destroy pause menu

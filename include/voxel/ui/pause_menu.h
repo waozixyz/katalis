@@ -11,15 +11,19 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-// Forward declaration
+// Forward declarations
 typedef struct NetworkContext NetworkContext;
+typedef struct SettingsMenu SettingsMenu;
+typedef struct GameSettings GameSettings;
+typedef struct World World;
 
 // ============================================================================
 // MENU STATES
 // ============================================================================
 
 typedef enum {
-    MENU_STATE_MAIN,            // Main menu: Resume, Host, Join, Exit
+    MENU_STATE_MAIN,            // Main menu: Resume, Settings, Host, Join, Exit
+    MENU_STATE_SETTINGS,        // Settings menu for tunable parameters
     MENU_STATE_HOST_SETUP,      // Host setup: Port input + Start
     MENU_STATE_JOIN_SETUP,      // Join setup: IP + Port input + Connect
     MENU_STATE_CONNECTING,      // Connecting: "Connecting..." + Cancel
@@ -60,6 +64,10 @@ typedef struct {
 
     // Network reference (set by game.c)
     NetworkContext* network;
+
+    // Settings menu (set by game.c)
+    SettingsMenu* settings_menu;
+    World* world;  // For applying settings
 
     // Player name for joining
     char player_name[32];
@@ -121,6 +129,11 @@ void pause_menu_draw(PauseMenu* menu);
  * Set network context reference
  */
 void pause_menu_set_network(PauseMenu* menu, NetworkContext* network);
+
+/**
+ * Set settings menu reference and game settings
+ */
+void pause_menu_set_settings(PauseMenu* menu, SettingsMenu* settings_menu, World* world);
 
 /**
  * Set status message (displayed in menu)

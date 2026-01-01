@@ -5,6 +5,7 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include "voxel/network/network.h"
+#include "voxel/network/serialization.h"
 #include "voxel/world/world.h"
 #include "voxel/player/player.h"
 #include "voxel/inventory/inventory.h"
@@ -50,146 +51,71 @@ static void set_socket_reuseaddr(int fd) {
 }
 
 // ============================================================================
-// SERIALIZATION HELPERS
-// ============================================================================
-
-static void write_u8(uint8_t** buf, uint8_t val) {
-    **buf = val;
-    (*buf)++;
-}
-
-static void write_u16(uint8_t** buf, uint16_t val) {
-    (*buf)[0] = val & 0xFF;
-    (*buf)[1] = (val >> 8) & 0xFF;
-    (*buf) += 2;
-}
-
-static void write_u32(uint8_t** buf, uint32_t val) {
-    (*buf)[0] = val & 0xFF;
-    (*buf)[1] = (val >> 8) & 0xFF;
-    (*buf)[2] = (val >> 16) & 0xFF;
-    (*buf)[3] = (val >> 24) & 0xFF;
-    (*buf) += 4;
-}
-
-static void write_i32(uint8_t** buf, int32_t val) {
-    write_u32(buf, (uint32_t)val);
-}
-
-static void write_f32(uint8_t** buf, float val) {
-    union { float f; uint32_t u; } conv;
-    conv.f = val;
-    write_u32(buf, conv.u);
-}
-
-static void write_string(uint8_t** buf, const char* str, size_t max_len) {
-    size_t len = strlen(str);
-    if (len > max_len - 1) len = max_len - 1;
-    memcpy(*buf, str, len);
-    memset(*buf + len, 0, max_len - len);
-    (*buf) += max_len;
-}
-
-static uint8_t read_u8(const uint8_t** buf) {
-    uint8_t val = **buf;
-    (*buf)++;
-    return val;
-}
-
-static uint16_t read_u16(const uint8_t** buf) {
-    uint16_t val = (*buf)[0] | ((*buf)[1] << 8);
-    (*buf) += 2;
-    return val;
-}
-
-static uint32_t read_u32(const uint8_t** buf) {
-    uint32_t val = (*buf)[0] | ((*buf)[1] << 8) | ((*buf)[2] << 16) | ((*buf)[3] << 24);
-    (*buf) += 4;
-    return val;
-}
-
-static int32_t read_i32(const uint8_t** buf) {
-    return (int32_t)read_u32(buf);
-}
-
-static float read_f32(const uint8_t** buf) {
-    union { float f; uint32_t u; } conv;
-    conv.u = read_u32(buf);
-    return conv.f;
-}
-
-static void read_string(const uint8_t** buf, char* out, size_t max_len) {
-    memcpy(out, *buf, max_len);
-    out[max_len - 1] = '\0';
-    (*buf) += max_len;
-}
-
-// ============================================================================
 // PACKET BUILDING
 // ============================================================================
 
 static size_t build_packet_header(uint8_t* buf, NetPacketType type,
                                    uint16_t payload_size, uint32_t sequence) {
     uint8_t* p = buf;
-    write_u32(&p, NET_PROTOCOL_MAGIC);
-    write_u8(&p, NET_PROTOCOL_VERSION);
-    write_u8(&p, (uint8_t)type);
-    write_u16(&p, payload_size);
-    write_u32(&p, sequence);
+    ser_write_u32(&p, NET_PROTOCOL_MAGIC);
+    ser_write_u8(&p, NET_PROTOCOL_VERSION);
+    ser_write_u8(&p, (uint8_t)type);
+    ser_write_u16(&p, payload_size);
+    ser_write_u32(&p, sequence);
     return NET_HEADER_SIZE;
 }
 
 static size_t build_player_state(uint8_t* buf, const NetPlayerState* state) {
     uint8_t* p = buf;
-    write_u8(&p, state->client_id);
-    write_f32(&p, state->pos_x);
-    write_f32(&p, state->pos_y);
-    write_f32(&p, state->pos_z);
-    write_f32(&p, state->vel_x);
-    write_f32(&p, state->vel_y);
-    write_f32(&p, state->vel_z);
-    write_f32(&p, state->yaw);
-    write_f32(&p, state->pitch);
-    write_u8(&p, state->flags);
-    write_u8(&p, state->selected_slot);
+    ser_write_u8(&p, state->client_id);
+    ser_write_f32(&p, state->pos_x);
+    ser_write_f32(&p, state->pos_y);
+    ser_write_f32(&p, state->pos_z);
+    ser_write_f32(&p, state->vel_x);
+    ser_write_f32(&p, state->vel_y);
+    ser_write_f32(&p, state->vel_z);
+    ser_write_f32(&p, state->yaw);
+    ser_write_f32(&p, state->pitch);
+    ser_write_u8(&p, state->flags);
+    ser_write_u8(&p, state->selected_slot);
     return p - buf;
 }
 
 static size_t parse_player_state(const uint8_t* buf, NetPlayerState* state) {
     const uint8_t* p = buf;
-    state->client_id = read_u8(&p);
-    state->pos_x = read_f32(&p);
-    state->pos_y = read_f32(&p);
-    state->pos_z = read_f32(&p);
-    state->vel_x = read_f32(&p);
-    state->vel_y = read_f32(&p);
-    state->vel_z = read_f32(&p);
-    state->yaw = read_f32(&p);
-    state->pitch = read_f32(&p);
-    state->flags = read_u8(&p);
-    state->selected_slot = read_u8(&p);
+    state->client_id = ser_read_u8(&p);
+    state->pos_x = ser_read_f32(&p);
+    state->pos_y = ser_read_f32(&p);
+    state->pos_z = ser_read_f32(&p);
+    state->vel_x = ser_read_f32(&p);
+    state->vel_y = ser_read_f32(&p);
+    state->vel_z = ser_read_f32(&p);
+    state->yaw = ser_read_f32(&p);
+    state->pitch = ser_read_f32(&p);
+    state->flags = ser_read_u8(&p);
+    state->selected_slot = ser_read_u8(&p);
     return p - buf;
 }
 
 static size_t build_block_change(uint8_t* buf, const NetBlockChange* change) {
     uint8_t* p = buf;
-    write_i32(&p, change->x);
-    write_i32(&p, change->y);
-    write_i32(&p, change->z);
-    write_u8(&p, change->block_type);
-    write_u8(&p, change->metadata);
-    write_u8(&p, change->client_id);
+    ser_write_i32(&p, change->x);
+    ser_write_i32(&p, change->y);
+    ser_write_i32(&p, change->z);
+    ser_write_u8(&p, change->block_type);
+    ser_write_u8(&p, change->metadata);
+    ser_write_u8(&p, change->client_id);
     return p - buf;
 }
 
 static size_t parse_block_change(const uint8_t* buf, NetBlockChange* change) {
     const uint8_t* p = buf;
-    change->x = read_i32(&p);
-    change->y = read_i32(&p);
-    change->z = read_i32(&p);
-    change->block_type = read_u8(&p);
-    change->metadata = read_u8(&p);
-    change->client_id = read_u8(&p);
+    change->x = ser_read_i32(&p);
+    change->y = ser_read_i32(&p);
+    change->z = ser_read_i32(&p);
+    change->block_type = ser_read_u8(&p);
+    change->metadata = ser_read_u8(&p);
+    change->client_id = ser_read_u8(&p);
     return p - buf;
 }
 
@@ -365,18 +291,18 @@ static void server_handle_connect_request(NetServer* server, int client_id, cons
 
     // Parse request
     const uint8_t* p = data;
-    read_string(&p, client->player_name, NET_PLAYER_NAME_MAX);
+    ser_read_string(&p, client->player_name, NET_PLAYER_NAME_MAX);
 
     printf("[NET_SERVER] Player '%s' joining as client %d\n", client->player_name, client_id);
 
     // Send accept (includes host name so client knows who the host is)
     uint8_t accept_buf[128];
     uint8_t* ap = accept_buf;
-    write_u8(&ap, client_id);
-    write_u32(&ap, 0);  // world_seed (not used currently)
-    write_f32(&ap, server->time_of_day ? *server->time_of_day : 12.0f);
-    write_u8(&ap, server->client_count + 1);
-    write_string(&ap, server->host_name, NET_PLAYER_NAME_MAX);  // Host name
+    ser_write_u8(&ap, client_id);
+    ser_write_u32(&ap, 0);  // world_seed (not used currently)
+    ser_write_f32(&ap, server->time_of_day ? *server->time_of_day : 12.0f);
+    ser_write_u8(&ap, server->client_count + 1);
+    ser_write_string(&ap, server->host_name, NET_PLAYER_NAME_MAX);  // Host name
 
     server_send_packet(server, client_id, NET_PACKET_CONNECT_ACCEPT, accept_buf, ap - accept_buf);
     client->authenticated = true;
@@ -385,11 +311,11 @@ static void server_handle_connect_request(NetServer* server, int client_id, cons
     // Notify other clients
     uint8_t join_buf[64];
     uint8_t* jp = join_buf;
-    write_u8(&jp, client_id);
-    write_string(&jp, client->player_name, NET_PLAYER_NAME_MAX);
-    write_f32(&jp, server->host_player->position.x);
-    write_f32(&jp, server->host_player->position.y);
-    write_f32(&jp, server->host_player->position.z);
+    ser_write_u8(&jp, client_id);
+    ser_write_string(&jp, client->player_name, NET_PLAYER_NAME_MAX);
+    ser_write_f32(&jp, server->host_player->position.x);
+    ser_write_f32(&jp, server->host_player->position.y);
+    ser_write_f32(&jp, server->host_player->position.z);
 
     server_broadcast(server, NET_PACKET_PLAYER_JOIN, join_buf, jp - join_buf, client_id);
 }
@@ -497,18 +423,18 @@ static void server_receive_client(NetServer* server, int client_id) {
         const uint8_t* p = client->recv_buffer;
 
         // Validate header
-        uint32_t magic = read_u32(&p);
+        uint32_t magic = ser_read_u32(&p);
         if (magic != NET_PROTOCOL_MAGIC) {
             printf("[NET_SERVER] Invalid magic from client %d\n", client_id);
             client->recv_offset = 0;
             break;
         }
 
-        uint8_t version = read_u8(&p);
+        uint8_t version = ser_read_u8(&p);
         (void)version;
-        uint8_t type = read_u8(&p);
-        uint16_t payload_size = read_u16(&p);
-        read_u32(&p);  // sequence
+        uint8_t type = ser_read_u8(&p);
+        uint16_t payload_size = ser_read_u16(&p);
+        ser_read_u32(&p);  // sequence
 
         size_t total_size = NET_HEADER_SIZE + payload_size;
         if (client->recv_offset < total_size) {
@@ -609,7 +535,7 @@ void net_server_broadcast_states(NetServer* server) {
             player_count++;
         }
     }
-    write_u8(&p, player_count);
+    ser_write_u8(&p, player_count);
 
     // Write host state
     p += build_player_state(p, &server->host_state);
@@ -639,9 +565,9 @@ void net_server_broadcast_time(NetServer* server) {
 
     uint8_t buf[16];
     uint8_t* p = buf;
-    write_f32(&p, server->time_of_day ? *server->time_of_day : 12.0f);
-    write_f32(&p, server->day_speed ? *server->day_speed : 0.5f);
-    write_u8(&p, 0);  // not paused
+    ser_write_f32(&p, server->time_of_day ? *server->time_of_day : 12.0f);
+    ser_write_f32(&p, server->day_speed ? *server->day_speed : 0.5f);
+    ser_write_u8(&p, 0);  // not paused
 
     server_broadcast(server, NET_PACKET_TIME_SYNC, buf, p - buf, -1);
 }
@@ -782,11 +708,11 @@ static void client_send_packet(NetClient* client, NetPacketType type,
 
 static void client_handle_connect_accept(NetClient* client, const uint8_t* data) {
     const uint8_t* p = data;
-    client->my_client_id = read_u8(&p);
-    read_u32(&p);  // world_seed
-    float time_of_day = read_f32(&p);
-    read_u8(&p);  // player_count
-    read_string(&p, client->player_names[0], NET_PLAYER_NAME_MAX);  // Host name is always slot 0
+    client->my_client_id = ser_read_u8(&p);
+    ser_read_u32(&p);  // world_seed
+    float time_of_day = ser_read_f32(&p);
+    ser_read_u8(&p);  // player_count
+    ser_read_string(&p, client->player_names[0], NET_PLAYER_NAME_MAX);  // Host name is always slot 0
     client->player_active[0] = true;  // Host is always active
 
     if (client->time_of_day) {
@@ -800,7 +726,7 @@ static void client_handle_connect_accept(NetClient* client, const uint8_t* data)
 
 static void client_handle_player_states(NetClient* client, const uint8_t* data) {
     const uint8_t* p = data;
-    uint8_t player_count = read_u8(&p);
+    uint8_t player_count = ser_read_u8(&p);
 
     for (int i = 0; i < player_count; i++) {
         NetPlayerState state;
@@ -816,11 +742,11 @@ static void client_handle_player_states(NetClient* client, const uint8_t* data) 
 
 static void client_handle_player_join(NetClient* client, const uint8_t* data) {
     const uint8_t* p = data;
-    uint8_t client_id = read_u8(&p);
-    read_string(&p, client->player_names[client_id], NET_PLAYER_NAME_MAX);
-    float pos_x = read_f32(&p);
-    float pos_y = read_f32(&p);
-    float pos_z = read_f32(&p);
+    uint8_t client_id = ser_read_u8(&p);
+    ser_read_string(&p, client->player_names[client_id], NET_PLAYER_NAME_MAX);
+    float pos_x = ser_read_f32(&p);
+    float pos_y = ser_read_f32(&p);
+    float pos_z = ser_read_f32(&p);
 
     client->remote_players[client_id].pos_x = pos_x;
     client->remote_players[client_id].pos_y = pos_y;
@@ -832,8 +758,8 @@ static void client_handle_player_join(NetClient* client, const uint8_t* data) {
 
 static void client_handle_player_leave(NetClient* client, const uint8_t* data) {
     const uint8_t* p = data;
-    uint8_t client_id = read_u8(&p);
-    read_u8(&p);  // reason
+    uint8_t client_id = ser_read_u8(&p);
+    ser_read_u8(&p);  // reason
 
     client->player_active[client_id] = false;
     printf("[NET_CLIENT] Player %d left\n", client_id);
@@ -849,7 +775,7 @@ static void client_handle_block_change(NetClient* client, const uint8_t* data) {
 
 static void client_handle_time_sync(NetClient* client, const uint8_t* data) {
     const uint8_t* p = data;
-    float time_of_day = read_f32(&p);
+    float time_of_day = ser_read_f32(&p);
 
     if (client->time_of_day) {
         *client->time_of_day = time_of_day;
@@ -915,7 +841,7 @@ int net_client_poll(NetClient* client, int timeout_ms) {
             // Connected - send handshake
             uint8_t buf[64];
             uint8_t* p = buf;
-            write_string(&p, client->player_name, NET_PLAYER_NAME_MAX);
+            ser_write_string(&p, client->player_name, NET_PLAYER_NAME_MAX);
             client_send_packet(client, NET_PACKET_CONNECT_REQUEST, buf, p - buf);
         }
     }
@@ -958,16 +884,16 @@ int net_client_poll(NetClient* client, int timeout_ms) {
         while (client->recv_offset >= NET_HEADER_SIZE) {
             const uint8_t* p = client->recv_buffer;
 
-            uint32_t magic = read_u32(&p);
+            uint32_t magic = ser_read_u32(&p);
             if (magic != NET_PROTOCOL_MAGIC) {
                 client->recv_offset = 0;
                 break;
             }
 
-            read_u8(&p);  // version
-            uint8_t type = read_u8(&p);
-            uint16_t payload_size = read_u16(&p);
-            read_u32(&p);  // sequence
+            ser_read_u8(&p);  // version
+            uint8_t type = ser_read_u8(&p);
+            uint16_t payload_size = ser_read_u16(&p);
+            ser_read_u32(&p);  // sequence
 
             size_t total_size = NET_HEADER_SIZE + payload_size;
             if (client->recv_offset < total_size) break;
@@ -1410,14 +1336,13 @@ void network_draw_nametags(NetworkContext* ctx, Camera3D camera) {
             Vector2 screen_pos = GetWorldToScreen(world_pos, camera);
 
             // Clamp to screen edges if off-screen
-            bool clamped = false;
             text_x = (int)screen_pos.x - text_width / 2;
             text_y = (int)screen_pos.y - font_size / 2;
 
-            if (text_x < 10) { text_x = 10; clamped = true; }
-            if (text_x > screen_width - text_width - 10) { text_x = screen_width - text_width - 10; clamped = true; }
-            if (text_y < 10) { text_y = 10; clamped = true; }
-            if (text_y > screen_height - font_size - 10) { text_y = screen_height - font_size - 10; clamped = true; }
+            if (text_x < 10) text_x = 10;
+            if (text_x > screen_width - text_width - 10) text_x = screen_width - text_width - 10;
+            if (text_y < 10) text_y = 10;
+            if (text_y > screen_height - font_size - 10) text_y = screen_height - font_size - 10;
 
             // Show distance
             char label[64];

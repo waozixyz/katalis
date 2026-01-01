@@ -18,9 +18,11 @@
 // CONFIGURATION
 // ============================================================================
 
-#define WORKER_THREAD_COUNT 4
+#define WORKER_THREAD_COUNT_MIN 2
+#define WORKER_THREAD_COUNT_MAX 16
 #define TASK_QUEUE_SIZE 512
 #define MAX_UPLOADS_PER_FRAME 32
+#define LOD_DISTANCE_THRESHOLD 8  // Chunks beyond this distance use LOD mesh
 
 // ============================================================================
 // DATA STRUCTURES
@@ -30,18 +32,30 @@
  * Staged mesh data - generated on worker thread, uploaded on main thread
  */
 typedef struct {
-    // Opaque mesh
+    // Opaque mesh (full detail)
     float* vertices;
     float* texcoords;
     float* normals;
     unsigned char* colors;
     int vertex_count;
-    // Transparent mesh (leaves, water, etc.)
+    // Transparent mesh (full detail)
     float* trans_vertices;
     float* trans_texcoords;
     float* trans_normals;
     unsigned char* trans_colors;
     int trans_vertex_count;
+    // LOD opaque mesh (simplified for distant chunks)
+    float* lod_vertices;
+    float* lod_texcoords;
+    float* lod_normals;
+    unsigned char* lod_colors;
+    int lod_vertex_count;
+    // LOD transparent mesh
+    float* lod_trans_vertices;
+    float* lod_trans_texcoords;
+    float* lod_trans_normals;
+    unsigned char* lod_trans_colors;
+    int lod_trans_vertex_count;
     bool valid;
 } StagedMesh;
 
@@ -52,6 +66,7 @@ typedef struct {
     Chunk* chunk;
     TerrainParams terrain_params;
     bool valid;
+    int priority;  // Lower value = higher priority (distance² from player)
 } ChunkTask;
 
 /**
@@ -80,7 +95,8 @@ typedef struct CompletedChunk {
  * Worker system
  */
 typedef struct ChunkWorker {
-    pthread_t threads[WORKER_THREAD_COUNT];
+    pthread_t* threads;              // Dynamic array of worker threads
+    int thread_count;                // Number of active worker threads
     TaskQueue pending;
     CompletedChunk* completed_head;
     CompletedChunk* completed_tail;
@@ -104,9 +120,11 @@ void chunk_worker_destroy(ChunkWorker* worker);
 
 /**
  * Enqueue a chunk for generation (non-blocking)
+ * Priority is calculated based on distance from center_chunk position
  * Returns true if successfully enqueued
  */
-bool chunk_worker_enqueue(ChunkWorker* worker, Chunk* chunk, TerrainParams params);
+bool chunk_worker_enqueue(ChunkWorker* worker, Chunk* chunk, TerrainParams params,
+                          int center_chunk_x, int center_chunk_z);
 
 /**
  * Poll for completed chunks (non-blocking)

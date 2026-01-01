@@ -32,7 +32,7 @@
 #define GUIDE_X 520
 #define GUIDE_Y 100
 #define GUIDE_WIDTH 220
-#define GUIDE_HEIGHT 420
+#define GUIDE_HEIGHT 480
 
 // Item browser grid
 #define BROWSER_ITEM_SIZE 28
@@ -423,10 +423,6 @@ void inventory_ui_draw_item_icon(ItemType type, int x, int y, int size, Texture2
 
     const ItemProperties* props = item_get_properties(type);
 
-    // Calculate source rectangle from texture atlas
-    float tile_uv_size = 1.0f / (float)TILES_PER_ROW;
-    float padding = 0.001f;  // Prevent bleeding
-
     Rectangle source = {
         (float)(props->atlas_tile_x * TILE_SIZE),
         (float)(props->atlas_tile_y * TILE_SIZE),
@@ -521,7 +517,7 @@ void inventory_ui_draw_full_screen(Inventory* inv, Texture2D atlas) {
     int panel_x = 50;
     int panel_y = 100;
     int panel_w = 460;  // Wide enough for 9 columns
-    int panel_h = 400;
+    int panel_h = 480;  // Same height as crafting guide
 
     DrawRectangle(panel_x, panel_y, panel_w, panel_h, (Color){40, 40, 40, 240});
     DrawRectangleLines(panel_x, panel_y, panel_w, panel_h, (Color){150, 150, 150, 255});
@@ -1254,6 +1250,7 @@ static void draw_fist_3d(float swing_angle, float forward_offset, float up_offse
  * Must be called INSIDE BeginMode3D() block
  */
 void inventory_ui_draw_held_item_3d(Player* player, Camera3D camera, Texture2D atlas) {
+    (void)camera;  // Reserved for future use
     if (!player || !player->inventory) return;
     if (player->view_mode != VIEW_MODE_FIRST_PERSON) return;
 

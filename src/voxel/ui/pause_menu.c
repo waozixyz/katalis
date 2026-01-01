@@ -6,6 +6,7 @@
  */
 
 #include "voxel/ui/pause_menu.h"
+#include "voxel/ui/settings_menu.h"
 #include "voxel/network/network.h"
 #include <raylib.h>
 #include <stdlib.h>
@@ -91,6 +92,7 @@ static void draw_button(int x, int y, int w, int h, const char* text, bool is_ho
 
 static void draw_input_field(int x, int y, int w, int h, const char* text,
                              const char* placeholder, bool is_active, int cursor_pos) {
+    (void)cursor_pos;  // Reserved for custom cursor positioning
     Color bg_color = is_active ? COLOR_INPUT_ACTIVE : COLOR_INPUT_BG;
     Color border_color = is_active ? COLOR_INPUT_BORDER : COLOR_BUTTON_BORDER;
 
@@ -166,6 +168,7 @@ static void handle_text_input(char* buffer, int max_len, bool allow_hostname) {
 // ============================================================================
 
 static void draw_main_menu(PauseMenu* menu, int panel_x, int panel_y, int mouse_x, int mouse_y) {
+    (void)menu;  // Menu state not needed for main menu rendering
     // Title
     const char* title = "PAUSED";
     int title_font_size = 36;
@@ -181,6 +184,11 @@ static void draw_main_menu(PauseMenu* menu, int panel_x, int panel_y, int mouse_
     // Resume
     hovered = is_point_in_rect(mouse_x, mouse_y, button_x, y, BUTTON_WIDTH, BUTTON_HEIGHT);
     draw_button(button_x, y, BUTTON_WIDTH, BUTTON_HEIGHT, "Resume Game", hovered);
+    y += BUTTON_HEIGHT + BUTTON_GAP;
+
+    // Settings
+    hovered = is_point_in_rect(mouse_x, mouse_y, button_x, y, BUTTON_WIDTH, BUTTON_HEIGHT);
+    draw_button(button_x, y, BUTTON_WIDTH, BUTTON_HEIGHT, "Settings", hovered);
     y += BUTTON_HEIGHT + BUTTON_GAP;
 
     // Host Game
@@ -348,7 +356,6 @@ static void draw_hosting(PauseMenu* menu, int panel_x, int panel_y, int mouse_x,
 
     // Show connected clients from network context
     if (menu->network) {
-        int player_count = network_get_player_count(menu->network);
         for (int i = 1; i < NET_MAX_CLIENTS; i++) {
             if (network_is_player_active(menu->network, i)) {
                 const char* name = network_get_player_name(menu->network, i);
@@ -430,6 +437,7 @@ static void draw_connected(PauseMenu* menu, int panel_x, int panel_y, int mouse_
 // ============================================================================
 
 static int handle_main_menu_input(PauseMenu* menu, int panel_x, int panel_y, int mouse_x, int mouse_y) {
+    (void)menu;
     if (!IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) return 0;
 
     int button_x = panel_x + (PANEL_WIDTH - BUTTON_WIDTH) / 2;
@@ -437,6 +445,10 @@ static int handle_main_menu_input(PauseMenu* menu, int panel_x, int panel_y, int
 
     // Resume
     if (is_point_in_rect(mouse_x, mouse_y, button_x, y, BUTTON_WIDTH, BUTTON_HEIGHT)) return 1;
+    y += BUTTON_HEIGHT + BUTTON_GAP;
+
+    // Settings
+    if (is_point_in_rect(mouse_x, mouse_y, button_x, y, BUTTON_WIDTH, BUTTON_HEIGHT)) return 10;
     y += BUTTON_HEIGHT + BUTTON_GAP;
 
     // Host Game
@@ -547,6 +559,7 @@ static int handle_join_setup_input(PauseMenu* menu, int panel_x, int panel_y, in
 }
 
 static int handle_connecting_input(PauseMenu* menu, int panel_x, int panel_y, int mouse_x, int mouse_y) {
+    (void)menu;
     int button_x = panel_x + (PANEL_WIDTH - BUTTON_WIDTH) / 2;
     int button_y = panel_y + 250;
 
@@ -562,6 +575,7 @@ static int handle_connecting_input(PauseMenu* menu, int panel_x, int panel_y, in
 }
 
 static int handle_hosting_input(PauseMenu* menu, int panel_x, int panel_y, int mouse_x, int mouse_y) {
+    (void)menu;
     if (!IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
         if (IsKeyPressed(KEY_ESCAPE)) return 1;  // Resume on ESC
         return 0;
@@ -581,6 +595,7 @@ static int handle_hosting_input(PauseMenu* menu, int panel_x, int panel_y, int m
 }
 
 static int handle_connected_input(PauseMenu* menu, int panel_x, int panel_y, int mouse_x, int mouse_y) {
+    (void)menu;
     if (!IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
         if (IsKeyPressed(KEY_ESCAPE)) return 1;  // Resume on ESC
         return 0;
@@ -690,6 +705,19 @@ int pause_menu_handle_input(PauseMenu* menu, int mouse_x, int mouse_y) {
     switch (menu->state) {
         case MENU_STATE_MAIN:
             return handle_main_menu_input(menu, panel_x, panel_y, mouse_x, mouse_y);
+        case MENU_STATE_SETTINGS:
+            if (menu->settings_menu) {
+                int result = settings_menu_handle_input(menu->settings_menu);
+                if (result == 1) {  // Close without saving
+                    settings_menu_close(menu->settings_menu);
+                    menu->state = MENU_STATE_MAIN;
+                } else if (result == 2) {  // Apply and close
+                    settings_menu_apply(menu->settings_menu, menu->world);
+                    settings_menu_close(menu->settings_menu);
+                    menu->state = MENU_STATE_MAIN;
+                }
+            }
+            return 0;
         case MENU_STATE_HOST_SETUP:
             return handle_host_setup_input(menu, panel_x, panel_y, mouse_x, mouse_y);
         case MENU_STATE_JOIN_SETUP:
@@ -715,6 +743,14 @@ void pause_menu_draw(PauseMenu* menu) {
 
     // Draw semi-transparent overlay
     DrawRectangle(0, 0, screen_width, screen_height, COLOR_OVERLAY);
+
+    // Settings menu draws its own panel, skip for that state
+    if (menu->state == MENU_STATE_SETTINGS) {
+        if (menu->settings_menu) {
+            settings_menu_draw(menu->settings_menu);
+        }
+        return;
+    }
 
     int panel_x = (screen_width - PANEL_WIDTH) / 2;
     int panel_y = (screen_height - PANEL_HEIGHT) / 2;
@@ -748,12 +784,22 @@ void pause_menu_draw(PauseMenu* menu) {
         case MENU_STATE_CONNECTED:
             draw_connected(menu, panel_x, panel_y, mouse_x, mouse_y);
             break;
+        case MENU_STATE_SETTINGS:
+            // Handled above, should never reach here
+            break;
     }
 }
 
 void pause_menu_set_network(PauseMenu* menu, NetworkContext* network) {
     if (menu) {
         menu->network = network;
+    }
+}
+
+void pause_menu_set_settings(PauseMenu* menu, SettingsMenu* settings_menu, World* world) {
+    if (menu) {
+        menu->settings_menu = settings_menu;
+        menu->world = world;
     }
 }
 

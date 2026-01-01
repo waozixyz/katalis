@@ -6,6 +6,7 @@
 
 #include "voxel/entity/sheep.h"
 #include "voxel/entity/collision.h"
+#include "voxel/entity/entity_utils.h"
 #include "voxel/world/world.h"
 #include "voxel/player/player.h"
 #include "voxel/core/block.h"
@@ -16,25 +17,6 @@
 #include <raylib.h>
 #include <raymath.h>
 #include <rlgl.h>
-
-// ============================================================================
-// INTERNAL HELPERS
-// ============================================================================
-
-/**
- * Get a random float between min and max
- */
-static float random_range(float min, float max) {
-    return min + ((float)rand() / RAND_MAX) * (max - min);
-}
-
-/**
- * Pick a random horizontal direction
- */
-static Vector3 random_direction(void) {
-    float angle = random_range(0, 2.0f * PI);
-    return (Vector3){cosf(angle), 0, sinf(angle)};
-}
 
 /**
  * Create sheep data with given colors
@@ -55,16 +37,16 @@ static SheepData* sheep_create_data(Color wool_color, Color skin_color) {
     data->idle_time = 0.0f;
     data->head_yaw_target = 0.0f;
     data->head_yaw_current = 0.0f;
-    data->head_look_timer = random_range(2.0f, 4.0f);
-    data->blink_timer = random_range(3.0f, 6.0f);
+    data->head_look_timer = entity_random_range(2.0f, 4.0f);
+    data->blink_timer = entity_random_range(3.0f, 6.0f);
     data->blink_progress = 0.0f;
 
     // AI state - start wandering
-    data->wander_timer = random_range(SHEEP_WANDER_TIME_MIN, SHEEP_WANDER_TIME_MAX);
+    data->wander_timer = entity_random_range(SHEEP_WANDER_TIME_MIN, SHEEP_WANDER_TIME_MAX);
     data->graze_timer = 0.0f;
     data->is_grazing = false;
     data->is_fleeing = false;
-    data->wander_direction = random_direction();
+    data->wander_direction = entity_random_direction();
 
     // Default lighting (full brightness)
     data->ambient_light = (Vector3){1.0f, 1.0f, 1.0f};
@@ -77,28 +59,6 @@ static SheepData* sheep_create_data(Color wool_color, Color skin_color) {
     data->jump_cooldown = 0.0f;
 
     return data;
-}
-
-/**
- * Check if position is safe (has solid ground below and air at feet/head)
- */
-static bool is_position_safe(World* world, Vector3 pos) {
-    if (!world) return true;  // No world, assume safe
-
-    int x = (int)floorf(pos.x);
-    int y = (int)floorf(pos.y);
-    int z = (int)floorf(pos.z);
-
-    // Check ground below
-    Block ground = world_get_block(world, x, y - 1, z);
-    if (!block_is_solid(ground)) return false;
-
-    // Check air at feet and body level
-    Block feet = world_get_block(world, x, y, z);
-    Block body = world_get_block(world, x, y + 1, z);
-    if (block_is_solid(feet) || block_is_solid(body)) return false;
-
-    return true;
 }
 
 // ============================================================================
@@ -165,8 +125,8 @@ void sheep_update(Entity* entity, struct World* world, float dt) {
         data->graze_timer -= dt;
         if (data->graze_timer <= 0) {
             data->is_grazing = false;
-            data->wander_timer = random_range(SHEEP_WANDER_TIME_MIN, SHEEP_WANDER_TIME_MAX);
-            data->wander_direction = random_direction();
+            data->wander_timer = entity_random_range(SHEEP_WANDER_TIME_MIN, SHEEP_WANDER_TIME_MAX);
+            data->wander_direction = entity_random_direction();
         }
     }
     else {
@@ -175,14 +135,14 @@ void sheep_update(Entity* entity, struct World* world, float dt) {
 
         if (data->wander_timer <= 0) {
             // Time to change behavior
-            if (random_range(0, 1) < SHEEP_GRAZE_CHANCE) {
+            if (entity_random_range(0, 1) < SHEEP_GRAZE_CHANCE) {
                 // Start grazing
                 data->is_grazing = true;
                 data->graze_timer = SHEEP_GRAZE_TIME;
             } else {
                 // Pick new wander direction
-                data->wander_direction = random_direction();
-                data->wander_timer = random_range(SHEEP_WANDER_TIME_MIN, SHEEP_WANDER_TIME_MAX);
+                data->wander_direction = entity_random_direction();
+                data->wander_timer = entity_random_range(SHEEP_WANDER_TIME_MIN, SHEEP_WANDER_TIME_MAX);
             }
         }
 
@@ -226,7 +186,7 @@ void sheep_update(Entity* entity, struct World* world, float dt) {
 
     // Pick new direction when hitting a wall (only if can't jump and not fleeing)
     if (COLLISION_HIT_WALL(collision_flags) && !data->is_fleeing && !should_jump) {
-        data->wander_direction = random_direction();
+        data->wander_direction = entity_random_direction();
     }
 
     // ========================================================================
@@ -243,7 +203,7 @@ void sheep_update(Entity* entity, struct World* world, float dt) {
         data->idle_time = 0.0f;  // Reset idle time when moving
     } else {
         // Idle: smoothly return to rest pose
-        data->leg_swing_angle *= 0.85f;
+        data->leg_swing_angle *= ENTITY_ANIMATION_DAMPING;
         data->idle_time += dt;  // Accumulate idle time for breathing
     }
 
@@ -251,8 +211,8 @@ void sheep_update(Entity* entity, struct World* world, float dt) {
     if (!data->is_fleeing && !data->is_grazing && horiz_speed < 0.1f) {
         data->head_look_timer -= dt;
         if (data->head_look_timer <= 0) {
-            data->head_yaw_target = random_range(-30.0f, 30.0f);
-            data->head_look_timer = random_range(2.0f, 4.0f);
+            data->head_yaw_target = entity_random_range(-30.0f, 30.0f);
+            data->head_look_timer = entity_random_range(2.0f, 4.0f);
         }
     } else {
         // Reset head to forward when moving, fleeing, or grazing
@@ -265,7 +225,7 @@ void sheep_update(Entity* entity, struct World* world, float dt) {
     data->blink_timer -= dt;
     if (data->blink_timer <= 0) {
         data->blink_progress = 1.0f;  // Start blink
-        data->blink_timer = random_range(3.0f, 6.0f);
+        data->blink_timer = entity_random_range(3.0f, 6.0f);
     }
     if (data->blink_progress > 0) {
         data->blink_progress -= dt * 8.0f;  // Fast blink (~0.125s)
@@ -291,18 +251,6 @@ void sheep_update(Entity* entity, struct World* world, float dt) {
 }
 
 /**
- * Apply ambient lighting to a color
- */
-static Color apply_ambient(Color c, Vector3 ambient) {
-    return (Color){
-        (unsigned char)(c.r * ambient.x),
-        (unsigned char)(c.g * ambient.y),
-        (unsigned char)(c.b * ambient.z),
-        c.a
-    };
-}
-
-/**
  * Render function for sheep
  * Draws a blocky Minecraft-style sheep
  */
@@ -313,8 +261,8 @@ void sheep_render(Entity* entity) {
     Vector3 pos = entity->position;
 
     // Apply ambient lighting to colors
-    Color wool_lit = apply_ambient(data->wool_color, data->ambient_light);
-    Color skin_lit = apply_ambient(data->skin_color, data->ambient_light);
+    Color wool_lit = entity_apply_ambient(data->wool_color, data->ambient_light);
+    Color skin_lit = entity_apply_ambient(data->skin_color, data->ambient_light);
 
     // Apply red flash when damaged
     if (data->damage_flash_timer > 0) {
@@ -457,8 +405,8 @@ void sheep_render(Entity* entity) {
     // ========================================================================
     // EYES with blink animation - follows head rotation
     // ========================================================================
-    Color eye_white = apply_ambient(WHITE, data->ambient_light);
-    Color eye_black = apply_ambient((Color){30, 30, 30, 255}, data->ambient_light);
+    Color eye_white = entity_apply_ambient(WHITE, data->ambient_light);
+    Color eye_black = entity_apply_ambient((Color){30, 30, 30, 255}, data->ambient_light);
 
     float eye_offset_y = 0.03f;
     float eye_offset_side = 0.08f;
@@ -589,7 +537,7 @@ Entity* sheep_spawn_colored(EntityManager* manager, Vector3 position, Color wool
     }
 
     // Random initial rotation
-    entity->rotation.y = random_range(0, 360);
+    entity->rotation.y = entity_random_range(0, 360);
 
     // Add to entity manager
     entity_manager_add(manager, entity);

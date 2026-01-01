@@ -18,6 +18,7 @@ typedef struct Player Player;
 typedef struct EntityManager EntityManager;
 typedef struct WaterUpdateQueue WaterUpdateQueue;
 typedef struct ChestRegistry ChestRegistry;
+typedef struct ChunkBatcher ChunkBatcher;
 
 // ============================================================================
 // WORLD CONSTANTS
@@ -49,6 +50,7 @@ typedef struct {
 typedef struct World {
     ChunkHashMap* chunks;
     ChunkWorker* worker;     // Multi-threaded chunk generation
+    ChunkBatcher* batcher;   // Chunk batching for reduced draw calls
     int center_chunk_x;      // Center of loaded chunks (camera position)
     int center_chunk_z;
     int view_distance;       // How many chunks to load around center
@@ -59,6 +61,11 @@ typedef struct World {
     WaterUpdateQueue* water_queue;  // Water flow update system
     int game_tick;           // Game tick counter for water updates
     ChestRegistry* chest_registry;  // Chest data storage
+    Chunk* dirty_head;       // Head of dirty chunk linked list (for O(n) remesh tracking)
+    int dirty_count;         // Number of chunks in dirty list
+    // Runtime settings (from settings menu)
+    int batch_rebuilds_per_frame;   // Max batch rebuilds per frame (default: 16)
+    int max_uploads_per_frame;      // Max mesh uploads per frame (default: 32)
 } World;
 
 // ============================================================================
@@ -148,5 +155,25 @@ EntityManager* world_get_entity_manager(World* world);
  * Set the entity manager for this world
  */
 void world_set_entity_manager(World* world, EntityManager* manager);
+
+/**
+ * Get current view distance (in chunks)
+ */
+int world_get_view_distance(World* world);
+
+/**
+ * Set view distance (in chunks, clamped to 2-32)
+ */
+void world_set_view_distance(World* world, int distance);
+
+/**
+ * Set batch rebuilds per frame (for settings menu)
+ */
+void world_set_batch_rebuilds(World* world, int max_rebuilds);
+
+/**
+ * Set max mesh uploads per frame (for settings menu)
+ */
+void world_set_max_uploads(World* world, int max_uploads);
 
 #endif // VOXEL_WORLD_H

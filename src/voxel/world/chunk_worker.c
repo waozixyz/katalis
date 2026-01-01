@@ -6,6 +6,7 @@
 
 #define _POSIX_C_SOURCE 199309L
 #include <time.h>
+#include <unistd.h>
 #include "voxel/world/chunk_worker.h"
 #include "voxel/world/terrain.h"
 #include "voxel/entity/tree.h"
@@ -14,6 +15,20 @@
 #include <stdlib.h>
 #include <string.h>
 #include <raylib.h>
+
+// ============================================================================
+// DYNAMIC THREAD COUNT
+// ============================================================================
+
+static int get_optimal_thread_count(void) {
+    long cores = sysconf(_SC_NPROCESSORS_ONLN);
+    if (cores <= 0) cores = 4;  // Fallback
+
+    int threads = (int)cores - 2;  // Reserve 2 for main thread + OS
+    if (threads < WORKER_THREAD_COUNT_MIN) threads = WORKER_THREAD_COUNT_MIN;
+    if (threads > WORKER_THREAD_COUNT_MAX) threads = WORKER_THREAD_COUNT_MAX;
+    return threads;
+}
 
 // ============================================================================
 // FORWARD DECLARATIONS
@@ -44,13 +59,42 @@ static void task_queue_destroy(TaskQueue* q) {
 static bool task_queue_push(TaskQueue* q, ChunkTask task) {
     pthread_mutex_lock(&q->mutex);
 
-    // Wait if queue is full (with timeout to check running flag)
-    while (q->count >= TASK_QUEUE_SIZE) {
+    // Return false if queue is full (non-blocking)
+    if (q->count >= TASK_QUEUE_SIZE) {
         pthread_mutex_unlock(&q->mutex);
-        return false;  // Non-blocking: return false if full
+        return false;
     }
 
-    q->tasks[q->tail] = task;
+    // Priority-sorted insertion: find position to insert
+    // Lower priority value = higher priority (closer to player)
+    // Tasks are stored so head has highest priority (lowest value)
+    int insert_pos = q->head;
+    int items_checked = 0;
+
+    // Find first task with lower priority (higher value) than new task
+    while (items_checked < q->count) {
+        int idx = (q->head + items_checked) % TASK_QUEUE_SIZE;
+        if (q->tasks[idx].priority > task.priority) {
+            insert_pos = idx;
+            break;
+        }
+        items_checked++;
+    }
+
+    // If we checked all items, insert at tail
+    if (items_checked == q->count) {
+        q->tasks[q->tail] = task;
+    } else {
+        // Shift tasks from insert_pos to tail to make room
+        int shift_count = q->count - items_checked;
+        for (int i = shift_count - 1; i >= 0; i--) {
+            int src = (insert_pos + i) % TASK_QUEUE_SIZE;
+            int dst = (insert_pos + i + 1) % TASK_QUEUE_SIZE;
+            q->tasks[dst] = q->tasks[src];
+        }
+        q->tasks[insert_pos] = task;
+    }
+
     q->tail = (q->tail + 1) % TASK_QUEUE_SIZE;
     q->count++;
 
@@ -161,6 +205,17 @@ ChunkWorker* chunk_worker_create(void) {
         return NULL;
     }
 
+    // Determine optimal thread count based on CPU cores
+    worker->thread_count = get_optimal_thread_count();
+
+    // Allocate thread array
+    worker->threads = (pthread_t*)malloc(worker->thread_count * sizeof(pthread_t));
+    if (!worker->threads) {
+        printf("[WORKER] Failed to allocate thread array\n");
+        free(worker);
+        return NULL;
+    }
+
     task_queue_init(&worker->pending);
     worker->completed_head = NULL;
     worker->completed_tail = NULL;
@@ -168,20 +223,21 @@ ChunkWorker* chunk_worker_create(void) {
     worker->running = true;
 
     // Start worker threads
-    for (int i = 0; i < WORKER_THREAD_COUNT; i++) {
+    for (int i = 0; i < worker->thread_count; i++) {
         if (pthread_create(&worker->threads[i], NULL, worker_thread_func, worker) != 0) {
             printf("[WORKER] Failed to create thread %d\n", i);
         }
     }
 
-    printf("[WORKER] Created %d worker threads\n", WORKER_THREAD_COUNT);
+    printf("[WORKER] Created %d worker threads (detected %ld CPU cores)\n",
+           worker->thread_count, sysconf(_SC_NPROCESSORS_ONLN));
     return worker;
 }
 
 void chunk_worker_destroy(ChunkWorker* worker) {
     if (!worker) return;
 
-    printf("[WORKER] Shutting down...\n");
+    printf("[WORKER] Shutting down %d threads...\n", worker->thread_count);
 
     // Signal threads to stop
     worker->running = false;
@@ -192,7 +248,7 @@ void chunk_worker_destroy(ChunkWorker* worker) {
     pthread_mutex_unlock(&worker->pending.mutex);
 
     // Wait for threads to finish
-    for (int i = 0; i < WORKER_THREAD_COUNT; i++) {
+    for (int i = 0; i < worker->thread_count; i++) {
         pthread_join(worker->threads[i], NULL);
     }
 
@@ -211,11 +267,14 @@ void chunk_worker_destroy(ChunkWorker* worker) {
     pthread_mutex_unlock(&worker->completed_mutex);
     pthread_mutex_destroy(&worker->completed_mutex);
 
+    // Free thread array
+    free(worker->threads);
     free(worker);
     printf("[WORKER] Shutdown complete\n");
 }
 
-bool chunk_worker_enqueue(ChunkWorker* worker, Chunk* chunk, TerrainParams params) {
+bool chunk_worker_enqueue(ChunkWorker* worker, Chunk* chunk, TerrainParams params,
+                          int center_chunk_x, int center_chunk_z) {
     if (!worker || !chunk) return false;
 
     // Don't enqueue if already generating or complete
@@ -223,10 +282,16 @@ bool chunk_worker_enqueue(ChunkWorker* worker, Chunk* chunk, TerrainParams param
         return false;
     }
 
+    // Calculate priority based on distance² from center (lower = higher priority)
+    int dx = chunk->x - center_chunk_x;
+    int dz = chunk->z - center_chunk_z;
+    int priority = dx * dx + dz * dz;
+
     ChunkTask task = {
         .chunk = chunk,
         .terrain_params = params,
-        .valid = true
+        .valid = true,
+        .priority = priority
     };
 
     return task_queue_push(&worker->pending, task);
@@ -301,6 +366,51 @@ void chunk_worker_upload_mesh(Chunk* chunk, StagedMesh* mesh) {
         mesh->trans_colors = NULL;
     }
 
+    // === Upload LOD OPAQUE mesh ===
+    if (chunk->lod_generated && chunk->mesh_lod.vboId != NULL) {
+        UnloadMesh(chunk->mesh_lod);
+        memset(&chunk->mesh_lod, 0, sizeof(Mesh));
+    }
+
+    if (mesh->lod_vertex_count > 0) {
+        chunk->mesh_lod.vertexCount = mesh->lod_vertex_count;
+        chunk->mesh_lod.triangleCount = mesh->lod_vertex_count / 3;
+        chunk->mesh_lod.vertices = mesh->lod_vertices;
+        chunk->mesh_lod.texcoords = mesh->lod_texcoords;
+        chunk->mesh_lod.normals = mesh->lod_normals;
+        chunk->mesh_lod.colors = mesh->lod_colors;
+        UploadMesh(&chunk->mesh_lod, false);
+
+        mesh->lod_vertices = NULL;
+        mesh->lod_texcoords = NULL;
+        mesh->lod_normals = NULL;
+        mesh->lod_colors = NULL;
+    }
+
+    // === Upload LOD TRANSPARENT mesh ===
+    if (chunk->lod_generated && chunk->transparent_mesh_lod.vboId != NULL) {
+        UnloadMesh(chunk->transparent_mesh_lod);
+        memset(&chunk->transparent_mesh_lod, 0, sizeof(Mesh));
+    }
+
+    if (mesh->lod_trans_vertex_count > 0) {
+        chunk->transparent_mesh_lod.vertexCount = mesh->lod_trans_vertex_count;
+        chunk->transparent_mesh_lod.triangleCount = mesh->lod_trans_vertex_count / 3;
+        chunk->transparent_mesh_lod.vertices = mesh->lod_trans_vertices;
+        chunk->transparent_mesh_lod.texcoords = mesh->lod_trans_texcoords;
+        chunk->transparent_mesh_lod.normals = mesh->lod_trans_normals;
+        chunk->transparent_mesh_lod.colors = mesh->lod_trans_colors;
+        UploadMesh(&chunk->transparent_mesh_lod, false);
+
+        mesh->lod_trans_vertices = NULL;
+        mesh->lod_trans_texcoords = NULL;
+        mesh->lod_trans_normals = NULL;
+        mesh->lod_trans_colors = NULL;
+    }
+
+    // Mark LOD as generated if any LOD mesh was uploaded
+    chunk->lod_generated = (mesh->lod_vertex_count > 0 || mesh->lod_trans_vertex_count > 0);
+
     chunk->needs_remesh = false;
     chunk->state = CHUNK_STATE_COMPLETE;
     mesh->valid = false;
@@ -321,6 +431,18 @@ void staged_mesh_free(StagedMesh* mesh) {
     if (mesh->trans_normals) free(mesh->trans_normals);
     if (mesh->trans_colors) free(mesh->trans_colors);
 
+    // Free LOD opaque mesh buffers
+    if (mesh->lod_vertices) free(mesh->lod_vertices);
+    if (mesh->lod_texcoords) free(mesh->lod_texcoords);
+    if (mesh->lod_normals) free(mesh->lod_normals);
+    if (mesh->lod_colors) free(mesh->lod_colors);
+
+    // Free LOD transparent mesh buffers
+    if (mesh->lod_trans_vertices) free(mesh->lod_trans_vertices);
+    if (mesh->lod_trans_texcoords) free(mesh->lod_trans_texcoords);
+    if (mesh->lod_trans_normals) free(mesh->lod_trans_normals);
+    if (mesh->lod_trans_colors) free(mesh->lod_trans_colors);
+
     mesh->vertices = NULL;
     mesh->texcoords = NULL;
     mesh->normals = NULL;
@@ -331,6 +453,16 @@ void staged_mesh_free(StagedMesh* mesh) {
     mesh->trans_normals = NULL;
     mesh->trans_colors = NULL;
     mesh->trans_vertex_count = 0;
+    mesh->lod_vertices = NULL;
+    mesh->lod_texcoords = NULL;
+    mesh->lod_normals = NULL;
+    mesh->lod_colors = NULL;
+    mesh->lod_vertex_count = 0;
+    mesh->lod_trans_vertices = NULL;
+    mesh->lod_trans_texcoords = NULL;
+    mesh->lod_trans_normals = NULL;
+    mesh->lod_trans_colors = NULL;
+    mesh->lod_trans_vertex_count = 0;
     mesh->valid = false;
 }
 

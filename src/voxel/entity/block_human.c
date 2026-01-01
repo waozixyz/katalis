@@ -3,6 +3,7 @@
  */
 
 #include "voxel/entity/block_human.h"
+#include "voxel/entity/entity_utils.h"
 #include "voxel/world/world.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -11,21 +12,11 @@
 #include <raymath.h>
 #include <rlgl.h>
 
+// Use entity_apply_ambient from entity_utils.h instead of local duplicate
+
 // ============================================================================
 // INTERNAL HELPERS
 // ============================================================================
-
-/**
- * Apply ambient lighting to a color
- */
-static Color apply_ambient(Color c, Vector3 ambient) {
-    return (Color){
-        (unsigned char)(c.r * ambient.x),
-        (unsigned char)(c.g * ambient.y),
-        (unsigned char)(c.b * ambient.z),
-        c.a
-    };
-}
 
 /**
  * Create block human data with default colors
@@ -81,8 +72,8 @@ void block_human_update(Entity* entity, struct World* world, float dt) {
         data->leg_swing_angle = sinf(data->walk_animation_time) * 25.0f;
     } else {
         // Idle: smoothly return to rest pose
-        data->arm_swing_angle *= 0.85f;
-        data->leg_swing_angle *= 0.85f;
+        data->arm_swing_angle *= ENTITY_ANIMATION_DAMPING;
+        data->leg_swing_angle *= ENTITY_ANIMATION_DAMPING;
     }
 }
 
@@ -97,10 +88,10 @@ void block_human_render(Entity* entity) {
     Vector3 pos = entity->position;
 
     // Apply ambient lighting to colors
-    Color head_lit = apply_ambient(data->appearance.head_color, data->ambient_light);
-    Color torso_lit = apply_ambient(data->appearance.torso_color, data->ambient_light);
-    Color arm_lit = apply_ambient(data->appearance.arm_color, data->ambient_light);
-    Color leg_lit = apply_ambient(data->appearance.leg_color, data->ambient_light);
+    Color head_lit = entity_apply_ambient(data->appearance.head_color, data->ambient_light);
+    Color torso_lit = entity_apply_ambient(data->appearance.torso_color, data->ambient_light);
+    Color arm_lit = entity_apply_ambient(data->appearance.arm_color, data->ambient_light);
+    Color leg_lit = entity_apply_ambient(data->appearance.leg_color, data->ambient_light);
 
     // Get entity rotation (yaw for facing direction)
     float yaw = entity->rotation.y;  // Y rotation is yaw
@@ -206,8 +197,8 @@ void block_human_render(Entity* entity) {
     DrawSphere(head_center, BLOCK_HUMAN_HEAD_SIZE, head_lit);
 
     // Eye colors with ambient lighting
-    Color eye_white = apply_ambient(WHITE, data->ambient_light);
-    Color eye_black = apply_ambient((Color){30, 30, 30, 255}, data->ambient_light);
+    Color eye_white = entity_apply_ambient(WHITE, data->ambient_light);
+    Color eye_black = entity_apply_ambient((Color){30, 30, 30, 255}, data->ambient_light);
 
     // Eye parameters
     float eye_offset_y = 0.05f;       // Slightly above center

@@ -9,9 +9,11 @@
 #define VOXEL_MINIMAP_H
 
 #include <raylib.h>
-#include "voxel/world/world.h"
-#include "voxel/player/player.h"
-#include "voxel/network/network.h"
+
+// Forward declarations (avoid circular includes)
+typedef struct World World;
+typedef struct Player Player;
+typedef struct NetworkContext NetworkContext;
 
 // Minimap configuration
 #define MINIMAP_SIZE 150         // Size in pixels (square)

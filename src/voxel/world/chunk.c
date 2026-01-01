@@ -45,9 +45,14 @@ Chunk* chunk_create(int x, int z) {
     chunk->is_empty = true;
     chunk->mesh_generated = false;
     chunk->transparent_mesh_generated = false;
+    chunk->lod_generated = false;
     chunk->has_spawned = false;
     chunk->solid_block_count = 0;
     chunk->state = CHUNK_STATE_EMPTY;
+    chunk->min_block_y = 255;  // No blocks yet (invalid range: min > max)
+    chunk->max_block_y = 0;
+    chunk->dirty_next = NULL;
+    chunk->in_dirty_list = false;
 
     // Initialize all blocks to air
     memset(chunk->blocks, 0, sizeof(chunk->blocks));
@@ -55,6 +60,8 @@ Chunk* chunk_create(int x, int z) {
     // Initialize meshes to zero
     memset(&chunk->mesh, 0, sizeof(Mesh));
     memset(&chunk->transparent_mesh, 0, sizeof(Mesh));
+    memset(&chunk->mesh_lod, 0, sizeof(Mesh));
+    memset(&chunk->transparent_mesh_lod, 0, sizeof(Mesh));
 
     return chunk;
 }
@@ -73,6 +80,16 @@ void chunk_destroy(Chunk* chunk) {
     // Unload transparent mesh from GPU if it was generated
     if (chunk->transparent_mesh_generated && chunk->transparent_mesh.vboId != NULL) {
         UnloadMesh(chunk->transparent_mesh);
+    }
+
+    // Unload LOD meshes from GPU if generated
+    if (chunk->lod_generated) {
+        if (chunk->mesh_lod.vboId != NULL) {
+            UnloadMesh(chunk->mesh_lod);
+        }
+        if (chunk->transparent_mesh_lod.vboId != NULL) {
+            UnloadMesh(chunk->transparent_mesh_lod);
+        }
     }
 
     free(chunk);
@@ -96,8 +113,13 @@ void chunk_set_block(Chunk* chunk, int x, int y, int z, Block block) {
     // Update solid block counter (O(1) instead of O(n) scan)
     if (old_type == BLOCK_AIR && new_type != BLOCK_AIR) {
         chunk->solid_block_count++;
+        // Update Y bounds when adding solid block
+        if ((uint8_t)y < chunk->min_block_y) chunk->min_block_y = (uint8_t)y;
+        if ((uint8_t)y > chunk->max_block_y) chunk->max_block_y = (uint8_t)y;
     } else if (old_type != BLOCK_AIR && new_type == BLOCK_AIR) {
         chunk->solid_block_count--;
+        // Note: Y bounds may become stale when removing blocks,
+        // but they're recalculated in chunk_update_empty_status()
     }
 
     chunk->is_empty = (chunk->solid_block_count == 0);
@@ -128,9 +150,18 @@ void chunk_fill(Chunk* chunk, BlockType type) {
         }
     }
 
-    // Update counter based on fill type
-    chunk->solid_block_count = (type == BLOCK_AIR) ? 0 : (CHUNK_SIZE * CHUNK_HEIGHT * CHUNK_SIZE);
-    chunk->is_empty = (type == BLOCK_AIR);
+    // Update counter and Y bounds based on fill type
+    if (type == BLOCK_AIR) {
+        chunk->solid_block_count = 0;
+        chunk->is_empty = true;
+        chunk->min_block_y = 255;  // Invalid range
+        chunk->max_block_y = 0;
+    } else {
+        chunk->solid_block_count = CHUNK_SIZE * CHUNK_HEIGHT * CHUNK_SIZE;
+        chunk->is_empty = false;
+        chunk->min_block_y = 0;
+        chunk->max_block_y = CHUNK_HEIGHT - 1;
+    }
     chunk->needs_remesh = true;
 }
 
@@ -143,18 +174,23 @@ bool chunk_is_empty(Chunk* chunk) {
 }
 
 /**
- * Update the is_empty flag and solid_block_count by scanning the chunk
+ * Update the is_empty flag, solid_block_count, and Y bounds by scanning the chunk
  * Call this after bulk terrain generation
  */
 void chunk_update_empty_status(Chunk* chunk) {
     if (!chunk) return;
 
     int count = 0;
+    uint8_t min_y = 255;  // Start with invalid range
+    uint8_t max_y = 0;
+
     for (int x = 0; x < CHUNK_SIZE; x++) {
         for (int y = 0; y < CHUNK_HEIGHT; y++) {
             for (int z = 0; z < CHUNK_SIZE; z++) {
                 if (chunk->blocks[x][y][z].type != BLOCK_AIR) {
                     count++;
+                    if ((uint8_t)y < min_y) min_y = (uint8_t)y;
+                    if ((uint8_t)y > max_y) max_y = (uint8_t)y;
                 }
             }
         }
@@ -162,6 +198,8 @@ void chunk_update_empty_status(Chunk* chunk) {
 
     chunk->solid_block_count = count;
     chunk->is_empty = (count == 0);
+    chunk->min_block_y = min_y;
+    chunk->max_block_y = max_y;
 }
 
 // ============================================================================
@@ -265,8 +303,8 @@ static void add_quad(float* vertices, float* texcoords, float* normals, unsigned
     // Apply block's light level (0-15 -> 0.0-1.0)
     float light_factor = (float)block_light_level / 15.0f;
 
-    // Minimum ambient so caves aren't pitch black (15% ambient)
-    float min_ambient = 0.15f;
+    // Minimum ambient so caves aren't pitch black (10% ambient)
+    float min_ambient = 0.10f;
     light_factor = min_ambient + light_factor * (1.0f - min_ambient);
 
     // Base brightness combines face direction and block light level
@@ -377,8 +415,13 @@ static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** t
                                        bool transparent_pass) {
     *vertex_count = 0;
 
-    // Iterate through all blocks in the chunk
-    for (int y = 0; y < CHUNK_HEIGHT; y++) {
+    // Use Y bounds to skip empty regions (optimization)
+    // Add 1 block margin to handle face culling at boundaries
+    int y_start = (chunk->min_block_y > 0) ? chunk->min_block_y - 1 : 0;
+    int y_end = (chunk->max_block_y < CHUNK_HEIGHT - 1) ? chunk->max_block_y + 2 : CHUNK_HEIGHT;
+
+    // Iterate through blocks in the relevant Y range only
+    for (int y = y_start; y < y_end; y++) {
         for (int z = 0; z < CHUNK_SIZE; z++) {
             for (int x = 0; x < CHUNK_SIZE; x++) {
                 Block block = chunk_get_block(chunk, x, y, z);
@@ -513,6 +556,163 @@ static void chunk_generate_mesh_simple(Chunk* chunk, float** vertices, float** t
 }
 
 /**
+ * LOD mesh generation - samples every 2nd block for distant chunks
+ * Creates 2x2 block faces instead of 1x1, reducing vertices by ~75%
+ */
+static void chunk_generate_mesh_lod(Chunk* chunk, float** vertices, float** texcoords,
+                                    float** normals, unsigned char** colors, int* vertex_count,
+                                    bool transparent_pass) {
+    *vertex_count = 0;
+
+    // Use Y bounds to skip empty regions
+    int y_start = (chunk->min_block_y > 0) ? chunk->min_block_y - 1 : 0;
+    int y_end = (chunk->max_block_y < CHUNK_HEIGHT - 1) ? chunk->max_block_y + 2 : CHUNK_HEIGHT;
+
+    // Sample every 2nd block in X and Z
+    for (int y = y_start; y < y_end; y++) {
+        for (int z = 0; z < CHUNK_SIZE; z += 2) {
+            for (int x = 0; x < CHUNK_SIZE; x += 2) {
+                // Find dominant block in 2x2 area
+                Block block = {BLOCK_AIR, 0, 0};
+                for (int dz = 0; dz < 2 && block.type == BLOCK_AIR; dz++) {
+                    for (int dx = 0; dx < 2 && block.type == BLOCK_AIR; dx++) {
+                        int bx = x + dx;
+                        int bz = z + dz;
+                        if (bx < CHUNK_SIZE && bz < CHUNK_SIZE) {
+                            Block b = chunk_get_block(chunk, bx, y, bz);
+                            if (block_is_solid(b)) {
+                                block = b;
+                            }
+                        }
+                    }
+                }
+
+                // Skip if no solid blocks in 2x2 area
+                if (!block_is_solid(block)) {
+                    continue;
+                }
+
+                // Two-pass rendering
+                bool is_transparent = block_is_transparent(block);
+                if (transparent_pass != is_transparent) {
+                    continue;
+                }
+
+                // Position (2x2 block area)
+                float wx = (float)x;
+                float wy = (float)y;
+                float wz = (float)z;
+                float block_size = 2.0f;  // LOD uses 2x2 blocks
+
+                // Get light for this position
+                uint8_t block_light = get_block_light(chunk, x, y, z);
+
+                // No AO for LOD (simplified)
+                float ao = 1.0f;
+
+                // Top face
+                bool has_top_neighbor = false;
+                if (y + 1 < CHUNK_HEIGHT) {
+                    for (int dz = 0; dz < 2 && !has_top_neighbor; dz++) {
+                        for (int dx = 0; dx < 2 && !has_top_neighbor; dx++) {
+                            int bx = x + dx, bz = z + dz;
+                            if (bx < CHUNK_SIZE && bz < CHUNK_SIZE) {
+                                Block n = chunk_get_block(chunk, bx, y + 1, bz);
+                                if (block_is_solid(n) && !block_is_transparent(n)) {
+                                    has_top_neighbor = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                if (!has_top_neighbor) {
+                    Vector3 v1 = {wx, wy + 1, wz};
+                    Vector3 v2 = {wx + block_size, wy + 1, wz};
+                    Vector3 v3 = {wx + block_size, wy + 1, wz + block_size};
+                    Vector3 v4 = {wx, wy + 1, wz + block_size};
+                    Vector3 normal = {0, 1, 0};
+                    add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
+                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light, ao, ao, ao, ao);
+                }
+
+                // Bottom face
+                bool has_bottom_neighbor = false;
+                if (y - 1 >= 0) {
+                    for (int dz = 0; dz < 2 && !has_bottom_neighbor; dz++) {
+                        for (int dx = 0; dx < 2 && !has_bottom_neighbor; dx++) {
+                            int bx = x + dx, bz = z + dz;
+                            if (bx < CHUNK_SIZE && bz < CHUNK_SIZE) {
+                                Block n = chunk_get_block(chunk, bx, y - 1, bz);
+                                if (block_is_solid(n) && !block_is_transparent(n)) {
+                                    has_bottom_neighbor = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                if (!has_bottom_neighbor) {
+                    Vector3 v1 = {wx, wy, wz + block_size};
+                    Vector3 v2 = {wx + block_size, wy, wz + block_size};
+                    Vector3 v3 = {wx + block_size, wy, wz};
+                    Vector3 v4 = {wx, wy, wz};
+                    Vector3 normal = {0, -1, 0};
+                    add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
+                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light, ao, ao, ao, ao);
+                }
+
+                // Front face (-Z) - only if at z=0 edge of 2x2 area
+                if (z == 0 || !block_is_solid(chunk_get_block(chunk, x, y, z - 1))) {
+                    Vector3 v1 = {wx, wy, wz};
+                    Vector3 v2 = {wx + block_size, wy, wz};
+                    Vector3 v3 = {wx + block_size, wy + 1, wz};
+                    Vector3 v4 = {wx, wy + 1, wz};
+                    Vector3 normal = {0, 0, -1};
+                    add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
+                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light, ao, ao, ao, ao);
+                }
+
+                // Back face (+Z) - only if at z+2 edge or neighbor is not solid
+                int back_z = z + 2;
+                bool show_back = (back_z >= CHUNK_SIZE) || !block_is_solid(chunk_get_block(chunk, x, y, back_z));
+                if (show_back) {
+                    Vector3 v1 = {wx + block_size, wy, wz + block_size};
+                    Vector3 v2 = {wx, wy, wz + block_size};
+                    Vector3 v3 = {wx, wy + 1, wz + block_size};
+                    Vector3 v4 = {wx + block_size, wy + 1, wz + block_size};
+                    Vector3 normal = {0, 0, 1};
+                    add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
+                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light, ao, ao, ao, ao);
+                }
+
+                // Left face (-X) - only if at x=0 edge
+                if (x == 0 || !block_is_solid(chunk_get_block(chunk, x - 1, y, z))) {
+                    Vector3 v1 = {wx, wy, wz + block_size};
+                    Vector3 v2 = {wx, wy, wz};
+                    Vector3 v3 = {wx, wy + 1, wz};
+                    Vector3 v4 = {wx, wy + 1, wz + block_size};
+                    Vector3 normal = {-1, 0, 0};
+                    add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
+                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light, ao, ao, ao, ao);
+                }
+
+                // Right face (+X) - only if at x+2 edge or neighbor is not solid
+                int right_x = x + 2;
+                bool show_right = (right_x >= CHUNK_SIZE) || !block_is_solid(chunk_get_block(chunk, right_x, y, z));
+                if (show_right) {
+                    Vector3 v1 = {wx + block_size, wy, wz};
+                    Vector3 v2 = {wx + block_size, wy, wz + block_size};
+                    Vector3 v3 = {wx + block_size, wy + 1, wz + block_size};
+                    Vector3 v4 = {wx + block_size, wy + 1, wz};
+                    Vector3 normal = {1, 0, 0};
+                    add_quad(*vertices, *texcoords, *normals, *colors, vertex_count,
+                            v1, v2, v3, v4, normal, block.type, 1, 1, block_light, ao, ao, ao, ao);
+                }
+            }
+        }
+    }
+}
+
+/**
  * Generate mesh for chunk using simple per-face algorithm
  */
 void chunk_generate_mesh(Chunk* chunk) {
@@ -546,8 +746,19 @@ void chunk_generate_mesh(Chunk* chunk) {
     float* texcoords = (float*)malloc(max_vertices * 2 * sizeof(float));
     float* normals = (float*)malloc(max_vertices * 3 * sizeof(float));
     unsigned char* colors = (unsigned char*)malloc(max_vertices * 4 * sizeof(unsigned char));
-    int vertex_count = 0;
 
+    if (!vertices || !texcoords || !normals || !colors) {
+        // Clean up partial allocations
+        free(vertices);    // free(NULL) is safe
+        free(texcoords);
+        free(normals);
+        free(colors);
+        // Leave needs_remesh = true so chunk can retry when memory is available
+        printf("[CHUNK] Warning: OOM during mesh generation for chunk (%d, %d)\n", chunk->x, chunk->z);
+        return;
+    }
+
+    int vertex_count = 0;
     chunk_generate_mesh_simple(chunk, &vertices, &texcoords, &normals, &colors, &vertex_count, false);
 
     if (vertex_count > 0) {
@@ -571,8 +782,19 @@ void chunk_generate_mesh(Chunk* chunk) {
     float* trans_texcoords = (float*)malloc(max_vertices * 2 * sizeof(float));
     float* trans_normals = (float*)malloc(max_vertices * 3 * sizeof(float));
     unsigned char* trans_colors = (unsigned char*)malloc(max_vertices * 4 * sizeof(unsigned char));
-    int trans_vertex_count = 0;
 
+    if (!trans_vertices || !trans_texcoords || !trans_normals || !trans_colors) {
+        // Clean up partial allocations
+        free(trans_vertices);
+        free(trans_texcoords);
+        free(trans_normals);
+        free(trans_colors);
+        // Leave needs_remesh = true so chunk can retry when memory is available
+        printf("[CHUNK] Warning: OOM during transparent mesh generation for chunk (%d, %d)\n", chunk->x, chunk->z);
+        return;
+    }
+
+    int trans_vertex_count = 0;
     chunk_generate_mesh_simple(chunk, &trans_vertices, &trans_texcoords, &trans_normals, &trans_colors, &trans_vertex_count, true);
 
     if (trans_vertex_count > 0) {
@@ -612,7 +834,7 @@ void chunk_update_mesh(Chunk* chunk) {
 void chunk_generate_mesh_staged(Chunk* chunk, StagedMesh* out) {
     if (!chunk || !out) return;
 
-    // Initialize output
+    // Initialize output (including LOD fields)
     out->vertices = NULL;
     out->texcoords = NULL;
     out->normals = NULL;
@@ -623,6 +845,16 @@ void chunk_generate_mesh_staged(Chunk* chunk, StagedMesh* out) {
     out->trans_normals = NULL;
     out->trans_colors = NULL;
     out->trans_vertex_count = 0;
+    out->lod_vertices = NULL;
+    out->lod_texcoords = NULL;
+    out->lod_normals = NULL;
+    out->lod_colors = NULL;
+    out->lod_vertex_count = 0;
+    out->lod_trans_vertices = NULL;
+    out->lod_trans_texcoords = NULL;
+    out->lod_trans_normals = NULL;
+    out->lod_trans_colors = NULL;
+    out->lod_trans_vertex_count = 0;
     out->valid = false;
 
     // Skip empty chunks
@@ -694,6 +926,66 @@ void chunk_generate_mesh_staged(Chunk* chunk, StagedMesh* out) {
         free(trans_texcoords);
         free(trans_normals);
         free(trans_colors);
+    }
+
+    // === PASS 3: Generate LOD OPAQUE mesh ===
+    // LOD uses smaller buffers since it samples every 2nd block
+    int lod_max_vertices = max_vertices / 4;  // ~25% of full detail
+    float* lod_vertices = (float*)malloc(lod_max_vertices * 3 * sizeof(float));
+    float* lod_texcoords = (float*)malloc(lod_max_vertices * 2 * sizeof(float));
+    float* lod_normals = (float*)malloc(lod_max_vertices * 3 * sizeof(float));
+    unsigned char* lod_colors = (unsigned char*)malloc(lod_max_vertices * 4 * sizeof(unsigned char));
+
+    if (lod_vertices && lod_texcoords && lod_normals && lod_colors) {
+        int lod_vertex_count = 0;
+        chunk_generate_mesh_lod(chunk, &lod_vertices, &lod_texcoords, &lod_normals, &lod_colors, &lod_vertex_count, false);
+
+        if (lod_vertex_count > 0) {
+            out->lod_vertices = lod_vertices;
+            out->lod_texcoords = lod_texcoords;
+            out->lod_normals = lod_normals;
+            out->lod_colors = lod_colors;
+            out->lod_vertex_count = lod_vertex_count;
+        } else {
+            free(lod_vertices);
+            free(lod_texcoords);
+            free(lod_normals);
+            free(lod_colors);
+        }
+    } else {
+        if (lod_vertices) free(lod_vertices);
+        if (lod_texcoords) free(lod_texcoords);
+        if (lod_normals) free(lod_normals);
+        if (lod_colors) free(lod_colors);
+    }
+
+    // === PASS 4: Generate LOD TRANSPARENT mesh ===
+    float* lod_trans_vertices = (float*)malloc(lod_max_vertices * 3 * sizeof(float));
+    float* lod_trans_texcoords = (float*)malloc(lod_max_vertices * 2 * sizeof(float));
+    float* lod_trans_normals = (float*)malloc(lod_max_vertices * 3 * sizeof(float));
+    unsigned char* lod_trans_colors = (unsigned char*)malloc(lod_max_vertices * 4 * sizeof(unsigned char));
+
+    if (lod_trans_vertices && lod_trans_texcoords && lod_trans_normals && lod_trans_colors) {
+        int lod_trans_vertex_count = 0;
+        chunk_generate_mesh_lod(chunk, &lod_trans_vertices, &lod_trans_texcoords, &lod_trans_normals, &lod_trans_colors, &lod_trans_vertex_count, true);
+
+        if (lod_trans_vertex_count > 0) {
+            out->lod_trans_vertices = lod_trans_vertices;
+            out->lod_trans_texcoords = lod_trans_texcoords;
+            out->lod_trans_normals = lod_trans_normals;
+            out->lod_trans_colors = lod_trans_colors;
+            out->lod_trans_vertex_count = lod_trans_vertex_count;
+        } else {
+            free(lod_trans_vertices);
+            free(lod_trans_texcoords);
+            free(lod_trans_normals);
+            free(lod_trans_colors);
+        }
+    } else {
+        if (lod_trans_vertices) free(lod_trans_vertices);
+        if (lod_trans_texcoords) free(lod_trans_texcoords);
+        if (lod_trans_normals) free(lod_trans_normals);
+        if (lod_trans_colors) free(lod_trans_colors);
     }
 
     out->valid = true;

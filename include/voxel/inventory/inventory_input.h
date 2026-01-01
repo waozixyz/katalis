@@ -8,7 +8,7 @@
 #define VOXEL_INVENTORY_INPUT_H
 
 #include <stdbool.h>
-#include "inventory.h"
+#include "voxel/inventory/inventory.h"
 
 // ============================================================================
 // CONSTANTS

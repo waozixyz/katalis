@@ -3,6 +3,9 @@
  */
 
 #include "voxel/ui/minimap.h"
+#include "voxel/world/world.h"
+#include "voxel/player/player.h"
+#include "voxel/network/network.h"
 #include "voxel/core/block.h"
 #include "voxel/world/chunk.h"
 #include <stdlib.h>

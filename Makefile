@@ -6,8 +6,8 @@ KRYON_PATH = /mnt/storage/Projects/kryon
 INCLUDES = -I$(KRYON_PATH)/bindings/c -I$(KRYON_PATH)/ir -I$(KRYON_PATH)/backends/desktop -I$(KRYON_PATH)/ir/third_party/cJSON
 SDL3_FLAGS = $(shell pkg-config --cflags --libs sdl3 2>/dev/null || echo "-lSDL3")
 RAYLIB_FLAGS = $(shell pkg-config --cflags --libs raylib 2>/dev/null || echo "-lraylib")
-LDFLAGS = -L$(KRYON_PATH)/build -Wl,-rpath,$(KRYON_PATH)/build
-LIBS = -lkryon_desktop -lkryon_ir $(SDL3_FLAGS) $(RAYLIB_FLAGS) -lGL -lm -pthread
+LDFLAGS = -L$(KRYON_PATH)/build -L$(HOME)/.local/lib -Wl,-rpath,$(KRYON_PATH)/build -Wl,-rpath,$(HOME)/.local/lib
+LIBS = -lkryon_desktop -lkryon_ir -lkryon_syntax $(SDL3_FLAGS) $(RAYLIB_FLAGS) -lGL -lm -pthread
 
 # Kryon C source files (compile directly since library doesn't build)
 KRYON_C_DIR = $(KRYON_PATH)/bindings/c
@@ -32,10 +32,12 @@ VOXEL_WORLD = src/voxel/world/world.c \
               src/voxel/world/biome.c \
               src/voxel/world/spawn.c \
               src/voxel/world/water.c \
-              src/voxel/world/chest.c
+              src/voxel/world/chest.c \
+              src/voxel/world/raycast.c
 
 # Entity module
 VOXEL_ENTITY = src/voxel/entity/entity.c \
+               src/voxel/entity/entity_utils.c \
                src/voxel/entity/collision.c \
                src/voxel/entity/pig.c \
                src/voxel/entity/sheep.c \
@@ -53,15 +55,18 @@ VOXEL_INVENTORY = src/voxel/inventory/inventory.c \
 
 # UI module
 VOXEL_UI = src/voxel/ui/pause_menu.c \
-           src/voxel/ui/minimap.c
+           src/voxel/ui/minimap.c \
+           src/voxel/ui/settings_menu.c
 
 # Render module
 VOXEL_RENDER = src/voxel/render/sky.c \
                src/voxel/render/light.c \
-               src/voxel/render/particle.c
+               src/voxel/render/particle.c \
+               src/voxel/render/chunk_batcher.c
 
 # Network module
-VOXEL_NETWORK = src/voxel/network/network.c
+VOXEL_NETWORK = src/voxel/network/network.c \
+                src/voxel/network/serialization.c
 
 # Combined
 VOXEL_SOURCES = $(VOXEL_CORE) $(VOXEL_WORLD) $(VOXEL_ENTITY) $(VOXEL_PLAYER) \
