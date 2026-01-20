@@ -19,6 +19,7 @@ typedef enum {
     TOOL_PICKAXE,     // Stone, ores, cobblestone
     TOOL_AXE,         // Wood, planks
     TOOL_SHOVEL,      // Dirt, sand, gravel
+    TOOL_SWORD,       // Sword - deals more damage to entities
 } ToolType;
 
 // ============================================================================
@@ -60,6 +61,12 @@ typedef enum {
     BLOCK_STALAGMITE,       // Rising stone spikes from cave floors
     // Interactive blocks
     BLOCK_CHEST,            // Loot container
+    // Beds
+    BLOCK_BED_HEAD,         // Head of bed (where player sleeps)
+    BLOCK_BED_FOOT,         // Foot of bed (pillow end)
+    // Doors
+    BLOCK_WOOD_DOOR,        // Wooden door (can be opened by hand)
+    BLOCK_IRON_DOOR,        // Iron door (needs redstone/interaction)
     BLOCK_COUNT  // Total number of block types
 } BlockType;
 

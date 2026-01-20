@@ -625,8 +625,5 @@ Entity* pig_spawn(EntityManager* manager, Vector3 position) {
     // Add to entity manager
     entity_manager_add(manager, entity);
 
-    printf("[PIG] Spawned #%d at (%.1f, %.1f, %.1f)\n",
-           entity->id, position.x, position.y, position.z);
-
     return entity;
 }

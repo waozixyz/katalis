@@ -138,6 +138,229 @@ void crafting_init(void) {
         },
         ITEM_STONE_SHOVEL, 1);
 
+    // Recipe 9: Wooden Sword (shaped)
+    // Pattern:
+    // . P .
+    // . P .
+    // . S .
+    add_recipe(RECIPE_SHAPED,
+        (ItemType[9]){
+            ITEM_NONE, ITEM_WOOD_PLANKS, ITEM_NONE,
+            ITEM_NONE, ITEM_WOOD_PLANKS, ITEM_NONE,
+            ITEM_NONE, ITEM_STICK, ITEM_NONE
+        },
+        ITEM_WOODEN_SWORD, 1);
+
+    // Recipe 10: Stone Sword (shaped)
+    // Pattern:
+    // . C .
+    // . C .
+    // . S .
+    add_recipe(RECIPE_SHAPED,
+        (ItemType[9]){
+            ITEM_NONE, ITEM_COBBLESTONE, ITEM_NONE,
+            ITEM_NONE, ITEM_COBBLESTONE, ITEM_NONE,
+            ITEM_NONE, ITEM_STICK, ITEM_NONE
+        },
+        ITEM_STONE_SWORD, 1);
+
+    // Recipe 11: Iron Sword (shaped)
+    // Pattern:
+    // . I .
+    // . I .
+    // . S .
+    add_recipe(RECIPE_SHAPED,
+        (ItemType[9]){
+            ITEM_NONE, ITEM_IRON_BLOCK, ITEM_NONE,
+            ITEM_NONE, ITEM_IRON_BLOCK, ITEM_NONE,
+            ITEM_NONE, ITEM_STICK, ITEM_NONE
+        },
+        ITEM_IRON_SWORD, 1);
+
+    // Recipe 12: Diamond Sword (shaped)
+    // Pattern:
+    // . D .
+    // . D .
+    // . S .
+    add_recipe(RECIPE_SHAPED,
+        (ItemType[9]){
+            ITEM_NONE, ITEM_DIAMOND_BLOCK, ITEM_NONE,
+            ITEM_NONE, ITEM_DIAMOND_BLOCK, ITEM_NONE,
+            ITEM_NONE, ITEM_STICK, ITEM_NONE
+        },
+        ITEM_DIAMOND_SWORD, 1);
+
+    // Recipe 13-28: Beds (16 colors) - shapeless
+    // White Bed: 2 White Wool + Planks
+    add_recipe(RECIPE_SHAPELESS,
+        (ItemType[9]){
+            ITEM_WOOL_WHITE, ITEM_WOOL_WHITE, ITEM_NONE,
+            ITEM_WOOD_PLANKS, ITEM_NONE, ITEM_NONE,
+            ITEM_NONE, ITEM_NONE, ITEM_NONE
+        },
+        ITEM_WHITE_BED, 1);
+
+    // Light Gray Bed: 2 Light Gray Wool + Planks
+    add_recipe(RECIPE_SHAPELESS,
+        (ItemType[9]){
+            ITEM_WOOL_LIGHT_GRAY, ITEM_WOOL_LIGHT_GRAY, ITEM_NONE,
+            ITEM_WOOD_PLANKS, ITEM_NONE, ITEM_NONE,
+            ITEM_NONE, ITEM_NONE, ITEM_NONE
+        },
+        ITEM_LIGHT_GRAY_BED, 1);
+
+    // Gray Bed: 2 Gray Wool + Planks
+    add_recipe(RECIPE_SHAPELESS,
+        (ItemType[9]){
+            ITEM_WOOL_GRAY, ITEM_WOOL_GRAY, ITEM_NONE,
+            ITEM_WOOD_PLANKS, ITEM_NONE, ITEM_NONE,
+            ITEM_NONE, ITEM_NONE, ITEM_NONE
+        },
+        ITEM_GRAY_BED, 1);
+
+    // Black Bed: 2 Black Wool + Planks
+    add_recipe(RECIPE_SHAPELESS,
+        (ItemType[9]){
+            ITEM_WOOL_BLACK, ITEM_WOOL_BLACK, ITEM_NONE,
+            ITEM_WOOD_PLANKS, ITEM_NONE, ITEM_NONE,
+            ITEM_NONE, ITEM_NONE, ITEM_NONE
+        },
+        ITEM_BLACK_BED, 1);
+
+    // Brown Bed: 2 Brown Wool + Planks
+    add_recipe(RECIPE_SHAPELESS,
+        (ItemType[9]){
+            ITEM_WOOL_BROWN, ITEM_WOOL_BROWN, ITEM_NONE,
+            ITEM_WOOD_PLANKS, ITEM_NONE, ITEM_NONE,
+            ITEM_NONE, ITEM_NONE, ITEM_NONE
+        },
+        ITEM_BROWN_BED, 1);
+
+    // Red Bed: 2 Red Wool + Planks
+    add_recipe(RECIPE_SHAPELESS,
+        (ItemType[9]){
+            ITEM_WOOL_RED, ITEM_WOOL_RED, ITEM_NONE,
+            ITEM_WOOD_PLANKS, ITEM_NONE, ITEM_NONE,
+            ITEM_NONE, ITEM_NONE, ITEM_NONE
+        },
+        ITEM_RED_BED, 1);
+
+    // Orange Bed: 2 Orange Wool + Planks
+    add_recipe(RECIPE_SHAPELESS,
+        (ItemType[9]){
+            ITEM_WOOL_ORANGE, ITEM_WOOL_ORANGE, ITEM_NONE,
+            ITEM_WOOD_PLANKS, ITEM_NONE, ITEM_NONE,
+            ITEM_NONE, ITEM_NONE, ITEM_NONE
+        },
+        ITEM_ORANGE_BED, 1);
+
+    // Yellow Bed: 2 Yellow Wool + Planks
+    add_recipe(RECIPE_SHAPELESS,
+        (ItemType[9]){
+            ITEM_WOOL_YELLOW, ITEM_WOOL_YELLOW, ITEM_NONE,
+            ITEM_WOOD_PLANKS, ITEM_NONE, ITEM_NONE,
+            ITEM_NONE, ITEM_NONE, ITEM_NONE
+        },
+        ITEM_YELLOW_BED, 1);
+
+    // Lime Bed: 2 Lime Wool + Planks
+    add_recipe(RECIPE_SHAPELESS,
+        (ItemType[9]){
+            ITEM_WOOL_LIME, ITEM_WOOL_LIME, ITEM_NONE,
+            ITEM_WOOD_PLANKS, ITEM_NONE, ITEM_NONE,
+            ITEM_NONE, ITEM_NONE, ITEM_NONE
+        },
+        ITEM_LIME_BED, 1);
+
+    // Green Bed: 2 Green Wool + Planks
+    add_recipe(RECIPE_SHAPELESS,
+        (ItemType[9]){
+            ITEM_WOOL_GREEN, ITEM_WOOL_GREEN, ITEM_NONE,
+            ITEM_WOOD_PLANKS, ITEM_NONE, ITEM_NONE,
+            ITEM_NONE, ITEM_NONE, ITEM_NONE
+        },
+        ITEM_GREEN_BED, 1);
+
+    // Cyan Bed: 2 Cyan Wool + Planks
+    add_recipe(RECIPE_SHAPELESS,
+        (ItemType[9]){
+            ITEM_WOOL_CYAN, ITEM_WOOL_CYAN, ITEM_NONE,
+            ITEM_WOOD_PLANKS, ITEM_NONE, ITEM_NONE,
+            ITEM_NONE, ITEM_NONE, ITEM_NONE
+        },
+        ITEM_CYAN_BED, 1);
+
+    // Light Blue Bed: 2 Light Blue Wool + Planks
+    add_recipe(RECIPE_SHAPELESS,
+        (ItemType[9]){
+            ITEM_WOOL_LIGHT_BLUE, ITEM_WOOL_LIGHT_BLUE, ITEM_NONE,
+            ITEM_WOOD_PLANKS, ITEM_NONE, ITEM_NONE,
+            ITEM_NONE, ITEM_NONE, ITEM_NONE
+        },
+        ITEM_LIGHT_BLUE_BED, 1);
+
+    // Blue Bed: 2 Blue Wool + Planks
+    add_recipe(RECIPE_SHAPELESS,
+        (ItemType[9]){
+            ITEM_WOOL_BLUE, ITEM_WOOL_BLUE, ITEM_NONE,
+            ITEM_WOOD_PLANKS, ITEM_NONE, ITEM_NONE,
+            ITEM_NONE, ITEM_NONE, ITEM_NONE
+        },
+        ITEM_BLUE_BED, 1);
+
+    // Purple Bed: 2 Purple Wool + Planks
+    add_recipe(RECIPE_SHAPELESS,
+        (ItemType[9]){
+            ITEM_WOOL_PURPLE, ITEM_WOOL_PURPLE, ITEM_NONE,
+            ITEM_WOOD_PLANKS, ITEM_NONE, ITEM_NONE,
+            ITEM_NONE, ITEM_NONE, ITEM_NONE
+        },
+        ITEM_PURPLE_BED, 1);
+
+    // Magenta Bed: 2 Magenta Wool + Planks
+    add_recipe(RECIPE_SHAPELESS,
+        (ItemType[9]){
+            ITEM_WOOL_MAGENTA, ITEM_WOOL_MAGENTA, ITEM_NONE,
+            ITEM_WOOD_PLANKS, ITEM_NONE, ITEM_NONE,
+            ITEM_NONE, ITEM_NONE, ITEM_NONE
+        },
+        ITEM_MAGENTA_BED, 1);
+
+    // Pink Bed: 2 Pink Wool + Planks
+    add_recipe(RECIPE_SHAPELESS,
+        (ItemType[9]){
+            ITEM_WOOL_PINK, ITEM_WOOL_PINK, ITEM_NONE,
+            ITEM_WOOD_PLANKS, ITEM_NONE, ITEM_NONE,
+            ITEM_NONE, ITEM_NONE, ITEM_NONE
+        },
+        ITEM_PINK_BED, 1);
+
+    // Recipe 45: Wooden Door (shaped)
+    // Pattern:
+    // P P
+    // P P
+    // P P
+    add_recipe(RECIPE_SHAPED,
+        (ItemType[9]){
+            ITEM_WOOD_PLANKS, ITEM_WOOD_PLANKS, ITEM_NONE,
+            ITEM_WOOD_PLANKS, ITEM_WOOD_PLANKS, ITEM_NONE,
+            ITEM_WOOD_PLANKS, ITEM_WOOD_PLANKS, ITEM_NONE
+        },
+        ITEM_WOOD_DOOR, 3);
+
+    // Recipe 46: Iron Door (shaped)
+    // Pattern:
+    // I I
+    // I I
+    // I I
+    add_recipe(RECIPE_SHAPED,
+        (ItemType[9]){
+            ITEM_IRON_BLOCK, ITEM_IRON_BLOCK, ITEM_NONE,
+            ITEM_IRON_BLOCK, ITEM_IRON_BLOCK, ITEM_NONE,
+            ITEM_IRON_BLOCK, ITEM_IRON_BLOCK, ITEM_NONE
+        },
+        ITEM_IRON_DOOR, 3);
+
     printf("[CRAFTING] Loaded %d recipes\n", g_recipe_count);
 }
 

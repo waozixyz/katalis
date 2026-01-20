@@ -542,9 +542,5 @@ Entity* sheep_spawn_colored(EntityManager* manager, Vector3 position, Color wool
     // Add to entity manager
     entity_manager_add(manager, entity);
 
-    printf("[SHEEP] Spawned #%d at (%.1f, %.1f, %.1f) - wool: RGB(%d,%d,%d)\n",
-           entity->id, position.x, position.y, position.z,
-           wool_color.r, wool_color.g, wool_color.b);
-
     return entity;
 }

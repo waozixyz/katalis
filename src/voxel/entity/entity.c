@@ -21,7 +21,6 @@ EntityManager* entity_manager_create(void) {
     manager->next_id = 1;  // Start IDs at 1 (0 = invalid)
     manager->entity_count = 0;
 
-    printf("[ENTITY] Entity manager created\n");
     return manager;
 }
 
@@ -36,7 +35,6 @@ void entity_manager_destroy(EntityManager* manager) {
         current = next;
     }
 
-    printf("[ENTITY] Entity manager destroyed (%d entities freed)\n", manager->entity_count);
     free(manager);
 }
 
@@ -94,10 +92,6 @@ void entity_manager_add(EntityManager* manager, Entity* entity) {
     entity->next = manager->entities;
     manager->entities = entity;
     manager->entity_count++;
-
-    printf("[ENTITY] Added entity #%u (type=%d) at (%.1f, %.1f, %.1f)\n",
-           entity->id, entity->type,
-           entity->position.x, entity->position.y, entity->position.z);
 }
 
 void entity_manager_remove(EntityManager* manager, Entity* entity) {

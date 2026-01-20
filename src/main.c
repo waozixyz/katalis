@@ -2,105 +2,38 @@
 /**
  * Katalis
  *
- * Title screen with navigation to game screen
+ * Direct Raylib initialization - Kryon framework removed
  */
 
-#include <kryon_dsl.h>
-#include <stdbool.h>
-#include <stdlib.h>
 #include <raylib.h>
+#include <stdio.h>
 #include "game.h"
 
-// Only include desktop renderer for standalone builds
-#ifndef KRYON_KIR_ONLY
-#include <ir_desktop_renderer.h>
-#endif
-
-// Global state
-static IRComponent* title_screen = NULL;
-static IRComponent* game_screen = NULL;
-
-
-
-// Event handler - switch from title to game screen
-void on_start_game(void) {
-    if (title_screen) {
-        kryon_set_visible(title_screen, false);
-    }
-    if (game_screen) {
-        kryon_set_visible(game_screen, true);
-    }
-}
-
 int main(void) {
-    kryon_init("Katalis", 800, 600);
+    // Initialize Raylib window
+    const int screen_width = 800;
+    const int screen_height = 600;
+    InitWindow(screen_width, screen_height, "Katalis");
+    SetTargetFPS(60);
 
-    printf("[MAIN] Creating UI tree...\n");
+    printf("[MAIN] Katalis starting...\n");
+    printf("[MAIN] Window initialized: %dx%d\n", screen_width, screen_height);
 
-    KRYON_APP(
-        COLUMN(
-            FULL_SIZE,
-            BG_COLOR(0x0a0e27),
-
-            // Title Screen (initially hidden)
-            title_screen = COLUMN(
-                FULL_SIZE,
-                JUSTIFY_CENTER,
-                ALIGN_CENTER,
-                GAP(40),
-                PADDING(60),
-                VISIBLE(false),
-
-                // Title "KATALIS"
-                TEXT("KATALIS",
-                    COLOR_YELLOW,
-                    FONT_SIZE(72),
-                    FONT_BOLD
-                ),
-
-                // Button container - positioned to the left
-                ROW(
-                    WIDTH_PCT(100),
-                    JUSTIFY_START,
-                    PADDING_TRBL(0, 0, 0, 120),
-
-                    BUTTON("Start Game",
-                        WIDTH(200),
-                        HEIGHT(60),
-                        BG_COLOR(0x6366f1),
-                        COLOR_WHITE,
-                        ON_CLICK(on_start_game)
-                    )
-                )
-            ),
-
-            // Game Screen (initially visible)
-            game_screen = NATIVE_CANVAS(game_run,
-                FULL_SIZE,
-                BG_COLOR(0x1a1a2e),
-                VISIBLE(true)
-            )
-        
-        )
-    );
-
-    printf("[MAIN] UI tree created\n");
-    printf("[MAIN] title_screen = %p (id=%u)\n", (void*)title_screen, title_screen ? title_screen->id : 0);
-    printf("[MAIN] game_screen = %p (id=%u)\n", (void*)game_screen, game_screen ? game_screen->id : 0);
-    if (title_screen) {
-        printf("[MAIN] title_screen->style = %p\n", (void*)title_screen->style);
-        if (title_screen->style) {
-            printf("[MAIN] title_screen visible = %d\n", title_screen->style->visible);
-        }
-    }
-    if (game_screen) {
-        printf("[MAIN] game_screen->style = %p\n", (void*)game_screen->style);
-        if (game_screen->style) {
-            printf("[MAIN] game_screen visible = %d\n", game_screen->style->visible);
-        } else {
-            printf("[MAIN] ERROR: game_screen has no style!\n");
-        }
+    // Main game loop
+    while (!WindowShouldClose()) {
+        BeginDrawing();
+        game_run();
+        EndDrawing();
     }
 
-    KRYON_RUN();
+    printf("[MAIN] Window closed, cleaning up...\n");
+
+    // Cleanup game resources before closing window
+    game_shutdown();
+
+    // Close window
+    CloseWindow();
+
+    printf("[MAIN] Katalis exited cleanly\n");
+    return 0;
 }

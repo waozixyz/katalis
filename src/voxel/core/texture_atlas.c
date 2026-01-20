@@ -649,6 +649,108 @@ static void generate_planks_tile(Image* atlas, int tile_x, int tile_y, Color bas
 }
 
 /**
+ * Generate a bed tile with mattress, sheet, and pillow
+ */
+static void generate_bed_tile(Image* atlas, int tile_x, int tile_y, Color wool_color, Color sheet_color) {
+    int start_x = tile_x * TILE_SIZE;
+    int start_y = tile_y * TILE_SIZE;
+
+    // Bed frame (wood)
+    Color frame_dark = (Color){100, 70, 40, 255};
+    Color frame_light = (Color){130, 90, 50, 255};
+
+    // Draw mattress (wool color)
+    for (int y = 4; y <= 12; y++) {
+        for (int x = 0; x <= 15; x++) {
+            int noise = (x * 7 + y * 13) % 10 - 5;
+            Color pixel = {
+                (unsigned char)clamp_int(wool_color.r + noise, 0, 255),
+                (unsigned char)clamp_int(wool_color.g + noise, 0, 255),
+                (unsigned char)clamp_int(wool_color.b + noise, 0, 255),
+                255
+            };
+            ImageDrawPixel(atlas, start_x + x, start_y + y, pixel);
+        }
+    }
+
+    // Draw sheet (sheet color with pillow)
+    for (int y = 5; y <= 11; y++) {
+        for (int x = 1; x <= 14; x++) {
+            if (x >= 2 && x <= 5 && y >= 6 && y <= 9) {
+                // Pillow (white)
+                ImageDrawPixel(atlas, start_x + x, start_y + y, WHITE);
+            } else {
+                int noise = (x * 5 + y * 11) % 15 - 7;
+                Color pixel = {
+                    (unsigned char)clamp_int(sheet_color.r + noise, 0, 255),
+                    (unsigned char)clamp_int(sheet_color.g + noise, 0, 255),
+                    (unsigned char)clamp_int(sheet_color.b + noise, 0, 255),
+                    255
+                };
+                ImageDrawPixel(atlas, start_x + x, start_y + y, pixel);
+            }
+        }
+    }
+
+    // Draw frame edges
+    for (int x = 0; x <= 15; x++) {
+        ImageDrawPixel(atlas, start_x + x, start_y + 13, frame_dark);
+        ImageDrawPixel(atlas, start_x + x, start_y + 12, frame_light);
+    }
+}
+
+/**
+ * Generate a door tile with frame and optional window
+ */
+static void generate_door_tile(Image* atlas, int tile_x, int tile_y, Color door_color, Color frame_color, bool has_window) {
+    int start_x = tile_x * TILE_SIZE;
+    int start_y = tile_y * TILE_SIZE;
+
+    // Draw door frame
+    for (int x = 1; x <= 14; x++) {
+        for (int y = 0; y <= 15; y++) {
+            // Edge/frame
+            if (x == 1 || x == 14 || y == 0 || y == 15) {
+                int noise = (x * 3 + y * 7) % 20 - 10;
+                Color pixel = {
+                    (unsigned char)clamp_int(frame_color.r + noise, 0, 255),
+                    (unsigned char)clamp_int(frame_color.g + noise, 0, 255),
+                    (unsigned char)clamp_int(frame_color.b + noise, 0, 255),
+                    255
+                };
+                ImageDrawPixel(atlas, start_x + x, start_y + y, pixel);
+            } else {
+                // Door surface
+                int noise = (x * 5 + y * 11) % 15 - 7;
+                Color pixel = {
+                    (unsigned char)clamp_int(door_color.r + noise, 0, 255),
+                    (unsigned char)clamp_int(door_color.g + noise, 0, 255),
+                    (unsigned char)clamp_int(door_color.b + noise, 0, 255),
+                    255
+                };
+                ImageDrawPixel(atlas, start_x + x, start_y + y, pixel);
+            }
+        }
+    }
+
+    // Window (for iron door)
+    if (has_window) {
+        for (int x = 5; x <= 10; x++) {
+            for (int y = 2; y <= 6; y++) {
+                ImageDrawPixel(atlas, start_x + x, start_y + y, (Color){150, 200, 220, 200});
+            }
+        }
+    }
+
+    // Door handle
+    for (int x = 11; x <= 12; x++) {
+        for (int y = 7; y <= 8; y++) {
+            ImageDrawPixel(atlas, start_x + x, start_y + y, (Color){80, 60, 40, 255});
+        }
+    }
+}
+
+/**
  * Generate procedural texture atlas
  */
 static Image generate_atlas_image(void) {
@@ -787,9 +889,11 @@ static Image generate_atlas_image(void) {
     generate_axe_tile(&atlas, 5, 0, wood_color);       // Wooden axe
     generate_axe_tile(&atlas, 5, 1, stone_color);      // Stone axe
 
-    // SWORDS - Column 7 (for future use)
+    // SWORDS - Column 7
     generate_sword_tile(&atlas, 7, 0, wood_color);     // Wooden sword
     generate_sword_tile(&atlas, 7, 1, stone_color);    // Stone sword
+    generate_sword_tile(&atlas, 7, 2, (Color){200, 200, 210, 255});  // Iron sword
+    generate_sword_tile(&atlas, 7, 3, (Color){150, 220, 255, 255});  // Diamond sword
 
     // MEAT - Raw meat item (pinkish-red)
     generate_tile(&atlas, 6, 0, (Color){200, 100, 100, 255}, true);   // Raw meat
@@ -804,6 +908,39 @@ static Image generate_atlas_image(void) {
     for (int i = 0; i < 10; i++) {
         generate_crack_tile(&atlas, i, i, 20);  // Columns 0-9, Row 20
     }
+
+    // BEDS - Rows 30-45 (16 colors)
+    const Color bed_colors[] = {
+        {255, 255, 255, 255},  // White
+        {180, 180, 180, 255},  // Light Gray
+        {100, 100, 100, 255},  // Gray
+        {30, 30, 30, 255},     // Black
+        {120, 80, 40, 255},    // Brown
+        {200, 50, 50, 255},    // Red
+        {220, 120, 30, 255},   // Orange
+        {240, 240, 80, 255},   // Yellow
+        {100, 200, 80, 255},   // Lime
+        {50, 150, 50, 255},    // Green
+        {50, 200, 200, 255},   // Cyan
+        {80, 150, 220, 255},   // Light Blue
+        {50, 50, 200, 255},    // Blue
+        {150, 50, 220, 255},   // Purple
+        {220, 50, 180, 255},   // Magenta
+        {240, 150, 180, 255},  // Pink
+    };
+    Color sheet_color = {220, 220, 255, 255};  // Light blue sheet
+    for (int i = 0; i < 16; i++) {
+        generate_bed_tile(&atlas, 0, 30 + i, bed_colors[i], sheet_color);
+    }
+
+    // WOOL - Rows 30-45 (using same colors as beds, column 1)
+    for (int i = 0; i < 16; i++) {
+        generate_tile(&atlas, 1, 30 + i, bed_colors[i], true);
+    }
+
+    // DOORS - Row 46
+    generate_door_tile(&atlas, 0, 46, (Color){130, 90, 50, 255}, (Color){100, 70, 40, 255}, false);  // Wood door
+    generate_door_tile(&atlas, 1, 46, (Color){180, 180, 190, 255}, (Color){150, 150, 160, 255}, true); // Iron door with window
 
     return atlas;
 }

@@ -55,7 +55,6 @@ void spawn_system_init(void) {
     };
 
     spawn_initialized = true;
-    printf("[SPAWN] Spawn system initialized with biome rules\n");
 }
 
 // ============================================================================
@@ -107,16 +106,27 @@ void spawn_herd(EntityManager* manager, EntityType type, Vector3 center,
 
         Entity* entity = NULL;
         if (type == ENTITY_TYPE_SHEEP) {
-            entity = sheep_spawn(manager, pos);
+            // Random wool color for variety
+            Color wool_colors[] = {
+                {245, 245, 245, 255},  // White (most common)
+                {180, 180, 180, 255},  // Light Gray
+                {100, 100, 100, 255},  // Gray
+                {30, 30, 30, 255},     // Black
+                {200, 50, 50, 255},    // Red
+                {50, 150, 50, 255},    // Green
+                {50, 50, 200, 255},    // Blue
+            };
+            int color_idx = rand() % 7;  // Weight towards white (will be adjusted)
+            // Bias towards white (50% chance of white)
+            if (rand() % 2 == 0) color_idx = 0;
+
+            entity = sheep_spawn_colored(manager, pos, wool_colors[color_idx]);
         } else if (type == ENTITY_TYPE_PIG) {
             entity = pig_spawn(manager, pos);
         }
 
         if (entity && i == 0) {
-            // Log first animal of herd
-            const char* type_name = (type == ENTITY_TYPE_SHEEP) ? "sheep" : "pig";
-            printf("[SPAWN] Herd of %d %s at (%.1f, %.1f, %.1f)\n",
-                   count, type_name, center.x, center.y, center.z);
+            // First animal of herd spawned successfully
         }
     }
 }

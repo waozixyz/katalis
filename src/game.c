@@ -31,7 +31,6 @@
 #include "voxel/render/chunk_batcher.h"
 #include "voxel/core/settings_constants.h"
 #include "voxel/ui/settings_menu.h"
-#include <kryon.h>  // For shutdown API
 #include <raylib.h>
 #include <raymath.h>
 #include <rlgl.h>
@@ -46,9 +45,6 @@
 // ============================================================================
 // FORWARD DECLARATIONS
 // ============================================================================
-
-// Cleanup callback for Kryon shutdown system (defined later)
-static void game_cleanup_callback(void* user_data);
 
 // ============================================================================
 // GAME STATE
@@ -201,6 +197,12 @@ static void game_init(void) {
     inv->hotbar[3] = (ItemStack){ITEM_WOOD_LOG, 16, 0, 0};
     inv->hotbar[4] = (ItemStack){ITEM_DIRT, 64, 0, 0};
     inv->hotbar[5] = (ItemStack){ITEM_COBBLESTONE, 32, 0, 0};
+    // New items for testing
+    inv->hotbar[6] = (ItemStack){ITEM_STONE_SWORD, 1, 132, 132};  // Sword for combat
+    inv->hotbar[7] = (ItemStack){ITEM_WOOL_WHITE, 16, 0, 0};   // Wool for bed crafting
+    inv->hotbar[8] = (ItemStack){ITEM_WOOD_PLANKS, 32, 0, 0};  // Planks for crafting
+    // Add some iron blocks for crafting (in main inventory)
+    inventory_add_item(inv, ITEM_IRON_BLOCK, 8);
     printf("[GAME] Added starting items to inventory\n");
 
     // Initialize target block state
@@ -260,12 +262,79 @@ static void game_init(void) {
     // Initialize chest interaction state
     g_state.open_chest = NULL;
 
-    // Register cleanup callback with Kryon shutdown system
-    // This ensures game resources are freed BEFORE the window is closed
-    kryon_set_cleanup_callback(NULL, game_cleanup_callback, NULL);
-    printf("[GAME] Registered shutdown cleanup callback\n");
-
     printf("[GAME] Procedural world initialized with %d chunks!\n", g_state.world->chunks->chunk_count);
+}
+
+/**
+ * Place a bed (consists of two blocks: head and foot)
+ */
+static void place_bed(GameState* game, int x, int y, int z, BlockType bed_type) {
+    // Determine orientation based on player view direction
+    // Simplified: place head to the right of the foot
+    int dx = 1;  // Head is at x+1
+
+    // Place bed foot (where player clicked)
+    world_set_block(game->world, x, y, z, (Block){bed_type, 0, 0});
+
+    // Place bed head (adjacent block)
+    world_set_block(game->world, x + dx, y, z, (Block){BLOCK_BED_HEAD, 0, 0});
+}
+
+/**
+ * Try to sleep in a bed (skip to daytime if night)
+ */
+static bool try_sleep_in_bed(GameState* game, int x, int y, int z) {
+    // Check if it's night time (time_of_day: 0-24, night is roughly 18-6)
+    // For simplicity, allow sleeping any time for now
+
+    // Skip to daytime
+    game->time_of_day = 0.0f;
+
+    printf("[GAME] Slept in bed, time set to morning\n");
+    return true;
+}
+
+/**
+ * Place a door (consists of two blocks: bottom and top)
+ */
+static void place_door(GameState* game, int x, int y, int z, BlockType door_type) {
+    // Place bottom door
+    world_set_block(game->world, x, y, z, (Block){door_type, 0, 0});
+
+    // Place top door
+    world_set_block(game->world, x, y + 1, z, (Block){door_type, 0, 0});
+}
+
+/**
+ * Toggle a door between open and closed states
+ */
+static void toggle_door(GameState* game, int x, int y, int z) {
+    Block block = world_get_block(game->world, x, y, z);
+
+    // Check if it's a door
+    if (block.type != BLOCK_WOOD_DOOR && block.type != BLOCK_IRON_DOOR) {
+        return;
+    }
+
+    // Find top/bottom door
+    int bottom_y = y;
+    int top_y = y + 1;
+
+    Block bottom_door = world_get_block(game->world, x, bottom_y, z);
+    Block top_door = world_get_block(game->world, x, top_y, z);
+
+    // Toggle open/closed state (using metadata bit 0)
+    bool is_open = (bottom_door.metadata & 1) != 0;
+    uint8_t new_metadata = is_open ? 0 : 1;
+
+    // Update both door parts
+    bottom_door.metadata = (bottom_door.metadata & ~1) | new_metadata;
+    top_door.metadata = (top_door.metadata & ~1) | new_metadata;
+
+    world_set_block(game->world, x, bottom_y, z, bottom_door);
+    world_set_block(game->world, x, top_y, z, top_door);
+
+    printf("[GAME] Door %s at (%d, %d, %d)\n", is_open ? "closed" : "opened", x, y, z);
 }
 
 /**
@@ -465,7 +534,37 @@ static void game_update(float dt) {
                 // Drop 1-2 meat
                 int meat_count = 1 + (rand() % 2);
                 inventory_add_item(g_state.player->inventory, ITEM_MEAT, meat_count);
-                printf("[GAME] Sheep killed! Dropped %d meat\n", meat_count);
+
+                // Drop 1-3 wool (based on sheep's wool color)
+                SheepData* sheep_data = (SheepData*)g_state.target_entity->data;
+                if (sheep_data) {
+                    int wool_count = 1 + (rand() % 3);
+                    Color wool_color = sheep_data->wool_color;
+
+                    // Map wool color to wool item type
+                    ItemType wool_item = ITEM_WOOL_WHITE;  // Default
+
+                    // Simple color matching (based on RGB values)
+                    if (wool_color.r > 230 && wool_color.g > 230 && wool_color.b > 230) {
+                        wool_item = ITEM_WOOL_WHITE;
+                    } else if (wool_color.r < 60 && wool_color.g < 60 && wool_color.b < 60) {
+                        wool_item = ITEM_WOOL_BLACK;
+                    } else if (wool_color.r > 180 && wool_color.g < 80 && wool_color.b < 80) {
+                        wool_item = ITEM_WOOL_RED;
+                    } else if (wool_color.r < 100 && wool_color.g > 100 && wool_color.b < 100) {
+                        wool_item = ITEM_WOOL_GREEN;
+                    } else if (wool_color.r < 100 && wool_color.g < 100 && wool_color.b > 150) {
+                        wool_item = ITEM_WOOL_BLUE;
+                    } else {
+                        // Default to light gray for other colors
+                        wool_item = ITEM_WOOL_LIGHT_GRAY;
+                    }
+
+                    inventory_add_item(g_state.player->inventory, wool_item, wool_count);
+                    printf("[GAME] Sheep killed! Dropped %d meat and %d wool\n", meat_count, wool_count);
+                } else {
+                    printf("[GAME] Sheep killed! Dropped %d meat\n", meat_count);
+                }
 
                 // Remove entity from manager and destroy
                 entity_manager_remove(g_state.entity_manager, g_state.target_entity);
@@ -643,8 +742,17 @@ static void game_update(float dt) {
                     EnableCursor();
                     printf("[GAME] Opened chest at (%d, %d, %d)\n", target_x, target_y, target_z);
                 }
-            } else {
-                // Normal block placement
+            }
+            // Check if clicking on a door to toggle it
+            else if (target_block.type == BLOCK_WOOD_DOOR || target_block.type == BLOCK_IRON_DOOR) {
+                toggle_door(&g_state, target_x, target_y, target_z);
+            }
+            // Check if clicking on a bed to sleep
+            else if (target_block.type == BLOCK_BED_FOOT || target_block.type == BLOCK_BED_HEAD) {
+                try_sleep_in_bed(&g_state, target_x, target_y, target_z);
+            }
+            else {
+                // Normal block placement or special multi-block placement
                 ItemStack* selected = inventory_get_selected_hotbar_item(g_state.player->inventory);
 
                 if (selected && selected->type != ITEM_NONE) {
@@ -666,15 +774,39 @@ static void game_update(float dt) {
 
                     // Check if placement position collides with player
                     if (!player_collides_with_position(g_state.player, place_pos)) {
-                        // Place block
-                        Block new_block = {props->places_as, 0, 0};
-                        world_set_block(g_state.world,
-                            (int)place_pos.x,
-                            (int)place_pos.y,
-                            (int)place_pos.z,
-                            new_block);
+                        // Special handling for beds and doors
+                        if (props->places_as == BLOCK_BED_FOOT) {
+                            // Place bed (two blocks)
+                            place_bed(&g_state, (int)place_pos.x, (int)place_pos.y, (int)place_pos.z, props->places_as);
 
-                        // Broadcast block change to network
+                            // Broadcast bed head placement
+                            network_broadcast_block_change(g_state.network, (int)place_pos.x + 1, (int)place_pos.y, (int)place_pos.z, BLOCK_BED_HEAD, 0);
+                        }
+                        else if (props->places_as == BLOCK_WOOD_DOOR || props->places_as == BLOCK_IRON_DOOR) {
+                            // Place door (two blocks)
+                            place_door(&g_state, (int)place_pos.x, (int)place_pos.y, (int)place_pos.z, props->places_as);
+
+                            // Broadcast top door placement
+                            network_broadcast_block_change(g_state.network, (int)place_pos.x, (int)place_pos.y + 1, (int)place_pos.z, props->places_as, 0);
+                        }
+                        else {
+                            // Normal single block placement
+                            Block new_block = {props->places_as, 0, 0};
+                            world_set_block(g_state.world,
+                                (int)place_pos.x,
+                                (int)place_pos.y,
+                                (int)place_pos.z,
+                                new_block);
+
+                            // Broadcast block change to network
+                            network_broadcast_block_change(g_state.network,
+                                (int)place_pos.x,
+                                (int)place_pos.y,
+                                (int)place_pos.z,
+                                props->places_as, 0);
+                        }
+
+                        // Broadcast the foot/placement block change
                         network_broadcast_block_change(g_state.network,
                             (int)place_pos.x,
                             (int)place_pos.y,
@@ -695,7 +827,7 @@ static void game_update(float dt) {
                     }
                 }
                 }  // if (selected && selected->type != ITEM_NONE)
-            }  // else (not a chest)
+            }  // else (not a chest, door, or bed)
         }  // if (g_state.has_target_block)
     }  // if (IsMouseButtonPressed...)
 
@@ -1210,10 +1342,8 @@ static void game_draw(void) {
 
 /**
  * Clean up all game resources - called BEFORE CloseWindow()
- * This function is registered as Kryon's cleanup callback, which is called
- * after the main loop exits but before the window is closed.
  */
-static void game_shutdown(void) {
+void game_shutdown(void) {
     if (!g_initialized) return;
 
     printf("[GAME] Shutting down...\n");
@@ -1271,38 +1401,19 @@ static void game_shutdown(void) {
     printf("[GAME] Shutdown complete\n");
 }
 
-/**
- * Cleanup callback wrapper for Kryon shutdown API
- * Called by Kryon after main loop exits, before window closes
- */
-static void game_cleanup_callback(void* user_data) {
-    (void)user_data;
-    game_shutdown();
-}
-
 // ============================================================================
 // MAIN ENTRY POINT (Public)
 // ============================================================================
 
-static bool g_shutdown_requested = false;
-
 /**
- * Game entry point - called every frame by render callback
+ * Game entry point - called every frame by main loop
  *
  * Shutdown flow:
- * 1. should_exit flag set (from pause menu "Quit" or other)
- * 2. We call kryon_request_shutdown() which signals Kryon to exit
- * 3. Kryon exits main loop and calls our cleanup callback (game_cleanup_callback)
- * 4. game_shutdown() frees all GPU resources
- * 5. Kryon closes the window
+ * 1. should_exit flag set (from pause menu "Quit" or window close)
+ * 2. game_shutdown() is called from main.c after loop exits
+ * 3. Window is closed by main.c
  */
-void game_run(uint32_t component_id) {
-    (void)component_id;
-
-    // Already requested shutdown - don't process frames
-    if (g_shutdown_requested) {
-        return;
-    }
+void game_run(void) {
 
     // One-time initialization
     if (!g_initialized) {
@@ -1310,15 +1421,11 @@ void game_run(uint32_t component_id) {
         g_initialized = true;
     }
 
-    // Note: Window close button (X) is handled by Kryon's raylib input handler
-    // which sets renderer->running = false and triggers graceful shutdown
+    // Note: Window close button (X) is handled by WindowShouldClose() in main loop
 
     // User-initiated exit (e.g., from pause menu "Quit" button)
     if (g_state.should_exit) {
-        printf("[GAME] User requested exit, initiating Kryon shutdown...\n");
-        g_shutdown_requested = true;
-        // Request Kryon to shut down - it will call our cleanup callback
-        kryon_request_shutdown(NULL, KRYON_SHUTDOWN_REASON_USER);
+        printf("[GAME] User requested exit, shutting down...\n");
         return;
     }
 

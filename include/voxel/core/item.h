@@ -28,9 +28,29 @@ typedef enum {
     ITEM_WOOD_PLANKS,
     ITEM_LEAVES,
     ITEM_BEDROCK,
+    ITEM_IRON_BLOCK,        // Placeholder for iron ingot
+    ITEM_DIAMOND_BLOCK,     // Placeholder for diamond
 
     // Crafting materials
     ITEM_STICK,
+
+    // Wool (16 colors for bed crafting)
+    ITEM_WOOL_WHITE,
+    ITEM_WOOL_LIGHT_GRAY,
+    ITEM_WOOL_GRAY,
+    ITEM_WOOL_BLACK,
+    ITEM_WOOL_BROWN,
+    ITEM_WOOL_RED,
+    ITEM_WOOL_ORANGE,
+    ITEM_WOOL_YELLOW,
+    ITEM_WOOL_LIME,
+    ITEM_WOOL_GREEN,
+    ITEM_WOOL_CYAN,
+    ITEM_WOOL_LIGHT_BLUE,
+    ITEM_WOOL_BLUE,
+    ITEM_WOOL_PURPLE,
+    ITEM_WOOL_MAGENTA,
+    ITEM_WOOL_PINK,
 
     // Tools
     ITEM_WOODEN_PICKAXE,
@@ -40,8 +60,36 @@ typedef enum {
     ITEM_WOODEN_AXE,
     ITEM_STONE_AXE,
 
+    // Swords
+    ITEM_WOODEN_SWORD,
+    ITEM_STONE_SWORD,
+    ITEM_IRON_SWORD,
+    ITEM_DIAMOND_SWORD,
+
     // Food
     ITEM_MEAT,
+
+    // Beds (16 wool colors)
+    ITEM_WHITE_BED,
+    ITEM_LIGHT_GRAY_BED,
+    ITEM_GRAY_BED,
+    ITEM_BLACK_BED,
+    ITEM_BROWN_BED,
+    ITEM_RED_BED,
+    ITEM_ORANGE_BED,
+    ITEM_YELLOW_BED,
+    ITEM_LIME_BED,
+    ITEM_GREEN_BED,
+    ITEM_CYAN_BED,
+    ITEM_LIGHT_BLUE_BED,
+    ITEM_BLUE_BED,
+    ITEM_PURPLE_BED,
+    ITEM_MAGENTA_BED,
+    ITEM_PINK_BED,
+
+    // Doors
+    ITEM_WOOD_DOOR,
+    ITEM_IRON_DOOR,
 
     ITEM_COUNT
 } ItemType;

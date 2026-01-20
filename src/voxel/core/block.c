@@ -363,6 +363,50 @@ void block_system_init(void) {
         .requires_tool = false
     };
 
+    // BED_HEAD (Head of bed - where player sleeps)
+    g_block_properties[BLOCK_BED_HEAD] = (BlockProperties){
+        .name = "Bed Head",
+        .is_solid = false,
+        .is_transparent = false,
+        .is_fluid = false,
+        .hardness = 0.2f,
+        .preferred_tool = TOOL_AXE,
+        .requires_tool = false
+    };
+
+    // BED_FOOT (Foot of bed - pillow end)
+    g_block_properties[BLOCK_BED_FOOT] = (BlockProperties){
+        .name = "Bed Foot",
+        .is_solid = false,
+        .is_transparent = false,
+        .is_fluid = false,
+        .hardness = 0.2f,
+        .preferred_tool = TOOL_AXE,
+        .requires_tool = false
+    };
+
+    // WOOD_DOOR (Wooden door - can be opened by hand)
+    g_block_properties[BLOCK_WOOD_DOOR] = (BlockProperties){
+        .name = "Wood Door",
+        .is_solid = false,
+        .is_transparent = false,
+        .is_fluid = false,
+        .hardness = 3.0f,
+        .preferred_tool = TOOL_AXE,
+        .requires_tool = false
+    };
+
+    // IRON_DOOR (Iron door - needs interaction)
+    g_block_properties[BLOCK_IRON_DOOR] = (BlockProperties){
+        .name = "Iron Door",
+        .is_solid = false,
+        .is_transparent = false,
+        .is_fluid = false,
+        .hardness = 5.0f,
+        .preferred_tool = TOOL_PICKAXE,
+        .requires_tool = true
+    };
+
     g_initialized = true;
     printf("[BLOCK] Block system initialized with %d block types\n", BLOCK_COUNT);
 }

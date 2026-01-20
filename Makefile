@@ -1,17 +1,17 @@
-# Makefile for Katalis (Kryon C Project)
+# Makefile for Katalis (Direct Raylib - Kryon Removed)
 
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c11 -O2
-KRYON_PATH = /mnt/storage/Projects/kryon
-INCLUDES = -I$(KRYON_PATH)/bindings/c -I$(KRYON_PATH)/ir -I$(KRYON_PATH)/backends/desktop -I$(KRYON_PATH)/ir/third_party/cJSON
+
+# Project includes
+INCLUDES = -Iinclude -Isrc
+
+# Raylib and SDL3 flags
 SDL3_FLAGS = $(shell pkg-config --cflags --libs sdl3 2>/dev/null || echo "-lSDL3")
 RAYLIB_FLAGS = $(shell pkg-config --cflags --libs raylib 2>/dev/null || echo "-lraylib")
-LDFLAGS = -L$(KRYON_PATH)/build -L$(HOME)/.local/lib -Wl,-rpath,$(KRYON_PATH)/build -Wl,-rpath,$(HOME)/.local/lib
-LIBS = -lkryon_desktop -lkryon_ir -lkryon_syntax $(SDL3_FLAGS) $(RAYLIB_FLAGS) -lGL -lm -pthread
 
-# Kryon C source files (compile directly since library doesn't build)
-KRYON_C_DIR = $(KRYON_PATH)/bindings/c
-KRYON_SOURCES = $(KRYON_C_DIR)/kryon.c $(KRYON_C_DIR)/kryon_dsl.c
+# Linker libraries (keep what's needed for game features)
+LIBS = $(SDL3_FLAGS) $(RAYLIB_FLAGS) -lSDL3_ttf -lharfbuzz -lfreetype -lfribidi -lGL -lm -pthread
 
 # Source files
 TARGET = main
@@ -78,15 +78,11 @@ APP_SOURCES = src/main.c src/game.c $(VOXEL_SOURCES)
 
 all: $(TARGET)
 
-main: $(APP_SOURCES) $(KRYON_SOURCES)
-	$(CC) $(CFLAGS) $(INCLUDES) -Iinclude -Isrc $(APP_SOURCES) $(KRYON_C_DIR)/kryon.c $(KRYON_C_DIR)/kryon_dsl.c $(LDFLAGS) $(LIBS) -o $@
+main: $(APP_SOURCES)
+	$(CC) $(CFLAGS) $(INCLUDES) $(APP_SOURCES) $(LIBS) -o $@
 
 clean:
 	rm -f $(TARGET) *.kir
 
 run: main
 	./main
-	@if [ -f output.kir ]; then \
-		echo "✓ Generated output.kir successfully!"; \
-		ls -lh output.kir; \
-	fi
